@@ -1,0 +1,2502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zentia 음성 길찾기</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+  <link rel="shortcut icon" href="icons/icon-192.png" />
+  <meta name="theme-color" content="#6366f1" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Zentia Solutions" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f52d8;
+      --primary-light: #eef2ff;
+      --bg: #f8f8fa;
+      --card-bg: #ffffff;
+      --text: #111111;
+      --text-muted: #9ca3af;
+      --text-secondary: #6b7280;
+      --border: #f0f0f0;
+      --border-focus: #6366f1;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.04);
+      --shadow-input: 0 -4px 20px rgba(0,0,0,0.06);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+      --radius-xl: 24px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      max-width: 480px;
+      margin: 0 auto;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ─── Header ──────────────────────────────── */
+    .header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 13px 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-logo {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .header-title {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+    .icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 7px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      transition: background 0.15s, color 0.15s;
+    }
+    .icon-btn:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* ─── Tabs ────────────────────────────────── */
+    .tab-bar {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      justify-content: center;
+    }
+    .tab-group {
+      display: flex;
+      background: var(--bg);
+      border-radius: 100px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .tab-btn {
+      padding: 7px 20px;
+      border: none;
+      border-radius: 100px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: transparent;
+      transition: all 0.18s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(99,102,241,0.25);
+    }
+
+    /* ─── Transport toggle ────────────────────── */
+    .transport-bar {
+      background: var(--card-bg);
+      padding: 10px 18px;
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .transport-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 100px;
+      background: var(--card-bg);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .transport-btn.active {
+      background: var(--text);
+      border-color: var(--text);
+      color: #fff;
+    }
+
+    /* ─── Panels ──────────────────────────────── */
+    .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .panel.active { display: flex; }
+
+    /* ─── Chat area ───────────────────────────── */
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      scroll-behavior: smooth;
+    }
+    .chat-area::-webkit-scrollbar { width: 0; }
+
+    /* ─── Empty state ─────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 28px 16px 20px;
+      gap: 12px;
+    }
+    .empty-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+    .empty-icon svg {
+      width: 26px;
+      height: 26px;
+      color: var(--primary);
+    }
+    .empty-state h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .empty-state p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .example-chips {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 7px;
+      margin-top: 12px;
+      width: 100%;
+    }
+    .chip {
+      background: var(--card-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 4px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+      box-shadow: var(--shadow-sm);
+      line-height: 1.3;
+    }
+    .chip .chip-icon { font-size: 18px; }
+    .chip:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+    }
+
+    /* ─── Message bubbles ─────────────────────── */
+    .message {
+      display: flex;
+      flex-direction: column;
+      max-width: 85%;
+      animation: msgIn 0.2s ease;
+    }
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .message.user { align-self: flex-end; align-items: flex-end; }
+    .message.bot  { align-self: flex-start; align-items: flex-start; }
+    .bubble {
+      padding: 10px 15px;
+      border-radius: 18px;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .message.user .bubble {
+      background: var(--primary);
+      color: #fff;
+      border-bottom-right-radius: 5px;
+    }
+    .message.bot .bubble {
+      background: var(--card-bg);
+      color: var(--text);
+      border-bottom-left-radius: 5px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+    }
+    .message-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+
+    /* ─── Loading dots ────────────────────────── */
+    .loading-bubble {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      border-bottom-left-radius: 5px;
+      padding: 14px 18px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      background: var(--primary);
+      border-radius: 50%;
+      opacity: 0.7;
+      animation: bounce 1.2s infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.18s; }
+    .dot:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.7; }
+      30% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    /* ─── Candidate cards ─────────────────────── */
+    .candidates-wrapper { width: 100%; max-width: 420px; }
+    .candidates-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding-left: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .candidate-card {
+      background: var(--card-bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      margin-bottom: 8px;
+      transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      position: relative;
+      cursor: pointer;
+    }
+    .candidate-card:hover {
+      border-color: #e0e1ff;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+    .candidate-card:active {
+      transform: scale(0.985);
+      background: #f5f5ff;
+    }
+    .candidate-card.selected {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12), var(--shadow-md);
+      background: #fafaff;
+    }
+    .candidate-card.selected .card-num {
+      background: var(--primary);
+      color: #fff;
+    }
+    .candidate-card.ai-pick {
+      border-color: var(--primary);
+      background: linear-gradient(180deg, #f7f8ff 0%, #ffffff 60%);
+    }
+    .ai-pick-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--primary-light);
+      border: 1px solid #d6d9ff;
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+    .ai-pick-badge .ai-reason {
+      font-weight: 500;
+      color: var(--text);
+    }
+    .card-row1 {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .card-num {
+      min-width: 22px;
+      height: 22px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .card-info { flex: 1; min-width: 0; }
+    .card-name {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: -0.2px;
+    }
+    .card-address {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .card-star {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 17px;
+      padding: 4px;
+      line-height: 1;
+      transition: transform 0.15s ease;
+      color: var(--text-muted);
+    }
+    .card-star:hover { transform: scale(1.25); }
+    .card-row2 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+    }
+    .card-tags {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .card-category {
+      background: #f3f4f6;
+      color: var(--text-secondary);
+      border-radius: 100px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .card-distance {
+      background: var(--primary-light);
+      color: var(--primary);
+      border-radius: 100px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .card-select-btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 100px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.12s;
+      white-space: nowrap;
+      letter-spacing: -0.1px;
+    }
+    .card-select-btn:hover {
+      background: var(--primary-dark);
+      transform: scale(1.02);
+    }
+    .card-select-btn:active { transform: scale(0.98); }
+    .card-icon-btn {
+      width: 30px; height: 30px;
+      border: 1px solid var(--border); background: var(--card-bg);
+      border-radius: 8px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--text-secondary); text-decoration: none;
+      font-size: 14px; transition: all 0.15s;
+    }
+    .card-icon-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+
+    /* ─── Recent searches ─────────────────────── */
+    .recent-box { width: 100%; padding: 8px 4px; }
+    .recent-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-align: left; padding-left: 4px; }
+    .recent-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
+    .recent-chip {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 100px; padding: 5px 12px;
+      font-size: 12px; color: var(--text); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .recent-chip:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+
+    /* ─── Usage tip ────────────────────────── */
+    .usage-tip {
+      width: 100%;
+      background: var(--primary-light);
+      border: 1px solid #e0e3ff;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+      text-align: left;
+      margin-bottom: 6px;
+    }
+    .usage-tip strong { color: var(--primary); font-weight: 600; }
+
+    /* ─── Settings new controls ──────────────── */
+    .seg-group {
+      display: flex;
+      gap: 6px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 10px;
+      margin-top: 6px;
+    }
+    .seg-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 8px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.15s;
+    }
+    .seg-btn.active {
+      background: var(--card-bg);
+      color: var(--primary);
+      box-shadow: var(--shadow-sm);
+      font-weight: 600;
+    }
+    .voice-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .voice-select {
+      flex: 1;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      font-size: 13px;
+      color: var(--text);
+      font-family: inherit;
+    }
+    .btn-mini {
+      padding: 9px 14px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid #e0e3ff;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn-mini:hover { background: #dde0ff; }
+    .radius-value {
+      float: right;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 13px;
+    }
+    #radiusSlider {
+      width: 100%;
+      margin-top: 8px;
+      accent-color: var(--primary);
+    }
+    .advanced-details {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+    .advanced-details > summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+      list-style: none;
+      padding: 4px 0;
+    }
+    .advanced-details > summary::before {
+      content: "▸ ";
+      display: inline-block;
+      transition: transform 0.15s;
+    }
+    .advanced-details[open] > summary::before { content: "▾ "; }
+    .usage-tip em { font-style: normal; background: #fff; padding: 1px 6px; border-radius: 6px; color: var(--primary); font-weight: 500; }
+
+    /* ─── Favorites panel ─────────────────────── */
+    .fav-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .fav-panel::-webkit-scrollbar { width: 0; }
+    .fav-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+      text-align: center;
+      flex: 1;
+    }
+    .fav-empty-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--bg);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+    .fav-empty-icon svg {
+      width: 24px;
+      height: 24px;
+      color: var(--text-muted);
+    }
+    .fav-empty p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .fav-item {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      transition: box-shadow 0.15s;
+    }
+    .fav-item:hover { box-shadow: var(--shadow-sm); }
+    .fav-row1 {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .fav-pin {
+      width: 32px;
+      height: 32px;
+      background: var(--primary-light);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .fav-pin svg {
+      width: 16px;
+      height: 16px;
+      color: var(--primary);
+    }
+    .fav-info { flex: 1; min-width: 0; }
+    .fav-name {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 2px;
+      letter-spacing: -0.2px;
+    }
+    .fav-address {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fav-row2 {
+      display: flex;
+      gap: 6px;
+      margin-top: 11px;
+    }
+    .fav-transit-btn, .fav-car-btn, .fav-delete-btn {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      transition: all 0.15s;
+    }
+    .fav-transit-btn {
+      background: #eff6ff;
+      color: #3b82f6;
+      border-color: #dbeafe;
+    }
+    .fav-transit-btn:hover { background: #dbeafe; }
+    .fav-car-btn {
+      background: #f3f4f6;
+      color: var(--text-secondary);
+      border-color: #e5e7eb;
+    }
+    .fav-car-btn:hover { background: #e5e7eb; }
+    .fav-delete-btn {
+      flex: 0 0 auto;
+      padding: 7px 14px;
+      background: none;
+      color: var(--text-muted);
+      border-color: var(--border);
+    }
+    .fav-delete-btn:hover { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+
+    /* ─── Mini map preview ───────────────────── */
+    .mini-map-wrap { border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+    .mini-map { width: 100%; height: 160px; border: none; border-radius: 10px; }
+
+    /* ─── Alias badge / button ───────────────── */
+    .fav-alias-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+      background: var(--primary-light);
+      border: 1px solid #e0e3ff;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 6px;
+      vertical-align: 1px;
+    }
+    .fav-alias-badge::before { content: "🏷️"; font-size: 10px; }
+    .fav-alias-badge { cursor: pointer; }
+    .fav-alias-badge:hover { background: #dde0ff; }
+    .fav-alias-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: transparent;
+      border: 1px dashed var(--border);
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 6px;
+      transition: all 0.15s;
+    }
+    .fav-alias-btn:hover {
+      color: var(--primary);
+      border-color: var(--primary);
+      border-style: solid;
+      background: var(--primary-light);
+    }
+
+    /* ─── Persistent chips ───────────────────── */
+    .persistent-chips {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .persistent-chips .chip {
+      font-size: 11px;
+      padding: 7px 2px;
+      border-radius: 10px;
+    }
+    .persistent-chips .chip .chip-icon { font-size: 16px; }
+
+    /* ─── Action header (mic + location, always visible) ── */
+    .action-header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .action-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      margin-top: 4px;
+    }
+    .action-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    /* ─── Input area ──────────────────────────── */
+    .input-area {
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      padding: 10px 16px 18px;
+      box-shadow: var(--shadow-input);
+    }
+    .location-status {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      opacity: 0.7;
+    }
+    .loc-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #d1d5db;
+      flex-shrink: 0;
+    }
+    .loc-dot.ok { background: #22c55e; }
+    .loc-dot.err { background: #f87171; }
+
+    /* Mic */
+    .mic-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .mic-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mic-ring {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(99,102,241,0.15);
+      opacity: 0;
+      transform: scale(1);
+      pointer-events: none;
+    }
+    .mic-btn.recording ~ .mic-ring,
+    .mic-btn.recording + .mic-ring {
+      animation: none;
+    }
+    .pulse-ring-1 {
+      animation: none;
+    }
+    .pulse-ring-2 {
+      animation: none;
+    }
+    .recording-active .pulse-ring-1 {
+      animation: pulseRing 1.6s ease-out infinite;
+    }
+    .recording-active .pulse-ring-2 {
+      animation: pulseRing 1.6s ease-out 0.5s infinite;
+    }
+    @keyframes pulseRing {
+      0%   { transform: scale(1); opacity: 0.5; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+    .mic-btn {
+      position: relative;
+      z-index: 1;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #818cf8, #6366f1);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.35), 0 2px 4px rgba(99,102,241,0.2);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .mic-btn:hover {
+      transform: scale(1.04);
+      box-shadow: 0 6px 20px rgba(99,102,241,0.45), 0 2px 6px rgba(99,102,241,0.25);
+    }
+    .mic-btn:active { transform: scale(0.97); }
+    .mic-btn svg {
+      width: 26px;
+      height: 26px;
+      color: #fff;
+    }
+    .mic-btn.recording {
+      background: linear-gradient(145deg, #f87171, #ef4444);
+      box-shadow: 0 4px 16px rgba(239,68,68,0.4), 0 2px 4px rgba(239,68,68,0.2);
+    }
+    .mic-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      letter-spacing: -0.1px;
+    }
+    .mic-hint.recording {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    /* Text input row */
+    .text-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: var(--bg);
+      border-radius: 100px;
+      padding: 5px 5px 5px 16px;
+      border: 1.5px solid var(--border);
+      transition: border-color 0.15s;
+    }
+    .text-input-row:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+    }
+    .text-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+      color: var(--text);
+    }
+    .text-input::placeholder { color: var(--text-muted); }
+    .send-btn {
+      width: 34px;
+      height: 34px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.12s;
+      flex-shrink: 0;
+    }
+    .send-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+    .send-btn:hover { background: var(--primary-dark); }
+    .send-btn:active { transform: scale(0.95); }
+    .mic-btn-small {
+      width: 34px; height: 34px; flex-shrink: 0;
+      background: var(--primary);
+      color: #fff; border: none; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.15s, transform 0.15s;
+    }
+    .mic-btn-small:hover { background: var(--primary-dark); }
+    .mic-btn-small:active { transform: scale(0.95); }
+    .mic-btn-small.recording { background: #ef4444; }
+    .mic-btn-small svg { width: 16px; height: 16px; }
+
+    /* ─── Config modal ────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card-bg);
+      border-radius: var(--radius-xl);
+      padding: 26px 24px 22px;
+      width: 92%;
+      max-width: 400px;
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0,0,0,0.04);
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .modal-header svg {
+      width: 18px;
+      height: 18px;
+      color: var(--text-secondary);
+    }
+    .modal h2 {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .modal label {
+      font-size: 12px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .modal input {
+      width: 100%;
+      padding: 11px 14px;
+      border: none;
+      border-bottom: 2px solid var(--border);
+      background: transparent;
+      font-size: 14px;
+      margin-bottom: 6px;
+      outline: none;
+      font-family: inherit;
+      color: var(--text);
+      transition: border-color 0.15s;
+    }
+    .modal input:focus { border-bottom-color: var(--primary); }
+    .modal-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+      line-height: 1.55;
+    }
+    .modal-actions { display: flex; gap: 8px; }
+    .btn-secondary {
+      flex: 0 0 auto;
+      padding: 11px 20px;
+      border: 1.5px solid var(--border);
+      border-radius: 100px;
+      background: var(--card-bg);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.15s;
+    }
+    .btn-secondary:hover { background: var(--bg); }
+    .btn-primary {
+      flex: 1;
+      padding: 11px 20px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 100px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.15s, transform 0.12s;
+    }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-primary:active { transform: scale(0.98); }
+
+    /* ─── Toast ───────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(6px);
+      background: #111;
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 100px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 50;
+      pointer-events: none;
+      white-space: nowrap;
+      max-width: 90vw;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ─── In-app browser banner ───────────────── */
+    .inapp-banner {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 100%; max-width: 480px;
+      background: #fff;
+      border-top: 1px solid var(--border);
+      border-radius: 16px 16px 0 0;
+      padding: 16px 18px 24px;
+      z-index: 200;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateX(-50%) translateY(100%); }
+      to   { transform: translateX(-50%) translateY(0); }
+    }
+    .inapp-banner.show { display: block; }
+    .inapp-content {
+      display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px;
+    }
+    .inapp-icon {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: #fef3c7; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      color: #d97706;
+    }
+    .inapp-icon svg { width: 18px; height: 18px; }
+    .inapp-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .inapp-text strong { font-size: 14px; font-weight: 700; color: var(--text); }
+    .inapp-text span { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+    .inapp-close {
+      background: none; border: none; cursor: pointer;
+      font-size: 16px; color: var(--text-muted); padding: 2px;
+      flex-shrink: 0;
+    }
+    .inapp-actions { display: flex; gap: 8px; }
+    .inapp-btn-primary {
+      flex: 1; padding: 11px 16px;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .inapp-btn-primary:hover { background: var(--primary-dark); }
+    .inapp-btn-secondary {
+      flex: 1; padding: 11px 16px;
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .inapp-btn-secondary:hover { background: var(--border); }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-logo">
+    <img src="icons/icon-192.png" alt="Zentia" style="width:32px;height:32px;border-radius:7px;" />
+  </div>
+  <div class="header-title">
+    <span style="font-weight:800;letter-spacing:0.5px;color:#1a3353;">ZENTIA</span>
+    <span style="font-weight:400;color:#6b7280;font-size:14px;" data-i18n="header.subtitle"> 음성 길찾기</span>
+  </div>
+  <button class="icon-btn" id="ttsToggleBtn" onclick="toggleTTS()" data-i18n-title="tts.title" title="TTS 켜기/끄기">
+    <svg id="ttsIconOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+    </svg>
+    <svg id="ttsIconOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+      <line x1="23" y1="9" x2="17" y2="15"/>
+      <line x1="17" y1="9" x2="23" y2="15"/>
+    </svg>
+  </button>
+  <button class="icon-btn" onclick="openConfig()" data-i18n-title="settings.title" title="설정">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+</div>
+
+<!-- Tabs -->
+<div class="tab-bar">
+  <div class="tab-group">
+    <button class="tab-btn active" id="tab-chat" onclick="switchTab('chat')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span data-i18n="tab.chat">채팅</span>
+    </button>
+    <button class="tab-btn" id="tab-fav" onclick="switchTab('fav')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span data-i18n="tab.fav">즐겨찾기</span> <span id="fav-count"></span>
+    </button>
+  </div>
+</div>
+
+<!-- Chat Panel -->
+<div class="panel active" id="panel-chat" style="overflow:hidden;">
+  <!-- Transport toggle -->
+  <div class="transport-bar">
+    <button class="transport-btn active" id="btn-transit" onclick="setTransport('transit')" data-i18n="transport.transit">🚇 대중교통</button>
+    <button class="transport-btn" id="btn-car" onclick="setTransport('car')" data-i18n="transport.car">🚗 자동차</button>
+  </div>
+
+  <!-- Mic + Location (always visible) -->
+  <div class="action-header">
+    <div class="mic-row">
+      <div class="mic-wrap" id="micWrap">
+        <div class="mic-ring pulse-ring-1"></div>
+        <div class="mic-ring pulse-ring-2"></div>
+        <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="mic-hint" id="micHint" data-i18n="mic.hint">버튼을 누르고 말씀하세요</div>
+    <div class="location-status">
+      <div class="loc-dot" id="locDot"></div>
+      <span id="locStatus" data-i18n="loc.loading">위치 정보 가져오는 중...</span>
+      <button id="locRefreshBtn" onclick="refreshLocation()" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:13px;color:var(--text-muted);line-height:1;" data-i18n-title="loc.refresh" title="위치 새로고침">↻</button>
+    </div>
+    <div class="location-landmark" id="locationLandmark" style="display:none;font-size:11px;color:var(--text-muted);text-align:center;">📍 <span id="landmarkText"></span></div>
+  </div>
+
+  <!-- Persistent chips (always visible) -->
+  <div class="persistent-chips">
+    <div class="chip" onclick="sendChip('FD6')"><span class="chip-icon">🍽️</span><span data-i18n="chip.FD6">맛집</span></div>
+    <div class="chip" onclick="sendChip('CE7')"><span class="chip-icon">☕</span><span data-i18n="chip.CE7">카페</span></div>
+    <div class="chip" onclick="sendChip('CS2')"><span class="chip-icon">🏪</span><span data-i18n="chip.CS2">편의점</span></div>
+    <div class="chip" onclick="sendChip('PM9')"><span class="chip-icon">💊</span><span data-i18n="chip.PM9">약국</span></div>
+    <div class="chip" onclick="sendChip('SW8')"><span class="chip-icon">🚇</span><span data-i18n="chip.SW8">지하철역</span></div>
+    <div class="chip" onclick="sendChip('PK6')"><span class="chip-icon">🅿️</span><span data-i18n="chip.PK6">주차장</span></div>
+    <div class="chip" onclick="sendChip('BK9')"><span class="chip-icon">🏦</span><span data-i18n="chip.BK9">은행</span></div>
+    <div class="chip" onclick="sendChip('OL7')"><span class="chip-icon">⛽</span><span data-i18n="chip.OL7">주유소</span></div>
+    <div class="chip" onclick="sendChip('HP8')"><span class="chip-icon">🏥</span><span data-i18n="chip.HP8">병원</span></div>
+    <div class="chip" onclick="sendChip('MT1')"><span class="chip-icon">🛒</span><span data-i18n="chip.MT1">마트</span></div>
+  </div>
+
+  <!-- Chat / results area (scrollable) -->
+  <div class="chat-area" id="chatArea">
+    <div class="empty-state" id="emptyState">
+      <div class="usage-tip" id="usageTip"></div>
+      <div id="recentSearches" class="recent-box" style="display:none;"></div>
+      <p class="action-subtitle" id="emptySubtitle" style="margin-top:8px;" data-i18n="empty.subtitle">검색 결과가 여기에 표시됩니다</p>
+    </div>
+  </div>
+
+  <!-- Text input (bottom) -->
+  <div class="input-area">
+    <div class="text-input-row">
+      <input type="text" class="text-input" id="textInput" data-i18n-ph="input.placeholder" placeholder="목적지를 입력하세요" />
+      <button class="send-btn" onclick="sendTextFromInput()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Favorites Panel -->
+<div class="panel" id="panel-fav">
+  <div class="fav-panel" id="favPanel"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- In-app browser banner -->
+<div class="inapp-banner" id="inappBanner">
+  <div class="inapp-content">
+    <div class="inapp-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="inapp-text">
+      <strong id="inappTitle">Chrome에서 열어주세요</strong>
+      <span id="inappDesc" data-i18n="inapp.descChrome">음성 인식은 Chrome 브라우저에서만 지원됩니다.</span>
+    </div>
+    <button class="inapp-close" onclick="document.getElementById('inappBanner').style.display='none'">✕</button>
+  </div>
+  <div class="inapp-actions">
+    <button class="inapp-btn-primary" id="inappOpenBtn" onclick="openInChrome()" data-i18n="inapp.openChrome">Chrome으로 열기</button>
+    <button class="inapp-btn-secondary" onclick="copyPageUrl()" data-i18n="inapp.copy">🔗 링크 복사</button>
+  </div>
+</div>
+
+<!-- Config modal -->
+<div class="modal-overlay" id="configModal">
+  <div class="modal">
+    <div class="modal-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      <h2 data-i18n="settings.title">설정</h2>
+    </div>
+
+    <!-- Language -->
+    <label data-i18n="settings.lang">언어</label>
+    <div class="seg-group" id="langSeg">
+      <button type="button" class="seg-btn" data-val="ko" onclick="setLangPick('ko')">한국어</button>
+      <button type="button" class="seg-btn" data-val="en" onclick="setLangPick('en')">English</button>
+    </div>
+
+    <!-- Voice -->
+    <label data-i18n="settings.voice" style="margin-top:14px;">음성</label>
+    <div class="voice-row">
+      <select id="voiceSelect" class="voice-select"></select>
+      <button type="button" class="btn-mini" onclick="previewVoice()" data-i18n="settings.voice.preview">미리듣기</button>
+    </div>
+
+    <!-- Chip radius -->
+    <label style="margin-top:14px;">
+      <span data-i18n="settings.chipRadius">칩 검색 반경</span>
+      <span id="radiusValue" class="radius-value">5 km</span>
+    </label>
+    <input type="range" id="radiusSlider" min="1" max="10" step="1" value="5" oninput="onRadiusInput(this.value)" />
+    <div class="modal-note" data-i18n="settings.chipRadius.hint">"칩"으로 검색할 때 현재 위치 기준 반경</div>
+
+    <!-- Advanced (collapsed) -->
+    <details class="advanced-details" id="advancedDetails">
+      <summary data-i18n="settings.advanced">고급 설정</summary>
+      <label style="margin-top:10px;" data-i18n="settings.webhookLabel">API 서버 URL (ActionFlow 연동)</label>
+      <input type="url" id="webhookInput" placeholder="http://localhost:4000/api/search" />
+      <div class="modal-note" data-i18n="settings.webhookNote">로컬 브릿지 서버(server/)를 실행한 뒤 표시되는 API 주소를 입력하세요. 기본값은 http://localhost:4000/api/search 입니다.</div>
+      <div class="modal-note" style="margin-top:10px;">
+        <span data-i18n="settings.uidLabel">내 ID</span>: <code id="userIdDisplay" style="font-size:11px;color:var(--text-secondary);user-select:all;"></code>
+      </div>
+    </details>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeConfig()" data-i18n="settings.cancel">취소</button>
+      <button class="btn-primary" onclick="saveConfig()" data-i18n="settings.save">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========================
+// CONFIG & STATE
+// ========================
+const CONFIG = {
+  // 로컬 ActionFlow 브릿지 서버(server/) 주소. server/.env의 PORT와 맞춰주세요.
+  webhookUrl: localStorage.getItem('webhookUrl') || 'http://localhost:4000/api/search',
+};
+
+// ========================
+// SETTINGS (multi-language / voice / chip radius)
+// ========================
+let currentLang = localStorage.getItem('lang') || (navigator.language || 'ko').slice(0,2);
+if (currentLang !== 'en' && currentLang !== 'ko') currentLang = 'ko';
+let chipRadius = parseInt(localStorage.getItem('chipRadius')) || 5000; // meters
+let selectedVoiceURI = localStorage.getItem('voiceURI') || '';
+let availableVoices = [];
+
+const I18N = {
+  ko: {
+    'app.title': 'Zentia 음성 길찾기',
+    'header.subtitle': '음성 길찾기',
+    'tts.title': 'TTS 켜기/끄기',
+    'tts.on': 'TTS 켜짐',
+    'tts.off': 'TTS 꺼짐',
+    'settings.title': '설정',
+    'settings.lang': '언어',
+    'settings.voice': '음성',
+    'settings.voice.none': '시스템 기본',
+    'settings.voice.preview': '미리듣기',
+    'settings.chipRadius': '칩 검색 반경',
+    'settings.chipRadius.hint': '"칩"으로 검색할 때 현재 위치 기준 반경',
+    'settings.advanced': '고급 설정',
+    'settings.webhookLabel': 'API 서버 URL (ActionFlow 연동)',
+    'settings.webhookNote': '로컬 브릿지 서버(server/)를 실행한 뒤 표시되는 API 주소를 입력하세요.',
+    'settings.uidLabel': '내 ID',
+    'settings.cancel': '취소',
+    'settings.save': '저장',
+    'settings.webhookSaved': 'API 서버 URL이 저장되었습니다.',
+    'settings.webhookCleared': 'API 서버 URL을 삭제했습니다.',
+    'settings.saved': '설정이 저장되었습니다.',
+    'settings.webhookNeeded': '설정이 필요합니다. 오른쪽 상단 설정 버튼을 눌러 API 서버 URL을 입력해주세요.',
+    'settings.webhookNeededToast': 'API 서버 URL을 설정해주세요.',
+    'voice.previewSample': '안녕하세요. 젠시아 음성 길찾기입니다.',
+    'tab.chat': '채팅',
+    'tab.fav': '즐겨찾기',
+    'transport.transit': '🚇 대중교통',
+    'transport.car': '🚗 자동차',
+    'transport.transit_short': '대중교통',
+    'transport.car_short': '자동차',
+    'mic.hint': '버튼을 누르고 말씀하세요',
+    'mic.listening': '듣고 있어요... (다시 누르면 중지)',
+    'mic.notAllowed': '마이크 권한을 허용해주세요.',
+    'mic.noSpeech': '음성이 감지되지 않았습니다.',
+    'mic.unsupported': '이 브라우저는 음성 인식을 지원하지 않습니다. 직접 입력해주세요.',
+    'mic.err': '음성 인식 오류: {0}',
+    'loc.loading': '위치 정보 가져오는 중...',
+    'loc.checking': '위치 확인 중...',
+    'loc.checkingAcc': '위치 확인 중... (오차 {0}m)',
+    'loc.ok': '위치 확인됨 (오차 {0}m)',
+    'loc.unsupported': '위치 서비스 미지원',
+    'loc.denied': '위치 권한 거부됨',
+    'loc.notfound': '위치를 찾을 수 없음',
+    'loc.timeout': '위치 요청 시간 초과',
+    'loc.err': '위치 오류',
+    'loc.fallback': '{0} — 서울시청 기준',
+    'loc.fallbackFail': '위치 확인 실패 — 서울시청 기준',
+    'loc.refresh': '위치 새로고침',
+    'chip.FD6': '맛집',
+    'chip.CE7': '카페',
+    'chip.CS2': '편의점',
+    'chip.PM9': '약국',
+    'chip.SW8': '지하철역',
+    'chip.PK6': '주차장',
+    'chip.BK9': '은행',
+    'chip.OL7': '주유소',
+    'chip.HP8': '병원',
+    'chip.MT1': '마트',
+    'tip.chips': '위 <strong>칩</strong>은 <strong>현재 위치 {0}km 이내</strong> 추천이에요',
+    'tip.elsewhere': '멀리 있는 곳은 <em>마이크</em>나 <em>아래 입력창</em>으로 검색해주세요',
+    'recent.title': '🕒 최근 검색',
+    'empty.subtitle': '검색 결과가 여기에 표시됩니다',
+    'input.placeholder': '목적지를 입력하세요',
+    'search.noResults': '검색 결과가 없습니다. 다른 목적지를 말씀해주세요.',
+    'search.noResultsTts': '검색 결과가 없습니다',
+    'search.summary': '"{0}" 검색 결과예요. ({1})',
+    'search.foundCount': '{0}곳을 찾았어요',
+    'search.error': '오류가 발생했습니다: {0}',
+    'search.networkErr': '네트워크 오류가 발생했습니다.',
+    'search.respFormat': '응답 형식 오류: {0}',
+    'search.summaryTts': '{0}곳을 찾았어요. 가장 가까운 곳은 {1} 거리의 {2}입니다.',
+    'search.noname': '이름 없음',
+    'nav.go': '길찾기 →',
+    'nav.start': '"{0}" 길찾기를 시작합니다! ({1})',
+    'nav.startTts': '{0} 길찾기를 시작합니다',
+    'nav.transit': '대중교통 🚇',
+    'nav.car': '자동차 🚗',
+    'nav.currentLoc': '현재위치',
+    'fav.empty': '즐겨찾기가 비어있어요.<br>검색 결과에서 ☆ 버튼을 눌러<br>자주 가는 곳을 저장하세요.',
+    'fav.deleted': '즐겨찾기에서 삭제했습니다.',
+    'fav.deletedName': '"{0}" 즐겨찾기에서 삭제했습니다.',
+    'fav.added': '"{0}" 즐겨찾기에 추가했습니다. ⭐',
+    'fav.aliasPrompt': '음성 호출 별칭을 입력하세요 (예: 집, 회사):',
+    'fav.aliasSaved': '"{0}" 별칭이 저장됐습니다.',
+    'fav.aliasDeleted': '별칭이 삭제됐습니다.',
+    'fav.aliasGoTts': '{0}으로 길찾기를 시작합니다',
+    'fav.alias.add': '+ 별칭',
+    'fav.alias.edit': '별칭 수정',
+    'fav.alias.set': '별칭 설정',
+    'inapp.copy': '🔗 링크 복사',
+    'inapp.copied': '링크가 복사됐습니다. Chrome에 붙여넣기 해주세요.',
+    'inapp.descIos': '음성 인식은 Safari 또는 Chrome에서 작동합니다. 링크를 복사해 다른 브라우저에서 열어주세요.',
+    'inapp.descChrome': '음성 인식은 Chrome에서만 작동합니다. Chrome으로 열어주세요.',
+    'inapp.openChrome': 'Chrome으로 열기',
+  },
+  en: {
+    'app.title': 'Zentia Voice Navigation',
+    'header.subtitle': 'Voice Nav',
+    'tts.title': 'Toggle TTS',
+    'tts.on': 'TTS on',
+    'tts.off': 'TTS off',
+    'settings.title': 'Settings',
+    'settings.lang': 'Language',
+    'settings.voice': 'Voice',
+    'settings.voice.none': 'System default',
+    'settings.voice.preview': 'Preview',
+    'settings.chipRadius': 'Chip search radius',
+    'settings.chipRadius.hint': 'Radius from your location for "chip" searches',
+    'settings.advanced': 'Advanced',
+    'settings.webhookLabel': 'API Server URL (ActionFlow bridge)',
+    'settings.webhookNote': 'Start the local bridge server (server/) and paste its API URL.',
+    'settings.uidLabel': 'My ID',
+    'settings.cancel': 'Cancel',
+    'settings.save': 'Save',
+    'settings.webhookSaved': 'API server URL saved.',
+    'settings.webhookCleared': 'API server URL cleared.',
+    'settings.saved': 'Settings saved.',
+    'settings.webhookNeeded': 'Setup required. Tap the settings icon and enter the API server URL.',
+    'settings.webhookNeededToast': 'Please set the API server URL.',
+    'voice.previewSample': 'Hello, this is Zentia voice navigation.',
+    'tab.chat': 'Chat',
+    'tab.fav': 'Favorites',
+    'transport.transit': '🚇 Transit',
+    'transport.car': '🚗 Car',
+    'transport.transit_short': 'Transit',
+    'transport.car_short': 'Car',
+    'mic.hint': 'Tap and speak',
+    'mic.listening': 'Listening... (tap again to stop)',
+    'mic.notAllowed': 'Please allow microphone access.',
+    'mic.noSpeech': 'No speech detected.',
+    'mic.unsupported': 'This browser does not support voice recognition. Please type instead.',
+    'mic.err': 'Voice recognition error: {0}',
+    'loc.loading': 'Getting your location...',
+    'loc.checking': 'Checking location...',
+    'loc.checkingAcc': 'Checking... (±{0}m)',
+    'loc.ok': 'Located (±{0}m)',
+    'loc.unsupported': 'Geolocation not supported',
+    'loc.denied': 'Location permission denied',
+    'loc.notfound': 'Cannot determine location',
+    'loc.timeout': 'Location request timed out',
+    'loc.err': 'Location error',
+    'loc.fallback': '{0} — defaulting to Seoul City Hall',
+    'loc.fallbackFail': 'Location failed — defaulting to Seoul City Hall',
+    'loc.refresh': 'Refresh location',
+    'chip.FD6': 'Food',
+    'chip.CE7': 'Cafe',
+    'chip.CS2': 'Store',
+    'chip.PM9': 'Pharmacy',
+    'chip.SW8': 'Subway',
+    'chip.PK6': 'Parking',
+    'chip.BK9': 'Bank',
+    'chip.OL7': 'Gas',
+    'chip.HP8': 'Hospital',
+    'chip.MT1': 'Mart',
+    'tip.chips': 'The <strong>chips</strong> above show places within <strong>{0} km</strong> of you',
+    'tip.elsewhere': 'For distant places, use the <em>mic</em> or <em>text input</em> below',
+    'recent.title': '🕒 Recent',
+    'empty.subtitle': 'Search results will appear here',
+    'input.placeholder': 'Enter a destination',
+    'search.noResults': 'No results. Try a different destination.',
+    'search.noResultsTts': 'No results found',
+    'search.summary': 'Results for "{0}". ({1})',
+    'search.foundCount': 'Found {0} places',
+    'search.error': 'Error: {0}',
+    'search.networkErr': 'Network error.',
+    'search.respFormat': 'Response format error: {0}',
+    'search.summaryTts': 'Found {0} places. The nearest is {2}, {1} away.',
+    'search.noname': 'Unnamed',
+    'nav.go': 'Navigate →',
+    'nav.start': 'Starting navigation to "{0}"! ({1})',
+    'nav.startTts': 'Starting navigation to {0}',
+    'nav.transit': 'Transit 🚇',
+    'nav.car': 'Car 🚗',
+    'nav.currentLoc': 'My Location',
+    'fav.empty': 'No favorites yet.<br>Tap ☆ on a result<br>to save places you visit often.',
+    'fav.deleted': 'Removed from favorites.',
+    'fav.deletedName': 'Removed "{0}" from favorites.',
+    'fav.added': 'Added "{0}" to favorites. ⭐',
+    'fav.aliasPrompt': 'Enter a voice alias (e.g. home, office):',
+    'fav.aliasSaved': 'Alias "{0}" saved.',
+    'fav.aliasDeleted': 'Alias cleared.',
+    'fav.aliasGoTts': 'Starting navigation to {0}',
+    'fav.alias.add': '+ alias',
+    'fav.alias.edit': 'Edit alias',
+    'fav.alias.set': 'Set alias',
+    'inapp.copy': '🔗 Copy Link',
+    'inapp.copied': 'Link copied. Paste it in Chrome.',
+    'inapp.descIos': 'Voice recognition works in Safari or Chrome. Copy the link and open it elsewhere.',
+    'inapp.descChrome': 'Voice recognition only works in Chrome. Please open it in Chrome.',
+    'inapp.openChrome': 'Open in Chrome',
+  },
+};
+
+function t(key) {
+  var s = (I18N[currentLang] && I18N[currentLang][key]) || I18N.ko[key] || key;
+  for (var i = 1; i < arguments.length; i++) {
+    s = s.replace('{' + (i - 1) + '}', arguments[i]);
+  }
+  return s;
+}
+
+function applyI18n() {
+  document.documentElement.lang = currentLang;
+  document.title = t('app.title');
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    el.innerHTML = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(function(el) {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function(el) {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  // Dynamic items that need re-rendering
+  var locStatusEl = document.getElementById('locStatus');
+  if (locStatusEl && !currentLocation && !locStatusEl.dataset.set) {
+    locStatusEl.textContent = t('loc.loading');
+  }
+  var tip = document.getElementById('usageTip');
+  if (tip) {
+    tip.innerHTML = '💡 ' + t('tip.chips', (chipRadius / 1000)) + '<br>' + t('tip.elsewhere');
+  }
+  renderFavorites && document.getElementById('panel-fav') && renderFavorites();
+  renderRecentSearches && renderRecentSearches();
+}
+
+let currentLocation = null;
+let currentLandmark = '';        // 현재 위치 도로명/장소명 (Nominatim)
+let locationReady = null;       // Promise: GPS + Nominatim 모두 완료
+let transportMode = 'transit';
+let isRecording = false;
+let recognition = null;
+let lastCandidates = [];
+let ttsEnabled = localStorage.getItem('ttsEnabled') !== 'false';
+
+// 사용자 식별자 (브라우저+도메인 단위, localStorage 삭제 시 재발급)
+let userId = localStorage.getItem('zentia_uid');
+if (!userId) {
+  userId = (crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'u-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('zentia_uid', userId);
+  localStorage.setItem('zentia_uid_created', new Date().toISOString());
+}
+
+// ========================
+// TTS
+// ========================
+function speak(text) {
+  if (!ttsEnabled) return;
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  var utter = new SpeechSynthesisUtterance(text);
+  utter.lang = currentLang === 'en' ? 'en-US' : 'ko-KR';
+  utter.rate = 1.05;
+  var v = pickVoice();
+  if (v) utter.voice = v;
+  speechSynthesis.speak(utter);
+}
+
+function pickVoice() {
+  if (!availableVoices.length) availableVoices = speechSynthesis.getVoices();
+  if (!availableVoices.length) return null;
+  if (selectedVoiceURI) {
+    var found = availableVoices.find(function(v) { return v.voiceURI === selectedVoiceURI; });
+    if (found && (currentLang === 'en' ? found.lang.startsWith('en') : found.lang.startsWith('ko'))) return found;
+  }
+  var prefix = currentLang === 'en' ? 'en' : 'ko';
+  return availableVoices.find(function(v) { return v.lang.startsWith(prefix); }) || null;
+}
+
+function loadVoices() {
+  availableVoices = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
+  populateVoiceSelect();
+}
+
+function populateVoiceSelect(uiLang) {
+  var sel = document.getElementById('voiceSelect');
+  if (!sel) return;
+  var lang = uiLang || currentLang;
+  var prefix = lang === 'en' ? 'en' : 'ko';
+  var filtered = availableVoices.filter(function(v) { return v.lang.startsWith(prefix); });
+  sel.innerHTML = '<option value="">' + t('settings.voice.none') + '</option>' +
+    filtered.map(function(v) {
+      return '<option value="' + escAttr(v.voiceURI) + '"' + (v.voiceURI === selectedVoiceURI ? ' selected' : '') + '>' +
+        escHtml(v.name) + ' (' + v.lang + ')' +
+      '</option>';
+    }).join('');
+}
+
+function previewVoice() {
+  if (!window.speechSynthesis) return;
+  // Read the CURRENT (uncommitted) UI selections, not the saved state
+  var seg = document.getElementById('langSeg');
+  var activeBtn = seg ? seg.querySelector('.seg-btn.active') : null;
+  var uiLang = (activeBtn && activeBtn.dataset.val) || seg.dataset.pending || currentLang;
+  var sel = document.getElementById('voiceSelect');
+  var previewURI = sel ? sel.value : '';
+
+  var sampleByLang = { ko: I18N.ko['voice.previewSample'], en: I18N.en['voice.previewSample'] };
+  speechSynthesis.cancel();
+  var utter = new SpeechSynthesisUtterance(sampleByLang[uiLang] || sampleByLang.ko);
+  utter.lang = uiLang === 'en' ? 'en-US' : 'ko-KR';
+  utter.rate = 1.05;
+  if (previewURI) {
+    var v = availableVoices.find(function(v) { return v.voiceURI === previewURI; });
+    if (v) utter.voice = v;
+  }
+  speechSynthesis.speak(utter);
+}
+
+function toggleTTS() {
+  ttsEnabled = !ttsEnabled;
+  localStorage.setItem('ttsEnabled', ttsEnabled ? 'true' : 'false');
+  document.getElementById('ttsIconOn').style.display = ttsEnabled ? '' : 'none';
+  document.getElementById('ttsIconOff').style.display = ttsEnabled ? 'none' : '';
+  showToast(ttsEnabled ? t('tts.on') : t('tts.off'));
+}
+
+function initTTSIcon() {
+  document.getElementById('ttsIconOn').style.display = ttsEnabled ? '' : 'none';
+  document.getElementById('ttsIconOff').style.display = ttsEnabled ? 'none' : '';
+}
+
+// ========================
+// VOICE COMMAND (결과 후 번호/이름 선택)
+// ========================
+function checkVoiceCommand(text) {
+  if (!lastCandidates.length) return false;
+  var numMap = {'첫':0,'1번':0,'일번':0,'하나':0,'두':1,'2번':1,'이번':1,'둘':1,'세':2,'3번':2,'삼번':2,'셋':2,'넷':3,'4번':3,'사번':3,'다섯':4,'5번':4,'오번':4};
+  for (var k in numMap) {
+    if (text.includes(k) && numMap[k] < lastCandidates.length) {
+      var c = lastCandidates[numMap[k]];
+      navigateTo(c.lat, c.lng, c.name);
+      return true;
+    }
+  }
+  for (var i = 0; i < lastCandidates.length; i++) {
+    if (lastCandidates[i].name && text.includes(lastCandidates[i].name)) {
+      navigateTo(lastCandidates[i].lat, lastCandidates[i].lng, lastCandidates[i].name);
+      return true;
+    }
+  }
+  return false;
+}
+
+// ========================
+// FAVORITE VOICE SHORTCUT
+// ========================
+function checkFavoriteVoice(text) {
+  var favs = getFavorites();
+  if (!favs.length) return false;
+  var clean = text.replace(/(으로|로|에|까지|가줘|가자|갈래|안내|길찾기)/g,'').trim();
+  var match = favs.find(function(f) { return (f.alias && clean.includes(f.alias)) || (f.name && clean.includes(f.name)); });
+  if (match) {
+    addUserMessage(text);
+    speak(t('fav.aliasGoTts', match.name));
+    navigateTo(match.lat, match.lng, match.name);
+    return true;
+  }
+  return false;
+}
+
+function setFavoriteAlias(lat, lng) {
+  var favs = getFavorites();
+  var idx = favs.findIndex(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; });
+  if (idx < 0) return;
+  var current = favs[idx].alias || '';
+  var alias = prompt(t('fav.aliasPrompt'), current);
+  if (alias === null) return;
+  favs[idx].alias = alias.trim();
+  saveFavorites(favs);
+  renderFavorites();
+  showToast(alias ? t('fav.aliasSaved', alias) : t('fav.aliasDeleted'));
+}
+
+// ========================
+// GEOLOCATION
+// ========================
+function initLocation() {
+  locationReady = new Promise(function(resolve) {
+    if (!navigator.geolocation) {
+      setLocStatus(t('loc.unsupported'), 'err');
+      currentLocation = { lat: 37.5665, lng: 126.9780 };
+      resolve();
+      return;
+    }
+    setLocStatus(t('loc.checking'), '');
+
+    var best = null;
+    var resolved = false;
+    var GOOD_ENOUGH = 30;   // 30m 이하면 즉시 확정
+    var MAX_WAIT   = 8000;  // 최대 8초 수집
+    var EARLY_OK   = 100;   // 100m 이하면 4초만 더 기다리고 마감
+
+    var watchId = navigator.geolocation.watchPosition(
+      function(pos) {
+        var acc = pos.coords.accuracy;
+        if (!best || acc < best.acc) {
+          best = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: acc };
+          setLocStatus(t('loc.checkingAcc', Math.round(acc)), '');
+        }
+        if (acc <= GOOD_ENOUGH && !resolved) finish();
+      },
+      function(err) {
+        if (resolved) return;
+        if (!best) {
+          var msgs = { 1: t('loc.denied'), 2: t('loc.notfound'), 3: t('loc.timeout') };
+          setLocStatus(t('loc.fallback', msgs[err.code] || t('loc.err')), 'err');
+          currentLocation = { lat: 37.5665, lng: 126.9780 };
+          resolved = true;
+          navigator.geolocation.clearWatch(watchId);
+          resolve();
+        } else {
+          finish();
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+
+    function finish() {
+      if (resolved) return;
+      resolved = true;
+      navigator.geolocation.clearWatch(watchId);
+      currentLocation = { lat: best.lat, lng: best.lng };
+      setLocStatus(t('loc.ok', Math.round(best.acc)), 'ok');
+      fetchNearbyLandmark(best.lat, best.lng).then(resolve);
+    }
+
+    setTimeout(function() {
+      if (!resolved && best && best.acc <= EARLY_OK) finish();
+    }, 4000);
+    setTimeout(function() {
+      if (!resolved) {
+        if (best) finish();
+        else {
+          resolved = true;
+          navigator.geolocation.clearWatch(watchId);
+          setLocStatus(t('loc.fallbackFail'), 'err');
+          currentLocation = { lat: 37.5665, lng: 126.9780 };
+          resolve();
+        }
+      }
+    }, MAX_WAIT);
+  });
+}
+
+function refreshLocation() {
+  document.getElementById('locationLandmark').style.display = 'none';
+  currentLocation = null;
+  initLocation();
+}
+
+function fetchNearbyLandmark(lat, lng) {
+  return fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json&accept-language=ko&zoom=17', {
+    headers: { 'Accept-Language': 'ko' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var a = data.address || {};
+    // UI 표시용 (랜드마크 안내)
+    var display = a.road || a.amenity || a.shop || a.office || a.building || a.neighbourhood || a.suburb || '';
+    if (display) {
+      currentLandmark = display;
+      document.getElementById('landmarkText').textContent = display + ' 근처';
+      document.getElementById('locationLandmark').style.display = 'block';
+    }
+  })
+  .catch(function() {});
+}
+
+function setLocStatus(msg, type) {
+  var el = document.getElementById('locStatus');
+  el.textContent = msg;
+  el.dataset.set = '1';
+  el.removeAttribute('data-i18n');
+  document.getElementById('locDot').className = 'loc-dot' + (type ? ' ' + type : '');
+}
+
+// ========================
+// TABS
+// ========================
+function switchTab(tab) {
+  document.getElementById('tab-chat').classList.toggle('active', tab === 'chat');
+  document.getElementById('tab-fav').classList.toggle('active', tab === 'fav');
+  document.getElementById('panel-chat').classList.toggle('active', tab === 'chat');
+  document.getElementById('panel-fav').classList.toggle('active', tab === 'fav');
+  if (tab === 'fav') renderFavorites();
+}
+
+// ========================
+// TRANSPORT MODE
+// ========================
+function setTransport(mode) {
+  transportMode = mode;
+  document.getElementById('btn-transit').classList.toggle('active', mode === 'transit');
+  document.getElementById('btn-car').classList.toggle('active', mode === 'car');
+}
+
+// ========================
+// SPEECH RECOGNITION
+// ========================
+function toggleRecording() {
+  if (isRecording) { stopRecording(); } else { startRecording(); }
+}
+
+function startRecording() {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast(t('mic.unsupported'));
+    return;
+  }
+  recognition = new SR();
+  recognition.lang = currentLang === 'en' ? 'en-US' : 'ko-KR';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = function() {
+    isRecording = true;
+    const stopIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('micBtn').innerHTML = stopIcon;
+    document.getElementById('micWrap').classList.add('recording-active');
+    document.getElementById('micHint').textContent = t('mic.listening');
+    document.getElementById('micHint').classList.add('recording');
+  };
+  recognition.onresult = function(e) {
+    var transcript = e.results[0][0].transcript;
+    if (!checkVoiceCommand(transcript)) sendText(transcript, '', 'voice');
+  };
+  recognition.onerror = function(e) {
+    stopRecording();
+    var msgs = { 'not-allowed': t('mic.notAllowed'), 'no-speech': t('mic.noSpeech') };
+    showToast(msgs[e.error] || t('mic.err', e.error));
+  };
+  recognition.onend = function() { stopRecording(); };
+  recognition.start();
+}
+
+function stopRecording() {
+  isRecording = false;
+  if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+  const micIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micBtn').innerHTML = micIcon;
+  document.getElementById('micWrap').classList.remove('recording-active');
+  document.getElementById('micHint').textContent = t('mic.hint');
+  document.getElementById('micHint').classList.remove('recording');
+}
+
+// ========================
+// SEND TEXT
+// ========================
+function sendTextFromInput() {
+  var input = document.getElementById('textInput');
+  var text = input.value.trim();
+  if (text) { input.value = ''; sendText(text, '', 'text'); }
+}
+
+document.getElementById('textInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') sendTextFromInput();
+});
+
+function clearResults() {
+  var chatArea = document.getElementById('chatArea');
+  var emptyState = document.getElementById('emptyState');
+  while (chatArea.firstChild) chatArea.removeChild(chatArea.firstChild);
+  if (emptyState) chatArea.appendChild(emptyState);
+}
+
+// 최근 검색 (최대 5개)
+function getRecentSearches() {
+  try { return JSON.parse(localStorage.getItem('recentSearches') || '[]'); } catch(e) { return []; }
+}
+function saveRecentSearch(text, categoryGroupCode) {
+  var list = getRecentSearches().filter(function(r) { return r.text !== text; });
+  list.unshift({ text: text, code: categoryGroupCode || '', ts: Date.now() });
+  list = list.slice(0, 5);
+  localStorage.setItem('recentSearches', JSON.stringify(list));
+  renderRecentSearches();
+}
+function renderRecentSearches() {
+  var box = document.getElementById('recentSearches');
+  if (!box) return;
+  var list = getRecentSearches();
+  if (!list.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="recent-title">' + t('recent.title') + '</div><div class="recent-chips">' +
+    list.map(function(r) {
+      var onclickAttr = r.code
+        ? 'sendChip(\'' + escAttr(r.code) + '\')'
+        : 'sendText(\'' + escAttr(r.text) + '\')';
+      var label = r.code ? t('chip.' + r.code) : r.text;
+      return '<div class="recent-chip" onclick="' + onclickAttr + '">' + escHtml(label) + '</div>';
+    }).join('') + '</div>';
+}
+
+function sendChip(code) {
+  sendText(t('chip.' + code), code, 'chip');
+}
+function sendCategory(code, label) { // legacy alias
+  sendText(label || t('chip.' + code), code, 'chip');
+}
+
+function sendText(text, categoryGroupCode, inputType) {
+  inputType = inputType || 'text';
+  if (!categoryGroupCode && checkFavoriteVoice(text)) return;
+  clearResults();
+  hideEmptyState();
+  addUserMessage(text);
+  saveRecentSearch(text, categoryGroupCode);
+
+  if (!CONFIG.webhookUrl) {
+    addBotMessage(t('settings.webhookNeeded'));
+    showToast(t('settings.webhookNeededToast'));
+    return;
+  }
+
+  var loadingId = addLoadingMessage();
+
+  // 위치 정보(GPS)가 완료될 때까지 대기
+  var wait = locationReady || Promise.resolve();
+  wait.then(function() { return doSearch(text, loadingId, categoryGroupCode, inputType); });
+}
+
+function doSearch(text, loadingId, categoryGroupCode, inputType) {
+  // 즐겨찾기 / 최근검색을 LLM 컨텍스트로 같이 전송 (chip은 굳이 안 보내도 됨)
+  var favs = (typeof getFavorites === 'function' ? getFavorites() : []).map(function(f) {
+    return { name: f.name, alias: f.alias || '', lat: f.lat, lng: f.lng };
+  });
+  var recent = (typeof getRecentSearches === 'function' ? getRecentSearches() : []).slice(0, 5).map(function(r) {
+    return { text: r.text, code: r.code || '' };
+  });
+  return fetch(CONFIG.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text,
+      lat: currentLocation ? currentLocation.lat : 37.5665,
+      lng: currentLocation ? currentLocation.lng : 126.9780,
+      landmark: currentLandmark || '',
+      transportMode,
+      categoryGroupCode: categoryGroupCode || '',
+      inputType: inputType || 'text',
+      userId,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      chipRadius,
+      lang: currentLang,
+      favorites: favs,
+      recentSearches: recent,
+      localTime: new Date().toISOString(),
+    }),
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('서버 오류 ' + r.status);
+    return r.text();
+  })
+  .then(function(raw) {
+    removeMessage(loadingId);
+    if (!raw || !raw.trim()) {
+      addBotMessage(t('search.noResults'));
+      if (ttsEnabled) speak(t('search.noResultsTts'));
+      return;
+    }
+    var data;
+    try { data = JSON.parse(raw); }
+    catch (e) {
+      addBotMessage(t('search.respFormat', raw.slice(0, 100)));
+      return;
+    }
+    // 응답이 배열로 감싸져 오는 경우 처리 (백엔드 구현에 따라 다를 수 있음)
+    var root = Array.isArray(data) ? data[0] : data;
+    var candidates = root.candidates || (Array.isArray(root) ? root : []);
+    var mode = root.transportMode || transportMode;
+    var dest = root.destination || '';
+    var spoken = root.spoken || '';
+    var topPick = root.topPick || null;
+    var clarification = root.clarification || '';
+
+    if (mode !== transportMode) setTransport(mode);
+
+    // (1) 의도가 모호 → 추가 질문만 띄우고 종료
+    if (clarification) {
+      addBotMessage('🤖 ' + clarification);
+      if (ttsEnabled) speak(clarification);
+      return;
+    }
+
+    if (candidates.length === 0) {
+      addBotMessage(t('search.noResults'));
+      speak(t('search.noResultsTts'));
+    } else {
+      if (dest) addBotMessage(t('search.summary', dest, mode === 'transit' ? t('transport.transit_short') : t('transport.car_short')));
+      showCandidates(candidates, topPick);
+      // LLM이 추천 멘트를 만들었으면 그걸로, 아니면 fallback
+      if (spoken) speak(spoken);
+      else speak(t('search.summaryTts', candidates.length, candidates[0].distanceLabel || '', candidates[0].name));
+    }
+  })
+  .catch(function(err) {
+    removeMessage(loadingId);
+    addBotMessage(t('search.error', err.message));
+    showToast(t('search.networkErr'));
+  });
+}
+
+// ========================
+// CHAT UI
+// ========================
+function hideEmptyState() {
+  var el = document.getElementById('emptyState');
+  if (el) el.style.display = 'none';
+}
+
+function addUserMessage(text) {
+  var now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  var el = document.createElement('div');
+  el.className = 'message user';
+  el.innerHTML = '<div class="bubble">' + escHtml(text) + '</div><div class="message-time">' + now + '</div>';
+  document.getElementById('chatArea').appendChild(el);
+  scrollToBottom();
+}
+
+function addBotMessage(text) {
+  var el = document.createElement('div');
+  el.className = 'message bot';
+  el.innerHTML = '<div class="bubble">' + escHtml(text) + '</div>';
+  document.getElementById('chatArea').appendChild(el);
+  scrollToBottom();
+}
+
+function addLoadingMessage() {
+  var id = 'loading-' + Date.now();
+  var el = document.createElement('div');
+  el.className = 'message bot'; el.id = id;
+  el.innerHTML = '<div class="loading-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+  document.getElementById('chatArea').appendChild(el);
+  scrollToBottom();
+  return id;
+}
+
+function removeMessage(id) {
+  var el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function showCandidates(candidates, topPick) {
+  lastCandidates = candidates;
+
+  var wrapper = document.createElement('div');
+  wrapper.className = 'message bot';
+  wrapper.style.cssText = 'max-width:100%;width:100%;';
+
+  var inner = document.createElement('div');
+  inner.className = 'candidates-wrapper';
+  inner.innerHTML = '<div class="candidates-title">' + t('search.foundCount', candidates.length) + '</div>';
+
+  // Mini map preview
+  var mapDiv = null;
+  if (candidates.length > 0) {
+    mapDiv = document.createElement('div');
+    mapDiv.className = 'mini-map-wrap';
+    mapDiv.id = 'miniMapWrap_' + Date.now();
+    inner.appendChild(mapDiv);
+    updateMiniMap(mapDiv, candidates[0]);
+  }
+
+  function updateMiniMap(div, place) {
+    var bbox = (place.lng - 0.004) + ',' + (place.lat - 0.003) + ',' + (place.lng + 0.004) + ',' + (place.lat + 0.003);
+    var src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox + '&layer=mapnik&marker=' + place.lat + ',' + place.lng;
+    var existing = div.querySelector('iframe');
+    if (existing) {
+      // Fade out → update src → fade in
+      existing.style.transition = 'opacity 0.2s';
+      existing.style.opacity = '0';
+      setTimeout(function() {
+        existing.src = src;
+        existing.style.opacity = '1';
+      }, 200);
+    } else {
+      div.innerHTML = '<iframe class="mini-map" src="' + src + '" frameborder="0" loading="lazy"></iframe>';
+    }
+  }
+
+  function selectCard(card, place) {
+    // Deselect all sibling cards
+    inner.querySelectorAll('.candidate-card').forEach(function(c) { c.classList.remove('selected'); });
+    card.classList.add('selected');
+    if (mapDiv) updateMiniMap(mapDiv, place);
+  }
+
+  var topIdx = topPick && typeof topPick.index === 'number' ? topPick.index : -1;
+  candidates.forEach(function(place, i) {
+    place.name = decodeEntities(place.name || '');
+    place.address = decodeEntities(place.address || '');
+    place.category = decodeEntities(place.category || '');
+    var isFav = isFavorite(place.lat, place.lng);
+    var isAiPick = i === topIdx;
+    var card = document.createElement('div');
+    card.className = 'candidate-card' + (i === 0 ? ' selected' : '') + (isAiPick ? ' ai-pick' : '');
+    card.dataset.lat = place.lat;
+    card.dataset.lng = place.lng;
+    card.dataset.name = place.name || '';
+    card.dataset.address = place.address || '';
+    card.dataset.category = place.category || '';
+
+    var aiBadge = isAiPick
+      ? '<div class="ai-pick-badge">✨ AI 추천' + (topPick.reason ? ' · <span class="ai-reason">' + escHtml(topPick.reason) + '</span>' : '') + '</div>'
+      : '';
+
+    card.innerHTML =
+      aiBadge +
+      '<div class="card-row1">' +
+        '<div class="card-num">' + place.index + '</div>' +
+        '<div class="card-info">' +
+          '<div class="card-name">' + escHtml(place.name || t('search.noname')) + '</div>' +
+          '<div class="card-address">' + escHtml(place.address || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<button class="card-star" onclick="toggleFavoriteFromCard(this)" title="즐겨찾기">' + (isFav ? '⭐' : '☆') + '</button>' +
+      '<div class="card-row2">' +
+        '<div class="card-tags">' +
+          (place.category ? '<span class="card-category">' + escHtml(place.category) + '</span>' : '') +
+          (place.distanceLabel ? '<span class="card-distance">' + place.distanceLabel + '</span>' : '') +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+          (place.phone ? '<a class="card-icon-btn" href="tel:' + escAttr(place.phone) + '" title="전화 ' + escAttr(place.phone) + '">📞</a>' : '') +
+          (place.placeUrl ? '<a class="card-icon-btn" href="' + escAttr(place.placeUrl) + '" target="_blank" rel="noopener" title="카카오맵에서 보기">ⓘ</a>' : '') +
+          '<button class="card-select-btn" onclick="navigateTo(' + place.lat + ',' + place.lng + ',\'' + escAttr(place.name || '') + '\')">' + t('nav.go') + '</button>' +
+        '</div>' +
+      '</div>';
+    // Card tap → select + update map (ignore taps on buttons/links)
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('button, a')) return;
+      selectCard(card, place);
+    });
+
+    inner.appendChild(card);
+  });
+
+  wrapper.appendChild(inner);
+  document.getElementById('chatArea').appendChild(wrapper);
+  scrollToBottom();
+}
+
+// ========================
+// NAVIGATION DEEPLINK
+// ========================
+function navigateTo(dlat, dlng, dname, mode) {
+  mode = mode || transportMode;
+  var slat = currentLocation ? currentLocation.lat : '';
+  var slng = currentLocation ? currentLocation.lng : '';
+  var appname = 'com.example.mapservice';
+  var enc = encodeURIComponent;
+
+  var appUrl = mode === 'transit'
+    ? 'nmap://route/public?slat=' + slat + '&slng=' + slng + '&sname=' + enc(t('nav.currentLoc')) + '&dlat=' + dlat + '&dlng=' + dlng + '&dname=' + enc(dname) + '&appname=' + appname
+    : 'nmap://route/car?slat=' + slat + '&slng=' + slng + '&sname=' + enc(t('nav.currentLoc')) + '&dlat=' + dlat + '&dlng=' + dlng + '&dname=' + enc(dname) + '&appname=' + appname;
+
+  var webUrl = mode === 'transit'
+    ? 'https://map.naver.com/v5/directions/' + slng + ',' + slat + ',' + enc(t('nav.currentLoc')) + ',15,map/' + dlng + ',' + dlat + ',' + enc(dname) + ',15,map/-/transit?c=15,0,0,0,dh'
+    : 'https://map.naver.com/v5/directions/' + slng + ',' + slat + ',' + enc(t('nav.currentLoc')) + ',15,map/' + dlng + ',' + dlat + ',' + enc(dname) + ',15,map/-/car?c=15,0,0,0,dh';
+
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    var timer = setTimeout(function() { window.open(webUrl, '_blank'); }, 1500);
+    var iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = appUrl;
+    document.body.appendChild(iframe);
+    window.addEventListener('blur', function() { clearTimeout(timer); }, { once: true });
+  } else {
+    window.open(webUrl, '_blank');
+  }
+
+  addBotMessage(t('nav.start', dname, mode === 'transit' ? t('nav.transit') : t('nav.car')));
+  speak(t('nav.startTts', dname));
+}
+
+// ========================
+// FAVORITES
+// ========================
+function getFavorites() {
+  try { return JSON.parse(localStorage.getItem('favorites') || '[]'); } catch(e) { return []; }
+}
+
+function saveFavorites(favs) {
+  localStorage.setItem('favorites', JSON.stringify(favs));
+  updateFavCount();
+}
+
+function isFavorite(lat, lng) {
+  return getFavorites().some(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; });
+}
+
+function toggleFavoriteFromCard(btn) {
+  var card = btn.closest('.candidate-card');
+  var lat = parseFloat(card.dataset.lat);
+  var lng = parseFloat(card.dataset.lng);
+  var name = card.dataset.name;
+  var address = card.dataset.address;
+  var category = card.dataset.category;
+
+  var favs = getFavorites();
+  var idx = favs.findIndex(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; });
+  if (idx >= 0) {
+    favs.splice(idx, 1);
+    btn.textContent = '☆';
+    showToast(t('fav.deletedName', name));
+  } else {
+    favs.unshift({ lat, lng, name, address, category, savedAt: Date.now() });
+    btn.textContent = '⭐';
+    showToast(t('fav.added', name));
+  }
+  saveFavorites(favs);
+}
+
+function removeFavorite(lat, lng) {
+  var favs = getFavorites().filter(function(f) { return !(Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001); });
+  saveFavorites(favs);
+  renderFavorites();
+  showToast(t('fav.deleted'));
+}
+
+function renderFavorites() {
+  var panel = document.getElementById('favPanel');
+  var favs = getFavorites();
+  panel.innerHTML = '';
+
+  if (favs.length === 0) {
+    panel.innerHTML =
+      '<div class="fav-empty">' +
+        '<div class="fav-empty-icon">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' +
+        '</div>' +
+        '<p>' + t('fav.empty') + '</p>' +
+      '</div>';
+    return;
+  }
+
+  favs.forEach(function(f) {
+    var item = document.createElement('div');
+    item.className = 'fav-item';
+    item.innerHTML =
+      '<div class="fav-row1">' +
+        '<div class="fav-pin">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>' +
+        '</div>' +
+        '<div class="fav-info">' +
+          '<div class="fav-name">' + escHtml(f.name) +
+            (f.alias
+              ? '<span class="fav-alias-badge" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.edit')) + '">' + escHtml(f.alias) + '</span>'
+              : '<button class="fav-alias-btn" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.set')) + '">' + t('fav.alias.add') + '</button>'
+            ) +
+          '</div>' +
+          '<div class="fav-address">' + escHtml(f.address || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="fav-row2">' +
+        '<button class="fav-transit-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'transit\')">' + t('transport.transit') + '</button>' +
+        '<button class="fav-car-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'car\')">' + t('transport.car') + '</button>' +
+        '<button class="fav-delete-btn" onclick="removeFavorite(' + f.lat + ',' + f.lng + ')">🗑</button>' +
+      '</div>';
+    panel.appendChild(item);
+  });
+}
+
+function updateFavCount() {
+  var count = getFavorites().length;
+  document.getElementById('fav-count').textContent = count > 0 ? '(' + count + ')' : '';
+}
+
+// ========================
+// CONFIG MODAL
+// ========================
+function openConfig() {
+  document.getElementById('webhookInput').value = CONFIG.webhookUrl;
+  document.getElementById('userIdDisplay').textContent = userId;
+  // Language segmented control
+  document.querySelectorAll('#langSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === currentLang);
+  });
+  // Chip radius slider
+  var km = chipRadius / 1000;
+  document.getElementById('radiusSlider').value = km;
+  document.getElementById('radiusValue').textContent = km + ' km';
+  // Voices
+  loadVoices();
+  document.getElementById('configModal').classList.add('open');
+}
+function closeConfig() {
+  document.getElementById('configModal').classList.remove('open');
+}
+function setLangPick(lang) {
+  document.querySelectorAll('#langSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === lang);
+  });
+  // Provisional — apply on save only
+  document.getElementById('langSeg').dataset.pending = lang;
+  // Reload voice list filtered by the chosen language (no global state mutation)
+  populateVoiceSelect(lang);
+}
+function onRadiusInput(val) {
+  document.getElementById('radiusValue').textContent = val + ' km';
+}
+function saveConfig() {
+  var url = document.getElementById('webhookInput').value.trim();
+  CONFIG.webhookUrl = url;
+  localStorage.setItem('webhookUrl', url);
+
+  // Language
+  var pendingLang = document.getElementById('langSeg').dataset.pending || currentLang;
+  if (pendingLang !== currentLang) {
+    currentLang = pendingLang;
+    localStorage.setItem('lang', currentLang);
+  }
+  // Radius
+  var km = parseInt(document.getElementById('radiusSlider').value, 10) || 5;
+  chipRadius = km * 1000;
+  localStorage.setItem('chipRadius', chipRadius);
+  // Voice
+  var sel = document.getElementById('voiceSelect');
+  selectedVoiceURI = sel ? sel.value : '';
+  localStorage.setItem('voiceURI', selectedVoiceURI);
+
+  applyI18n();
+  showToast(t('settings.saved'));
+  closeConfig();
+}
+document.getElementById('configModal').addEventListener('click', function(e) {
+  if (e.target === this) closeConfig();
+});
+
+// ========================
+// HELPERS
+// ========================
+function scrollToBottom() {
+  var c = document.getElementById('chatArea');
+  c.scrollTop = c.scrollHeight;
+}
+
+function decodeEntities(str) {
+  return String(str).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escAttr(str) {
+  return String(str).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 3000);
+}
+
+// ========================
+// IN-APP BROWSER DETECTION
+// ========================
+function detectInAppBrowser() {
+  var ua = navigator.userAgent;
+  var isKakao   = /KAKAOTALK/i.test(ua);
+  var isNaver   = /NAVER/i.test(ua) && !/NaverBot/i.test(ua);
+  var isInsta   = /Instagram/i.test(ua);
+  var isFB      = /FBAN|FBAV/i.test(ua);
+  var isLine    = /Line\//i.test(ua);
+  var isSamsung = /SamsungBrowser/i.test(ua);
+  var isInApp   = isKakao || isNaver || isInsta || isFB || isLine;
+
+  if (!isInApp) return;
+
+  var appName = isKakao ? '카카오톡' : isNaver ? '네이버' : isInsta ? '인스타그램' : isFB ? '페이스북' : 'Line';
+  var banner = document.getElementById('inappBanner');
+  document.getElementById('inappTitle').textContent = appName + ' 브라우저에서 열렸어요';
+  document.getElementById('inappDesc').textContent = t('inapp.descChrome');
+
+  // Android: intent scheme으로 Chrome 직접 실행 가능
+  var isAndroid = /Android/i.test(ua);
+  var openBtn = document.getElementById('inappOpenBtn');
+  if (isAndroid) {
+    openBtn.style.display = '';
+  } else {
+    // iOS는 Chrome 강제 실행 불가 → 버튼 숨기고 링크 복사만 안내
+    openBtn.style.display = 'none';
+    document.getElementById('inappDesc').textContent = t('inapp.descIos');
+  }
+
+  banner.classList.add('show');
+}
+
+function openInChrome() {
+  var url = location.href;
+  // Android Chrome intent scheme
+  location.href = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+}
+
+function copyPageUrl() {
+  var url = location.href;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function() {
+      showToast(t('inapp.copied'));
+      document.getElementById('inappBanner').style.display = 'none';
+    });
+  } else {
+    var el = document.createElement('textarea');
+    el.value = url;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showToast(t('inapp.copied'));
+    document.getElementById('inappBanner').style.display = 'none';
+  }
+}
+
+// ========================
+// INIT
+// ========================
+applyI18n();
+detectInAppBrowser();
+initLocation();
+updateFavCount();
+renderRecentSearches();
+initTTSIcon();
+if (window.speechSynthesis) {
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(function(reg) {
+    reg.update();
+    reg.addEventListener('updatefound', function() {
+      var nw = reg.installing;
+      if (nw) nw.addEventListener('statechange', function() {
+        if (nw.state === 'activated') location.reload();
+      });
+    });
+  }).catch(function() {});
+}
+</script>
+</body>
+</html>
