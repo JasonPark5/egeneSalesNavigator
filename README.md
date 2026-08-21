@@ -9,10 +9,14 @@
 
 | 항목 | n8nMapService | 이 레포 |
 |---|---|---|
-| 자동화 엔진 | n8n (webhook, 즉시 응답) | 사내 ActionFlow (트리거 → 폴링) |
+| 자동화 엔진 | n8n (Webhook 노드, 즉시 응답) | 사내 ActionFlow (API Trigger 노드, 즉시 응답) |
 | 실행 위치 | GitHub Pages (정적 호스팅) + n8n 클라우드 | 로컬 브릿지 서버(`server/`) + 로컬 정적 서빙 |
 | 프론트엔드 → 백엔드 | 브라우저가 n8n Webhook URL로 직접 POST | 브라우저가 로컬 `server/`의 `/api/search`로 POST |
-| n8n ↔ ActionFlow 차이 흡수 | - | `server/`가 ActionFlow의 트리거+폴링을 감싸서, 프론트엔드는 예전처럼 한 번의 fetch로 결과를 받음 |
+| n8n ↔ ActionFlow 차이 흡수 | - | `server/`가 프론트엔드 계약(`{ candidates, destination, ... }`)을 유지하면서 뒷단만 ActionFlow API Trigger 호출로 교체 |
+
+ActionFlow의 API Trigger 노드는 POST + JSON body를 받고, 플로우 끝에서 만든 JSON을 n8n의
+"Respond to Webhook"과 동일하게 **동기 응답**으로 돌려줍니다. 그래서 브릿지 서버(`server/`)는
+트리거 한 번 호출하고 응답을 그대로 넘겨주기만 하면 됩니다 (폴링 불필요).
 
 프론트엔드(`web/index.html`)는 UI/음성인식/딥링크 로직을 그대로 유지했고, "Webhook URL" 설정을
 "API 서버 URL(ActionFlow 연동)"로만 바꿨습니다.
@@ -26,7 +30,7 @@
    ▼
 로컬 브릿지 서버 (server/)
    │
-   ├─ BACKEND_MODE=actionflow  → 사내 ActionFlow 실행 트리거 → 완료까지 폴링 → 결과 반환
+   ├─ BACKEND_MODE=actionflow  → 사내 ActionFlow API Trigger 호출 → 응답을 그대로 반환
    │                              (server/src/actionflowClient.js)
    │
    └─ BACKEND_MODE=mock        → ActionFlow 없이 이 서버가 직접
@@ -70,9 +74,8 @@ npm start                 # http://localhost:4000
 
 - `BACKEND_MODE=mock` (기본값): ActionFlow 없이 로컬에서 바로 동작. `LLM_PROVIDER`(gemini/claude),
   해당 API 키, `KAKAO_REST_API_KEY`(developers.kakao.com)가 필요합니다.
-- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. `ACTIONFLOW_BASE_URL`, `ACTIONFLOW_FLOW_ID`,
-  `ACTIONFLOW_API_KEY`와 트리거/폴링 경로·필드명을 사내 ActionFlow 스펙에 맞게 채웁니다.
-  자세한 항목 설명은 `server/.env.example` 주석을 참고하세요.
+- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. ActionFlow에서 만든 플로우의 API Trigger URI를
+  `ACTIONFLOW_API_URL`에 넣으면 됩니다 (인증이 있다면 `ACTIONFLOW_API_KEY`도).
 
 ## 저장소 구조
 
