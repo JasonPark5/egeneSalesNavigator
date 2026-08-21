@@ -1,0 +1,38 @@
+# nginx는 필수가 아닙니다. server/(Express)가 정적 파일 서빙과 /api를 모두 처리하므로
+# 기본 로컬 실행은 nginx 없이 http://localhost:4000 으로 바로 됩니다.
+#
+# nginx가 필요한 경우:
+#   - 사내망에서 고정 포트(80/443)로 접속해야 하거나, 다른 서비스와 함께 하나의
+#     도메인/포트로 묶어야 할 때
+#   - ActionFlow(또는 사내 프록시)가 특정 출발지 IP/포트만 허용해서 앞단에 리버스
+#     프록시가 필요할 때
+#   - HTTPS가 꼭 필요할 때 (참고: Web Speech API/Geolocation은 localhost에서는
+#     HTTP로도 동작하므로, 로컬 데모만 할 거라면 보통 필요 없습니다)
+#
+# 설치 (Debian/Ubuntu):
+#   sudo apt-get update && sudo apt-get install -y nginx
+# 설치 (macOS):
+#   brew install nginx
+#
+# 사용법: 이 파일을 /etc/nginx/sites-available/egene-actionflow 로 복사하고
+#   /etc/nginx/sites-enabled/ 에 심볼릭 링크한 뒤 `sudo nginx -t && sudo systemctl reload nginx`
+
+server {
+    listen 8080;
+    server_name localhost;
+
+    # 정적 프론트엔드 + /api 모두 Express(server/)가 처리하므로 그대로 프록시
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ActionFlow 쪽 실행이 오래 걸릴 수 있으므로 타임아웃 여유 있게
+    location /api/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_read_timeout 60s;
+    }
+}
