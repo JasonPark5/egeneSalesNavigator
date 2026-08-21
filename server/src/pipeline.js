@@ -110,6 +110,33 @@ async function callLLMTool({ systemPrompt, userMessage, toolSchema, toolChoiceNa
     return block?.input || null;
   }
 
+  if (provider === 'openai') {
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다.');
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        temperature: 0.3,
+        max_tokens: 800,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        tools: [
+          { type: 'function', function: { name: toolSchema.name, description: toolSchema.description, parameters: toolSchema.parameters } },
+        ],
+        tool_choice: { type: 'function', function: { name: toolChoiceName } },
+      }),
+    });
+    if (!res.ok) throw new Error(`OpenAI API 오류: HTTP ${res.status}`);
+    const data = await res.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    return toolCall ? JSON.parse(toolCall.function.arguments) : null;
+  }
+
   throw new Error(`알 수 없는 LLM_PROVIDER: ${provider}`);
 }
 
