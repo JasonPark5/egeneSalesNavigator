@@ -84,3 +84,30 @@ web/       프론트엔드 (단일 파일 SPA, n8nMapService/index.html 기반)
 server/    로컬 브릿지 서버 (Express) — ActionFlow 연동 + mock 모드
 nginx/     선택 사항: 리버스 프록시 예시 설정
 ```
+
+## GitHub Pages 데모 배포 (임시)
+
+`server/`(비밀키를 다루는 백엔드) 없이, 다른 사람에게 링크만으로 검증을 부탁하고 싶을 때를 위한
+**정적 배포** 경로입니다. `.github/workflows/deploy-pages.yml`이 `web/`만 GitHub Pages로 배포하고,
+`web/pipeline-client.js`가 `server/src/pipeline.js`와 동일한 로직(LLM 의도분석 → 카카오 검색 →
+LLM 큐레이션)을 **브라우저에서 직접** 수행합니다.
+
+- 카카오 검색: REST API 키는 브라우저에서 CORS로 막혀 있어, Kakao Maps **JavaScript 키**로 Kakao
+  Maps JS SDK(`services.Places`)를 대신 씁니다. Kakao Developers 콘솔의 "Web 플랫폼"에 배포될
+  도메인(`https://<owner>.github.io`)을 허용 도메인으로 등록해야 합니다.
+- LLM: OpenAI API는 브라우저에서 직접 호출 가능해서 그대로 씁니다.
+
+**필요한 repo secret** (Settings → Secrets and variables → Actions):
+
+| Secret | 용도 |
+|---|---|
+| `OPENAI_API_KEY` | 데모 방문자가 자기 키 없이도 AI 추천을 써볼 수 있게 하는 기본 OpenAI 키 |
+| `KAKAO_JS_KEY` | Kakao Developers에서 발급받은 **JavaScript** 키 (REST 키와 다름) |
+
+⚠️ **주의**: 이 두 키는 배포된 정적 페이지의 소스에 그대로 노출됩니다(누구나 조회 가능). 사내
+해커톤 검증용 **임시 배포**로만 쓰고, 실제 서비스는 `server/` + ActionFlow 연동
+(`BACKEND_MODE=actionflow`) 방식을 쓰세요.
+
+로컬 개발(`localhost`)에는 영향 없습니다 — `web/index.html`은 `localhost`에서 열리면 지금까지처럼
+`server/`의 Node 브릿지를 그대로 씁니다. 설정에서 "API 서버 URL"을 비워두면 로컬에서도 클라이언트
+파이프라인을 강제로 테스트해볼 수 있습니다.

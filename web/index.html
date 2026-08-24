@@ -1550,6 +1550,15 @@
 </div>
 
 <script>
+// 정적(GitHub Pages 등) 배포 빌드 시 GitHub Actions가 repo secret 값으로 치환합니다.
+// 저장소에는 플레이스홀더만 커밋되며, 로컬에서 그대로 열면(server/ 없이) 빈 값으로
+// 취급돼 설정 화면에서 직접 키를 입력해야 동작합니다. (server/ 로컬 개발에는 영향 없음)
+window.__DEFAULT_LLM_PROVIDER__ = "__BUILD_LLM_PROVIDER__";
+window.__DEFAULT_LLM_API_KEY__ = "__BUILD_LLM_API_KEY__";
+window.__DEFAULT_KAKAO_JS_KEY__ = "__BUILD_KAKAO_JS_KEY__";
+</script>
+<script src="pipeline-client.js"></script>
+<script>
 // ========================
 // CONFIG & STATE
 // ========================
@@ -2345,21 +2354,27 @@ function confirmEventLocation(index, isCorrect) {
 // 카카오 키워드 검색 1회 실행 (LLM 스킵, 거리 제한 없이 정확도순 — "이 이름의 장소를
 // 정확히 찾기" 용도. "칩"(주변 카테고리 탐색, 반경 제한)과는 다른 모드라 혼동하지 말 것.
 async function kakaoLocateSearch(query, mode) {
-  var res = await fetch(CONFIG.webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: query,
-      lat: currentLocation ? currentLocation.lat : 37.5665,
-      lng: currentLocation ? currentLocation.lng : 126.9780,
-      transportMode: mode,
-      inputType: 'locate', // LLM 스킵 + 반경 제한 없이 정확도순 검색
-      userId: userId,
-      lang: currentLang,
-    }),
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  var data = await res.json();
+  var payload = {
+    text: query,
+    lat: currentLocation ? currentLocation.lat : 37.5665,
+    lng: currentLocation ? currentLocation.lng : 126.9780,
+    transportMode: mode,
+    inputType: 'locate', // LLM 스킵 + 반경 제한 없이 정확도순 검색
+    userId: userId,
+    lang: currentLang,
+  };
+  var data;
+  if (shouldUseClientPipeline()) {
+    data = await window.runClientPipeline(payload);
+  } else {
+    var res = await fetch(CONFIG.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  }
   var root = Array.isArray(data) ? data[0] : data;
   return (root && root.candidates) || [];
 }
@@ -2840,7 +2855,18 @@ function sendText(text, categoryGroupCode, inputType) {
   wait.then(function() { return doSearch(text, loadingId, categoryGroupCode, inputType); });
 }
 
-function doSearch(text, loadingId, categoryGroupCode, inputType) {
+// 서버(server/) 없이 GitHub Pages 같은 순수 정적 호스팅에 올렸을 때를 위한 클라이언트
+// 사이드 파이프라인(pipeline-client.js, 로드되면 window.runClientPipeline로 노출됨).
+// 로컬 개발(localhost)에서는 지금까지처럼 항상 server/의 Node 브릿지를 그대로 쓰고,
+// 그 외 호스트(GitHub Pages 등)에서는 서버가 없으므로 자동으로 클라이언트 파이프라인을 씀.
+// 설정에서 webhookUrl을 직접 비우면 로컬에서도 클라이언트 파이프라인을 강제로 테스트해볼 수 있다.
+function shouldUseClientPipeline() {
+  if (typeof window.runClientPipeline !== 'function') return false;
+  var isLocalDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  return !CONFIG.webhookUrl || !isLocalDev;
+}
+
+function buildSearchPayload(text, categoryGroupCode, inputType) {
   // 즐겨찾기 / 최근검색을 LLM 컨텍스트로 같이 전송 (chip은 굳이 안 보내도 됨)
   var favs = (typeof getFavorites === 'function' ? getFavorites() : []).map(function(f) {
     return { name: f.name, alias: f.alias || '', lat: f.lat, lng: f.lng };
@@ -2848,28 +2874,78 @@ function doSearch(text, loadingId, categoryGroupCode, inputType) {
   var recent = (typeof getRecentSearches === 'function' ? getRecentSearches() : []).slice(0, 5).map(function(r) {
     return { text: r.text, code: r.code || '' };
   });
+  return {
+    text,
+    lat: currentLocation ? currentLocation.lat : 37.5665,
+    lng: currentLocation ? currentLocation.lng : 126.9780,
+    landmark: currentLandmark || '',
+    transportMode,
+    categoryGroupCode: categoryGroupCode || '',
+    inputType: inputType || 'text',
+    userId,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    chipRadius,
+    lang: currentLang,
+    favorites: favs,
+    recentSearches: recent,
+    localTime: new Date().toISOString(),
+    // 개인 구독 LLM 키 (설정에서 입력한 경우만). 서버 모드에선 비어 있으면 server/.env 기본값을 씀.
+    llmProvider: CONFIG.llmProvider || undefined,
+    llmApiKey: CONFIG.llmApiKey || undefined,
+  };
+}
+
+function handleSearchResult(data) {
+  // 응답이 배열로 감싸져 오는 경우 처리 (백엔드 구현에 따라 다를 수 있음)
+  var root = Array.isArray(data) ? data[0] : data;
+  var candidates = root.candidates || (Array.isArray(root) ? root : []);
+  var mode = root.transportMode || transportMode;
+  var dest = root.destination || '';
+  var spoken = root.spoken || '';
+  var topPick = root.topPick || null;
+  var clarification = root.clarification || '';
+
+  if (mode !== transportMode) setTransport(mode);
+
+  // (1) 의도가 모호 → 추가 질문만 띄우고 종료
+  if (clarification) {
+    addBotMessage('🤖 ' + clarification);
+    if (ttsEnabled) speak(clarification);
+    return;
+  }
+
+  if (candidates.length === 0) {
+    addBotMessage(t('search.noResults'));
+    speak(t('search.noResultsTts'));
+  } else {
+    if (dest) addBotMessage(t('search.summary', dest, mode === 'transit' ? t('transport.transit_short') : t('transport.car_short')));
+    showCandidates(candidates, topPick);
+    // LLM이 추천 멘트를 만들었으면 그걸로, 아니면 fallback
+    if (spoken) speak(spoken);
+    else speak(t('search.summaryTts', candidates.length, candidates[0].distanceLabel || '', candidates[0].name));
+  }
+}
+
+function doSearch(text, loadingId, categoryGroupCode, inputType) {
+  var payload = buildSearchPayload(text, categoryGroupCode, inputType);
+
+  if (shouldUseClientPipeline()) {
+    return window.runClientPipeline(payload)
+      .then(function(data) {
+        removeMessage(loadingId);
+        handleSearchResult(data);
+      })
+      .catch(function(err) {
+        removeMessage(loadingId);
+        addBotMessage(t('search.error', err.message));
+        showToast(t('search.networkErr'));
+      });
+  }
+
   return fetch(CONFIG.webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text,
-      lat: currentLocation ? currentLocation.lat : 37.5665,
-      lng: currentLocation ? currentLocation.lng : 126.9780,
-      landmark: currentLandmark || '',
-      transportMode,
-      categoryGroupCode: categoryGroupCode || '',
-      inputType: inputType || 'text',
-      userId,
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      chipRadius,
-      lang: currentLang,
-      favorites: favs,
-      recentSearches: recent,
-      localTime: new Date().toISOString(),
-      // 개인 구독 LLM 키 (설정에서 입력한 경우만). 서버는 비어 있으면 server/.env 기본값을 씀.
-      llmProvider: CONFIG.llmProvider || undefined,
-      llmApiKey: CONFIG.llmApiKey || undefined,
-    }),
+    body: JSON.stringify(payload),
   })
   .then(function(r) {
     if (!r.ok) throw new Error('서버 오류 ' + r.status);
@@ -2888,34 +2964,7 @@ function doSearch(text, loadingId, categoryGroupCode, inputType) {
       addBotMessage(t('search.respFormat', raw.slice(0, 100)));
       return;
     }
-    // 응답이 배열로 감싸져 오는 경우 처리 (백엔드 구현에 따라 다를 수 있음)
-    var root = Array.isArray(data) ? data[0] : data;
-    var candidates = root.candidates || (Array.isArray(root) ? root : []);
-    var mode = root.transportMode || transportMode;
-    var dest = root.destination || '';
-    var spoken = root.spoken || '';
-    var topPick = root.topPick || null;
-    var clarification = root.clarification || '';
-
-    if (mode !== transportMode) setTransport(mode);
-
-    // (1) 의도가 모호 → 추가 질문만 띄우고 종료
-    if (clarification) {
-      addBotMessage('🤖 ' + clarification);
-      if (ttsEnabled) speak(clarification);
-      return;
-    }
-
-    if (candidates.length === 0) {
-      addBotMessage(t('search.noResults'));
-      speak(t('search.noResultsTts'));
-    } else {
-      if (dest) addBotMessage(t('search.summary', dest, mode === 'transit' ? t('transport.transit_short') : t('transport.car_short')));
-      showCandidates(candidates, topPick);
-      // LLM이 추천 멘트를 만들었으면 그걸로, 아니면 fallback
-      if (spoken) speak(spoken);
-      else speak(t('search.summaryTts', candidates.length, candidates[0].distanceLabel || '', candidates[0].name));
-    }
+    handleSearchResult(data);
   })
   .catch(function(err) {
     removeMessage(loadingId);
