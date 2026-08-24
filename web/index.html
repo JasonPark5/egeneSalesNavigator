@@ -895,6 +895,9 @@
       background: linear-gradient(145deg, #f87171, #ef4444);
       box-shadow: 0 4px 16px rgba(239,68,68,0.4), 0 2px 4px rgba(239,68,68,0.2);
     }
+    .mic-wrap-inline { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .mic-btn.compact { width: 40px; height: 40px; }
+    .mic-btn.compact svg { width: 17px; height: 17px; }
     .mic-hint {
       font-size: 12px;
       color: var(--text-muted);
@@ -1351,32 +1354,7 @@
     <button class="transport-btn" id="btn-car" onclick="setTransport('car')" data-i18n="transport.car">🚗 자동차</button>
   </div>
 
-  <!-- Mic + Location (always visible) -->
-  <div class="action-header">
-    <div class="mic-row">
-      <div class="mic-wrap" id="micWrap">
-        <div class="mic-ring pulse-ring-1"></div>
-        <div class="mic-ring pulse-ring-2"></div>
-        <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div class="mic-hint" id="micHint" data-i18n="mic.hint">버튼을 누르고 말씀하세요</div>
-    <div class="location-status">
-      <div class="loc-dot" id="locDot"></div>
-      <span id="locStatus" data-i18n="loc.loading">위치 정보 가져오는 중...</span>
-      <button id="locRefreshBtn" onclick="refreshLocation()" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:13px;color:var(--text-muted);line-height:1;" data-i18n-title="loc.refresh" title="위치 새로고침">↻</button>
-    </div>
-    <div class="location-landmark" id="locationLandmark" style="display:none;font-size:11px;color:var(--text-muted);text-align:center;">📍 <span id="landmarkText"></span></div>
-  </div>
-
-  <!-- Persistent chips (always visible) -->
+  <!-- Persistent chips (always visible, top) -->
   <div class="persistent-chips">
     <div class="chip" onclick="sendChip('FD6')"><span class="chip-icon">🍽️</span><span data-i18n="chip.FD6">맛집</span></div>
     <div class="chip" onclick="sendChip('CE7')"><span class="chip-icon">☕</span><span data-i18n="chip.CE7">카페</span></div>
@@ -1401,7 +1379,23 @@
 
   <!-- Text input (bottom) -->
   <div class="input-area">
+    <div class="location-status">
+      <div class="loc-dot" id="locDot"></div>
+      <span id="locStatus" data-i18n="loc.loading">위치 정보 가져오는 중...</span>
+      <button id="locRefreshBtn" onclick="refreshLocation()" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:13px;color:var(--text-muted);line-height:1;" data-i18n-title="loc.refresh" title="위치 새로고침">↻</button>
+    </div>
+    <div class="location-landmark" id="locationLandmark" style="display:none;font-size:11px;color:var(--text-muted);text-align:center;">📍 <span id="landmarkText"></span></div>
     <div class="text-input-row">
+      <div class="mic-wrap-inline" id="micWrap">
+        <button class="mic-btn compact" id="micBtn" onclick="toggleRecording()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+      </div>
       <input type="text" class="text-input" id="textInput" data-i18n-ph="input.placeholder" placeholder="목적지를 입력하세요" />
       <button class="send-btn" onclick="sendTextFromInput()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1410,6 +1404,7 @@
         </svg>
       </button>
     </div>
+    <div class="mic-hint" id="micHint" data-i18n="mic.hint" style="margin-top:5px;">버튼을 누르고 말씀하세요</div>
   </div>
 </div>
 
@@ -2329,6 +2324,28 @@ function confirmEventLocation(index, isCorrect) {
   renderToday();
 }
 
+// 카카오 키워드 검색 1회 실행 (LLM 스킵, chip 모드) — 후보 배열만 반환
+async function kakaoChipSearch(query, mode) {
+  var res = await fetch(CONFIG.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: query,
+      lat: currentLocation ? currentLocation.lat : 37.5665,
+      lng: currentLocation ? currentLocation.lng : 126.9780,
+      transportMode: mode,
+      inputType: 'chip', // LLM 스킵, 바로 카카오 키워드 검색
+      userId: userId,
+      lang: currentLang,
+      chipRadius: chipRadius,
+    }),
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  var data = await res.json();
+  var root = Array.isArray(data) ? data[0] : data;
+  return (root && root.candidates) || [];
+}
+
 // 실제 좌표/이동시간을 모르는 일정(주로 실제 캘린더 이벤트)은 뒤에서 조용히
 // 카카오 검색을 돌려 1등 결과로 바로 길찾기까지 실행. 못 찾으면 검색탭으로 안내.
 async function resolveAndNavigateEvent(index) {
@@ -2336,41 +2353,34 @@ async function resolveAndNavigateEvent(index) {
   if (!ev) return;
   var raw = eventLocationName(ev) || ev.title || '';
   // 구글 캘린더 위치는 보통 "장소명, 상세주소" 형태라 앞부분(장소명)만 쓰면 검색이 더 잘 맞음
-  var query = raw.split(',')[0].trim() || raw;
-  if (!query) { switchTab('search'); return; }
+  var placeName = raw.split(',')[0].trim() || raw;
+  var mode = ev.transportMode || transportMode;
+
+  if (!placeName) { switchTab('search'); return; }
 
   showToast(t('today.locating'));
   try {
-    var res = await fetch(CONFIG.webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: query,
-        lat: currentLocation ? currentLocation.lat : 37.5665,
-        lng: currentLocation ? currentLocation.lng : 126.9780,
-        transportMode: ev.transportMode || transportMode,
-        inputType: 'chip', // LLM 스킵, 바로 카카오 키워드 검색
-        userId: userId,
-        lang: currentLang,
-        chipRadius: chipRadius,
-      }),
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    var data = await res.json();
-    var root = Array.isArray(data) ? data[0] : data;
-    var candidates = (root && root.candidates) || [];
+    var candidates = await kakaoChipSearch(placeName, mode);
+    console.log('[Today] "' + placeName + '" 검색 결과 ' + candidates.length + '건');
+
+    // 장소명만으로 못 찾으면, 원문 전체(주소 포함)로 한 번 더 시도
+    if (candidates.length === 0 && raw !== placeName) {
+      candidates = await kakaoChipSearch(raw, mode);
+      console.log('[Today] "' + raw + '" (원문) 검색 결과 ' + candidates.length + '건');
+    }
+
     if (candidates.length > 0) {
       var top = candidates[0];
-      navigateTo(top.lat, top.lng, top.name, ev.transportMode || transportMode);
+      navigateTo(top.lat, top.lng, top.name, mode);
     } else {
       showToast(t('today.locateNotFound'));
       switchTab('search');
-      sendText(query, '', 'text');
+      sendText(placeName, '', 'text');
     }
   } catch (err) {
     console.error('[Today] 위치 검색 실패:', err);
     switchTab('search');
-    sendText(query, '', 'text');
+    sendText(placeName, '', 'text');
   }
 }
 
@@ -2384,22 +2394,22 @@ function isGoogleAuthReady() {
   return !!GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
 }
 
-// 액세스 토큰(수명 ~1시간)을 sessionStorage에 넣어서 새로고침해도 그대로 유지되게 함
-// (탭을 닫으면 사라짐 — 이 정도면 해커톤 데모엔 충분하고, "조용한 재로그인" 팝업이
-// 매번 뜨는 것보다 훨씬 예측 가능함).
+// 액세스 토큰(수명 ~1시간)을 localStorage에 넣어서 새로고침은 물론 브라우저를
+// 껐다 켜도 유지되게 함. 토큰 자체는 만료되면(401) 자동으로 지워지고 재연결을
+// 요구하니, 계속 저장해둬도 실질적인 위험은 낮음(해커톤 로컬 앱 기준).
 const GOOGLE_TOKEN_STORAGE_KEY = 'googleCalendarToken';
 
 function saveGoogleToken(token, expiresInSeconds) {
   var expiresAt = Date.now() + (expiresInSeconds || 3600) * 1000;
-  sessionStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY, JSON.stringify({ token: token, expiresAt: expiresAt }));
+  localStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY, JSON.stringify({ token: token, expiresAt: expiresAt }));
 }
 function loadGoogleToken() {
   try {
-    var raw = sessionStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
+    var raw = localStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
     if (!raw) return null;
     var parsed = JSON.parse(raw);
     if (!parsed.token || !parsed.expiresAt || Date.now() >= parsed.expiresAt) {
-      sessionStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
+      localStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
       return null;
     }
     return parsed.token;
@@ -2408,7 +2418,7 @@ function loadGoogleToken() {
   }
 }
 function clearGoogleToken() {
-  sessionStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
 }
 
 // 페이지 로드 시 세션에 남은 토큰이 있으면 팝업 없이 바로 복원
