@@ -50,6 +50,11 @@ const INTENT_TOOL_SCHEMA = {
       categoryGroupCode: {
         type: 'string',
         enum: ['', 'FD6', 'CE7', 'CS2', 'PM9', 'SW8', 'PK6', 'BK9', 'OL7', 'HP8', 'MT1'],
+        description:
+          '요청이 아래 업종 중 하나에 해당하면 query에 구체적인 상호/메뉴가 있어도 항상 같이 채우세요 ' +
+          '(카카오 키워드 검색이 0건일 때 이 값으로 업종 기준 재검색하는 안전망으로도 쓰입니다): ' +
+          "FD6=음식점/맛집/밥집/식당, CE7=카페, CS2=편의점, PM9=약국, SW8=지하철역, PK6=주차장, " +
+          'BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트. 해당 없으면 빈 문자열.',
       },
       transportMode: {
         type: 'string',
@@ -179,6 +184,7 @@ async function resolveIntent(ctx) {
     '당신은 한국 길찾기 앱의 의도 분석 어시스턴트입니다. 사용자의 자연어 발화에서 카카오 로컬 검색에 쓸 쿼리/카테고리/필터를 추출하세요. ' +
     "즐겨찾기 별칭(집, 회사 등)이 발화에서 목적지 자체로 쓰이면(예: '집으로 가자', '회사 가는 길') intent='navigate_favorite'이고 destinationFavoriteName에 그 별칭을 넣으세요. " +
     "즐겨찾기 별칭이 검색 기준 위치로만 쓰이면(예: '집 근처 편의점', '회사 주변 카페') intent='search'이고 originHint에만 넣으세요 (destinationFavoriteName은 비움). " +
+    "originHint/destinationFavoriteName에 즐겨찾기를 넣을 때는 '# 즐겨찾기' 목록에 있는 alias 값을 토씨 하나 안 틀리고 그대로 복사해서 넣으세요 (예: 목록에 alias:'집'이면 '집근처'/'우리집'이 아니라 정확히 '집'만). " +
     "이동수단(transportMode)은 발화에 명시적으로 언급된 경우에만(예: '대중교통으로', '차 타고') 그 값으로 바꾸고, 언급이 없으면 컨텍스트의 '이동수단 기본' 값을 절대 임의로 바꾸지 말고 그대로 유지하세요. " +
     "query는 실제 상호명/업종에 매칭될 짧은 검색어만 넣고, '아이랑 갈만한' 같은 동반자/분위기/목적 수식어는 query에서 빼서 filters에 넣으세요 (query에 그대로 넣으면 검색결과 0건이 됩니다). " +
     "모호하면 clarification에 짧은 질문을 넣고 intent='ambiguous'. " +
@@ -314,7 +320,38 @@ async function curateResults({ candidates, originalText, filters, lang, spokenFa
 }
 
 function findFavorite(favorites, name) {
-  return (favorites || []).find((f) => f.alias === name || f.name === name);
+  const clean = String(name || '').trim();
+  if (!clean) return null;
+  // LLM이 별칭을 정확히 그대로("집") 돌려주지 않고 조사가 붙거나("집근처", "집 근처")
+  // 앞뒤에 다른 말이 붙어서 올 때가 있어, 완전일치가 안 되면 별칭이 접두어로 포함된
+  // 경우까지 허용한다. originHint/destinationFavoriteName은 이미 LLM이 "즐겨찾기 별칭
+  // 또는 현재위치"로 좁혀서 뽑은 값이라 임의 문장이 섞여 들어올 일이 없어, 부분일치를
+  // 써도 클라이언트 쪽 발화 전체 매칭 때처럼 무관한 단어(예: '맛집')와 충돌하지 않는다.
+  return (favorites || []).find(
+    (f) =>
+      (f.alias && (f.alias === clean || clean.startsWith(f.alias))) ||
+      (f.name && (f.name === clean || clean.startsWith(f.name)))
+  );
+}
+
+// LLM이 categoryGroupCode를 비워서 반환했을 때를 대비한 보조 추론(키워드 기반).
+// 카테고리 코드가 있어야 "키워드 검색 0건 -> 카테고리 검색 폴백"이 동작하므로,
+// LLM 판단을 신뢰하되 흔한 업종 단어가 원문에 있으면 최소한의 안전망으로 채워준다.
+const CATEGORY_KEYWORDS = [
+  ['FD6', ['맛집', '밥집', '식당', '고깃집', '고기집', '국밥', '냉면', '분식', '돈까스', '파스타', '이자카야', '포차', '중국집', '일식집', '백반', '뷔페']],
+  ['CE7', ['카페', '커피', '디저트', '베이커리', '빵집']],
+  ['CS2', ['편의점']],
+  ['PM9', ['약국']],
+  ['SW8', ['지하철역', '전철역']],
+  ['PK6', ['주차장']],
+  ['BK9', ['은행', 'atm', '현금인출기']],
+  ['OL7', ['주유소', '충전소']],
+  ['HP8', ['병원', '의원', '치과', '한의원']],
+  ['MT1', ['대형마트', '이마트', '홈플러스', '롯데마트']],
+];
+function inferCategoryFromText(text) {
+  const found = CATEGORY_KEYWORDS.find(([, keywords]) => keywords.some((kw) => text.includes(kw)));
+  return found ? found[0] : '';
 }
 
 async function runMockPipeline(body) {
@@ -345,6 +382,10 @@ async function runMockPipeline(body) {
   }
 
   const intent = await resolveIntent(ctx);
+  if (!intent.categoryGroupCode) {
+    const inferred = inferCategoryFromText(ctx.text);
+    if (inferred) intent.categoryGroupCode = inferred;
+  }
   console.log(
     `[search] "${ctx.text}" -> intent=${intent.intent} query="${intent.query}" category=${intent.categoryGroupCode || '(none)'} ` +
       `transportMode=${intent.transportMode} originHint=${intent.originHint} dest=${intent.destinationFavoriteName || '(none)'}` +
@@ -396,6 +437,12 @@ async function runMockPipeline(body) {
     if (origin) {
       searchLat = origin.lat;
       searchLng = origin.lng;
+      console.log(`[search] 기준 위치 = 즐겨찾기 "${intent.originHint}" -> (${origin.lat}, ${origin.lng})`);
+    } else {
+      console.log(
+        `[search] 기준 위치 = 즐겨찾기 "${intent.originHint}" (매칭 실패, 현재 GPS로 대체) ` +
+          `보유 즐겨찾기: ${JSON.stringify((ctx.favorites || []).map((f) => f.alias || f.name))}`
+      );
     }
   }
 
