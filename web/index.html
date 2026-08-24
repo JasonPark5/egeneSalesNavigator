@@ -2043,7 +2043,12 @@ function checkFavoriteVoice(text) {
   var favs = getFavorites();
   if (!favs.length) return false;
   var clean = text.replace(/(으로|로|에|까지|가줘|가자|갈래|안내|길찾기)/g,'').trim();
-  var match = favs.find(function(f) { return (f.alias && clean.includes(f.alias)) || (f.name && clean.includes(f.name)); });
+  // 별칭이 발화 전체(부가어 제거 후)와 정확히 같을 때만 즉시 처리.
+  // 부분일치(includes)를 쓰면 '집' 별칭이 '맛집'/'밥집'/'술집' 같은 단어 속 '집'과도
+  // 매칭돼 버리고, '집 근처 편의점'처럼 별칭이 목적지가 아니라 기준 위치로만 쓰인
+  // 경우까지 즉시 집으로 이동시켜 버린다. 그런 애매한 경우는 서버 LLM의 의도 분석
+  // (navigate_favorite vs search)으로 넘긴다.
+  var match = favs.find(function(f) { return (f.alias && clean === f.alias) || (f.name && clean === f.name); });
   if (match) {
     addUserMessage(text);
     speak(t('fav.aliasGoTts', match.name));
