@@ -18,7 +18,9 @@ function prepareContext(body) {
     favorites: Array.isArray(body.favorites) ? body.favorites : [],
     recentSearches: Array.isArray(body.recentSearches) ? body.recentSearches : [],
     userId: body.userId || 'anonymous',
-    skipLLM: (body.inputType || '') === 'chip',
+    // chip: 현재 위치 근처(반경 제한) 카테고리 탐색. locate: 이름/주소로 특정 장소를
+    // 정확히 찾기(거리 제한 없음, 정확도순) — 캘린더 일정 위치 확인 등에 사용.
+    skipLLM: body.inputType === 'chip' || body.inputType === 'locate',
     // 개인 구독 LLM (설정 > 내 연동 설정에서 입력한 경우만). 없으면 서버 기본값(.env) 사용.
     llmOverride: body.llmProvider ? { provider: body.llmProvider, apiKey: body.llmApiKey } : null,
   };
@@ -270,14 +272,15 @@ async function runMockPipeline(body) {
   const ctx = prepareContext(body);
 
   if (ctx.skipLLM) {
+    const isLocate = ctx.inputType === 'locate';
     const q = ctx.text.replace(/근처\s*/g, '').trim() || ctx.text;
     const kakaoUrl = buildKakaoUrl({
       query: q,
       x: ctx.userLng,
       y: ctx.userLat,
       size: '10',
-      radius: String(ctx.userChipRadius),
-      sort: 'distance',
+      radius: isLocate ? null : String(ctx.userChipRadius),
+      sort: isLocate ? 'accuracy' : 'distance',
       category_group_code: ctx.categoryGroupCode,
     });
     const raw = await kakaoSearch(kakaoUrl);

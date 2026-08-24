@@ -2152,10 +2152,12 @@ function fetchNearbyLandmark(lat, lng) {
 
 function setLocStatus(msg, type) {
   var el = document.getElementById('locStatus');
+  if (!el) return;
   el.textContent = msg;
   el.dataset.set = '1';
   el.removeAttribute('data-i18n');
-  document.getElementById('locDot').className = 'loc-dot' + (type ? ' ' + type : '');
+  var dot = document.getElementById('locDot');
+  if (dot) dot.className = 'loc-dot' + (type ? ' ' + type : '');
 }
 
 // ========================
@@ -2324,8 +2326,9 @@ function confirmEventLocation(index, isCorrect) {
   renderToday();
 }
 
-// 카카오 키워드 검색 1회 실행 (LLM 스킵, chip 모드) — 후보 배열만 반환
-async function kakaoChipSearch(query, mode) {
+// 카카오 키워드 검색 1회 실행 (LLM 스킵, 거리 제한 없이 정확도순 — "이 이름의 장소를
+// 정확히 찾기" 용도. "칩"(주변 카테고리 탐색, 반경 제한)과는 다른 모드라 혼동하지 말 것.
+async function kakaoLocateSearch(query, mode) {
   var res = await fetch(CONFIG.webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2334,10 +2337,9 @@ async function kakaoChipSearch(query, mode) {
       lat: currentLocation ? currentLocation.lat : 37.5665,
       lng: currentLocation ? currentLocation.lng : 126.9780,
       transportMode: mode,
-      inputType: 'chip', // LLM 스킵, 바로 카카오 키워드 검색
+      inputType: 'locate', // LLM 스킵 + 반경 제한 없이 정확도순 검색
       userId: userId,
       lang: currentLang,
-      chipRadius: chipRadius,
     }),
   });
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -2360,12 +2362,12 @@ async function resolveAndNavigateEvent(index) {
 
   showToast(t('today.locating'));
   try {
-    var candidates = await kakaoChipSearch(placeName, mode);
+    var candidates = await kakaoLocateSearch(placeName, mode);
     console.log('[Today] "' + placeName + '" 검색 결과 ' + candidates.length + '건');
 
     // 장소명만으로 못 찾으면, 원문 전체(주소 포함)로 한 번 더 시도
     if (candidates.length === 0 && raw !== placeName) {
-      candidates = await kakaoChipSearch(raw, mode);
+      candidates = await kakaoLocateSearch(raw, mode);
       console.log('[Today] "' + raw + '" (원문) 검색 결과 ' + candidates.length + '건');
     }
 
@@ -3048,8 +3050,16 @@ function saveFavorites(favs) {
   updateFavCount();
 }
 
+// 두 좌표가 "같은 장소"인지 판정하는 유일한 기준 — 즐겨찾기/방문로그 전체에서
+// 이 함수 하나만 씀 (예전엔 곳에 따라 오차범위 비교와 소수점 4자리 반올림 비교가
+// 섞여 있어서, 카카오 검색이 같은 장소를 미세하게 다른 좌표로 돌려줄 때 같은
+// 장소가 "즐겨찾기됨"과 "자주 가는 곳"으로 중복 표시되는 버그가 있었음).
+function sameCoord(lat1, lng1, lat2, lng2) {
+  return Math.abs(lat1 - lat2) < 0.0001 && Math.abs(lng1 - lng2) < 0.0001;
+}
+
 function isFavorite(lat, lng) {
-  return getFavorites().some(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; });
+  return getFavorites().some(function(f) { return sameCoord(f.lat, f.lng, lat, lng); });
 }
 
 function toggleFavoriteFromCard(btn) {
@@ -3061,7 +3071,7 @@ function toggleFavoriteFromCard(btn) {
   var category = card.dataset.category;
 
   var favs = getFavorites();
-  var idx = favs.findIndex(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; });
+  var idx = favs.findIndex(function(f) { return sameCoord(f.lat, f.lng, lat, lng); });
   if (idx >= 0) {
     favs.splice(idx, 1);
     btn.textContent = '☆';
@@ -3075,7 +3085,7 @@ function toggleFavoriteFromCard(btn) {
 }
 
 function removeFavorite(lat, lng) {
-  var favs = getFavorites().filter(function(f) { return !(Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001); });
+  var favs = getFavorites().filter(function(f) { return !sameCoord(f.lat, f.lng, lat, lng); });
   saveFavorites(favs);
   renderFavorites();
   showToast(t('fav.deleted'));
@@ -3088,7 +3098,7 @@ function getVisitLog() {
 
 function logVisit(lat, lng, name) {
   var log = getVisitLog();
-  var idx = log.findIndex(function(v) { return Math.abs(v.lat - lat) < 0.0001 && Math.abs(v.lng - lng) < 0.0001; });
+  var idx = log.findIndex(function(v) { return sameCoord(v.lat, v.lng, lat, lng); });
   var now = Date.now();
   var hour = new Date(now).getHours();
   if (idx >= 0) {
@@ -3105,7 +3115,7 @@ function logVisit(lat, lng, name) {
 
 function addFavoriteFromVisit(lat, lng, name) {
   var favs = getFavorites();
-  if (!favs.some(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; })) {
+  if (!favs.some(function(f) { return sameCoord(f.lat, f.lng, lat, lng); })) {
     favs.unshift({ lat: lat, lng: lng, name: name, address: '', category: '', savedAt: Date.now() });
     saveFavorites(favs);
     showToast(t('fav.added', name));
@@ -3119,20 +3129,18 @@ function renderFavorites() {
   var visits = getVisitLog();
 
   function visitFor(lat, lng) {
-    return visits.find(function(v) { return Math.abs(v.lat - lat) < 0.0001 && Math.abs(v.lng - lng) < 0.0001; });
+    return visits.find(function(v) { return sameCoord(v.lat, v.lng, lat, lng); });
   }
-
-  var favKeys = {};
-  favs.forEach(function(f) { favKeys[f.lat.toFixed(4) + ',' + f.lng.toFixed(4)] = true; });
 
   var merged = favs.map(function(f) {
     var v = visitFor(f.lat, f.lng);
     return { fav: f, count: v ? v.count : 0, lastVisited: v ? v.lastVisited : f.savedAt, isFav: true };
   }).concat(
-    visits.filter(function(v) { return v.count >= 3 && !favKeys[v.lat.toFixed(4) + ',' + v.lng.toFixed(4)]; })
-      .map(function(v) {
-        return { fav: { lat: v.lat, lng: v.lng, name: v.name, address: '', category: '' }, count: v.count, lastVisited: v.lastVisited, isFav: false };
-      })
+    visits.filter(function(v) {
+      return v.count >= 3 && !favs.some(function(f) { return sameCoord(f.lat, f.lng, v.lat, v.lng); });
+    }).map(function(v) {
+      return { fav: { lat: v.lat, lng: v.lng, name: v.name, address: '', category: '' }, count: v.count, lastVisited: v.lastVisited, isFav: false };
+    })
   );
   merged.sort(function(a, b) { return (b.count * 1e13 + b.lastVisited) - (a.count * 1e13 + a.lastVisited); });
 
