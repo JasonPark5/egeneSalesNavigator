@@ -1514,6 +1514,27 @@
       </div>
     </details>
 
+    <!-- Personal integrations: bring-your-own LLM key / Calendar -->
+    <details class="advanced-details" id="integrationsDetails">
+      <summary data-i18n="settings.integrations">내 연동 설정</summary>
+
+      <label style="margin-top:10px;" data-i18n="settings.llmProvider">LLM 제공자</label>
+      <select id="llmProviderSelect" class="voice-select" style="width:100%;margin-bottom:6px;">
+        <option value="">—</option>
+        <option value="gemini">Gemini</option>
+        <option value="claude">Claude</option>
+        <option value="openai">OpenAI</option>
+      </select>
+      <input type="password" id="llmApiKeyInput" data-i18n-ph="settings.llmApiKey.ph" placeholder="개인 API 키" autocomplete="off" />
+      <div class="modal-note" data-i18n="settings.llmNote">비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.</div>
+
+      <label style="margin-top:4px;" data-i18n="settings.calendarId">Google Calendar ID</label>
+      <input type="text" id="calendarIdInput" data-i18n-ph="settings.calendarId.ph" placeholder="you@company.com" autocomplete="off" />
+      <label style="margin-top:4px;" data-i18n="settings.calendarApiKey">Google Calendar API 키</label>
+      <input type="password" id="calendarApiKeyInput" data-i18n-ph="settings.calendarApiKey.ph" placeholder="Calendar API 키" autocomplete="off" />
+      <div class="modal-note" data-i18n="settings.calendarNote">캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.</div>
+    </details>
+
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeConfig()" data-i18n="settings.cancel">취소</button>
       <button class="btn-primary" onclick="saveConfig()" data-i18n="settings.save">저장</button>
@@ -1528,6 +1549,12 @@
 const CONFIG = {
   // 로컬 ActionFlow 브릿지 서버(server/) 주소. server/.env의 PORT와 맞춰주세요.
   webhookUrl: localStorage.getItem('webhookUrl') || 'http://localhost:4000/api/search',
+  // 개인 LLM 구독 키 (설정 > 내 연동 설정). 비워두면 서버 기본 키(server/.env) 사용.
+  llmProvider: localStorage.getItem('llmProvider') || '',
+  llmApiKey: localStorage.getItem('llmApiKey') || '',
+  // 개인 Google Calendar (설정 > 내 연동 설정). 비워두면 오늘 탭은 예시 일정을 보여줌.
+  calendarId: localStorage.getItem('calendarId') || '',
+  calendarApiKey: localStorage.getItem('calendarApiKey') || '',
 };
 
 // ========================
@@ -1557,6 +1584,15 @@ const I18N = {
     'settings.webhookLabel': 'API 서버 URL (ActionFlow 연동)',
     'settings.webhookNote': '로컬 브릿지 서버(server/)를 실행한 뒤 표시되는 API 주소를 입력하세요.',
     'settings.uidLabel': '내 ID',
+    'settings.integrations': '내 연동 설정',
+    'settings.llmProvider': 'LLM 제공자',
+    'settings.llmApiKey.ph': '개인 API 키',
+    'settings.llmNote': '비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.',
+    'settings.calendarId': 'Google Calendar ID',
+    'settings.calendarId.ph': 'you@company.com',
+    'settings.calendarApiKey': 'Google Calendar API 키',
+    'settings.calendarApiKey.ph': 'Calendar API 키',
+    'settings.calendarNote': '캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.',
     'settings.cancel': '취소',
     'settings.save': '저장',
     'settings.webhookSaved': 'API 서버 URL이 저장되었습니다.',
@@ -1570,6 +1606,7 @@ const I18N = {
     'tab.search': '검색',
     'today.briefingLabel': '오늘의 브리핑',
     'today.calStatus': 'Google Calendar 연동됨',
+    'today.calStatusMock': '예시 일정',
     'today.empty.title': '오늘은 일정이 없어요',
     'today.empty.desc': '즐겨찾기나 검색에서 목적지를 찾아보세요',
     'today.locConfirmed': '위치 확인됨',
@@ -1582,6 +1619,12 @@ const I18N = {
     'today.confirmNo': '다른 곳이에요',
     'today.confirmed': '일정 장소로 저장했어요',
     'today.needsEdit': '캘린더에서 장소를 직접 입력해주세요',
+    'today.briefingSimple': '오늘 일정 {0}건이 있어요.',
+    'today.viaSearchHint': '정확한 이동시간은 검색에서 확인하세요',
+    'today.noLocationHint': '이 일정엔 위치가 없어요. 검색으로 찾아볼까요?',
+    'today.findLocation': '검색으로 찾기',
+    'today.calendarError': 'Google Calendar를 불러오지 못했어요. 설정을 확인해주세요.',
+    'today.untitled': '(제목 없음)',
     'fav.patternLabel': '지금 이 시간대에 자주 가는 곳',
     'fav.frequentLabel': '자주 가는 곳',
     'fav.visitCount': '회 방문',
@@ -1683,6 +1726,15 @@ const I18N = {
     'settings.webhookLabel': 'API Server URL (ActionFlow bridge)',
     'settings.webhookNote': 'Start the local bridge server (server/) and paste its API URL.',
     'settings.uidLabel': 'My ID',
+    'settings.integrations': 'My integrations',
+    'settings.llmProvider': 'LLM provider',
+    'settings.llmApiKey.ph': 'Personal API key',
+    'settings.llmNote': "Leave blank to use the default key set in the local server (server/.env). If you enter one, it's sent with every search — stored only in this browser.",
+    'settings.calendarId': 'Google Calendar ID',
+    'settings.calendarId.ph': 'you@company.com',
+    'settings.calendarApiKey': 'Google Calendar API key',
+    'settings.calendarApiKey.ph': 'Calendar API key',
+    'settings.calendarNote': 'Share your calendar as "public" and issue an API key to show real events in the Today tab. Leave blank to show sample events.',
     'settings.cancel': 'Cancel',
     'settings.save': 'Save',
     'settings.webhookSaved': 'API server URL saved.',
@@ -1696,6 +1748,7 @@ const I18N = {
     'tab.search': 'Search',
     'today.briefingLabel': "Today's briefing",
     'today.calStatus': 'Google Calendar connected',
+    'today.calStatusMock': 'Sample events',
     'today.empty.title': 'No events today',
     'today.empty.desc': 'Try Favorites or Search to find a destination',
     'today.locConfirmed': 'Location confirmed',
@@ -1708,6 +1761,12 @@ const I18N = {
     'today.confirmNo': "That's not it",
     'today.confirmed': 'Saved as the event location',
     'today.needsEdit': 'Please add the location in your calendar',
+    'today.briefingSimple': 'You have {0} event(s) today.',
+    'today.viaSearchHint': 'Check Search for the exact travel time',
+    'today.noLocationHint': "This event has no location. Want to search for it?",
+    'today.findLocation': 'Search for it',
+    'today.calendarError': "Couldn't load Google Calendar. Please check your settings.",
+    'today.untitled': '(No title)',
     'fav.patternLabel': 'Frequent at this time of day',
     'fav.frequentLabel': 'Frequent places',
     'fav.visitCount': ' visits',
@@ -2101,7 +2160,7 @@ function switchTab(tab) {
 // ========================
 // TODO: 실제 Google Calendar 연동 시 이 배열을 API 응답으로 교체.
 // resolved:false 인 일정은 캘린더에 주소가 없어 장소를 추정한 경우를 흉내낸 것.
-const TODAY_EVENTS = [
+let TODAY_EVENTS = [
   {
     time: '10:00',
     title: '한빛시스템 제품 데모',
@@ -2121,6 +2180,8 @@ const TODAY_EVENTS = [
     transportMode: 'transit',
   },
 ];
+const MOCK_TODAY_EVENTS = TODAY_EVENTS;
+let calendarConnected = false;
 const MEETING_DURATION_MIN = 60;
 
 function timeToMinutes(hhmm) {
@@ -2152,10 +2213,16 @@ function renderToday() {
   var today = new Date();
   var dateLabel = (today.getMonth() + 1) + (currentLang === 'en' ? '/' + today.getDate() : '월 ' + today.getDate() + '일 일정');
 
-  var totalTravel = events.reduce(function(sum, e) { return sum + e.travelMinutes; }, 0);
-  var first = events[0];
-  var firstDeparture = minutesToTime(timeToMinutes(first.time) - first.travelMinutes);
-  var briefingText = t('today.briefing', events.length, totalTravel, eventLocationName(first), firstDeparture);
+  var knownEvents = events.filter(function(e) { return e.travelKnown !== false; });
+  var briefingText;
+  if (knownEvents.length) {
+    var totalTravel = knownEvents.reduce(function(sum, e) { return sum + e.travelMinutes; }, 0);
+    var first = knownEvents[0];
+    var firstDeparture = minutesToTime(timeToMinutes(first.time) - first.travelMinutes);
+    briefingText = t('today.briefing', events.length, totalTravel, eventLocationName(first), firstDeparture);
+  } else {
+    briefingText = t('today.briefingSimple', events.length);
+  }
 
   var html = '';
   html += '<div class="briefing-card">' +
@@ -2166,7 +2233,7 @@ function renderToday() {
     '<div class="briefing-text" id="briefingText">' + escHtml(briefingText) + '</div></div>' +
   '</div>';
 
-  html += '<div class="today-date-row"><div class="date-title">' + escHtml(dateLabel) + '</div><div class="cal-status">' + t('today.calStatus') + '</div></div>';
+  html += '<div class="today-date-row"><div class="date-title">' + escHtml(dateLabel) + '</div><div class="cal-status">' + (calendarConnected ? t('today.calStatus') : t('today.calStatusMock')) + '</div></div>';
 
   html += '<div class="timeline"><div class="timeline-line"></div>';
   events.forEach(function(ev, i) {
@@ -2180,25 +2247,37 @@ function renderToday() {
         (ev.resolved ? '<span class="event-badge">' + t('today.locConfirmed') + '</span>' : '') +
         '</div>';
 
-    if (ev.resolved) {
+    if (ev.resolved && ev.travelKnown !== false) {
       html +=
         '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
         '<div class="event-travel-row">' +
           '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + ' · ' + minutesToTime(timeToMinutes(ev.time) - ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
           '<button class="event-go-btn" onclick="navigateTo(' + ev.lat + ',' + ev.lng + ',\'' + escAttr(ev.locationName) + '\',\'' + ev.transportMode + '\')">' + t('today.goBtn') + '</button>' +
         '</div>';
-    } else {
+    } else if (ev.resolved && ev.travelKnown === false) {
+      // 실제 캘린더 일정: 정확한 좌표/이동시간을 모르므로 검색으로 넘겨 좌표를 찾음
+      html +=
+        '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
+        '<div class="event-travel-row">' +
+          '<div class="event-travel-info">' + t('today.viaSearchHint') + '</div>' +
+          '<button class="event-go-btn" onclick="findEventLocation(' + i + ')">' + t('today.goBtn') + '</button>' +
+        '</div>';
+    } else if (ev.inferredName) {
       html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.inferHint') + '</div>' +
         '<div class="infer-name">' + escHtml(ev.inferredName) + '</div>' +
         '<div class="infer-actions">' +
           '<button class="confirm-chip yes" onclick="confirmEventLocation(' + i + ', true)">' + t('today.confirmYes') + '</button>' +
           '<button class="confirm-chip no" onclick="confirmEventLocation(' + i + ', false)">' + t('today.confirmNo') + '</button>' +
         '</div></div>';
+    } else {
+      html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.noLocationHint') + '</div>' +
+        '<div class="infer-actions"><button class="confirm-chip yes" onclick="findEventLocation(' + i + ')">' + t('today.findLocation') + '</button></div>' +
+      '</div>';
     }
     html += '</div></div>';
 
     var next = events[i + 1];
-    if (next) {
+    if (next && ev.travelKnown !== false && next.travelKnown !== false) {
       var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
       if (freeMin < next.travelMinutes) {
         html += '<div class="warning-strip-row"><div style="width:30px;flex-shrink:0;"></div>' +
@@ -2225,6 +2304,60 @@ function confirmEventLocation(index, isCorrect) {
     showToast(t('today.needsEdit'));
   }
   renderToday();
+}
+
+// 실제 좌표/이동시간을 모르는 일정은 기존 검색 파이프라인(카카오 검색)으로 넘겨 찾음
+function findEventLocation(index) {
+  var ev = TODAY_EVENTS[index];
+  if (!ev) return;
+  switchTab('search');
+  sendText(eventLocationName(ev) || ev.title, '', 'text');
+}
+
+// ─── Google Calendar (개인 연동, 설정에서 Calendar ID + API 키를 넣은 경우) ───
+async function refreshTodayFromCalendar() {
+  var calId = CONFIG.calendarId, apiKey = CONFIG.calendarApiKey;
+  if (!calId || !apiKey) {
+    calendarConnected = false;
+    TODAY_EVENTS = MOCK_TODAY_EVENTS;
+    renderToday();
+    return;
+  }
+
+  var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  var dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
+  var url = 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(calId) + '/events' +
+    '?key=' + encodeURIComponent(apiKey) +
+    '&timeMin=' + encodeURIComponent(dayStart.toISOString()) +
+    '&timeMax=' + encodeURIComponent(dayEnd.toISOString()) +
+    '&singleEvents=true&orderBy=startTime';
+
+  try {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    var items = (data.items || []).filter(function(item) { return item.start && item.start.dateTime; });
+    TODAY_EVENTS = items.map(function(item) {
+      var start = new Date(item.start.dateTime);
+      var hh = ('0' + start.getHours()).slice(-2);
+      var mm = ('0' + start.getMinutes()).slice(-2);
+      var title = item.summary || t('today.untitled');
+      return {
+        time: hh + ':' + mm,
+        title: title,
+        resolved: !!item.location,
+        locationName: item.location || '',
+        inferredName: '',
+        travelKnown: false,
+        transportMode: transportMode,
+      };
+    });
+    calendarConnected = true;
+    renderToday();
+  } catch (err) {
+    calendarConnected = false;
+    showToast(t('today.calendarError'));
+  }
 }
 
 // ========================
@@ -2484,6 +2617,9 @@ function doSearch(text, loadingId, categoryGroupCode, inputType) {
       favorites: favs,
       recentSearches: recent,
       localTime: new Date().toISOString(),
+      // 개인 구독 LLM 키 (설정에서 입력한 경우만). 서버는 비어 있으면 server/.env 기본값을 씀.
+      llmProvider: CONFIG.llmProvider || undefined,
+      llmApiKey: CONFIG.llmApiKey || undefined,
     }),
   })
   .then(function(r) {
@@ -2889,6 +3025,10 @@ function updateFavCount() {
 function openConfig() {
   document.getElementById('webhookInput').value = CONFIG.webhookUrl;
   document.getElementById('userIdDisplay').textContent = userId;
+  document.getElementById('llmProviderSelect').value = CONFIG.llmProvider;
+  document.getElementById('llmApiKeyInput').value = CONFIG.llmApiKey;
+  document.getElementById('calendarIdInput').value = CONFIG.calendarId;
+  document.getElementById('calendarApiKeyInput').value = CONFIG.calendarApiKey;
   // Language segmented control
   document.querySelectorAll('#langSeg .seg-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.val === currentLang);
@@ -2921,6 +3061,16 @@ function saveConfig() {
   CONFIG.webhookUrl = url;
   localStorage.setItem('webhookUrl', url);
 
+  // Personal LLM / Calendar integrations
+  CONFIG.llmProvider = document.getElementById('llmProviderSelect').value;
+  CONFIG.llmApiKey = document.getElementById('llmApiKeyInput').value.trim();
+  CONFIG.calendarId = document.getElementById('calendarIdInput').value.trim();
+  CONFIG.calendarApiKey = document.getElementById('calendarApiKeyInput').value.trim();
+  localStorage.setItem('llmProvider', CONFIG.llmProvider);
+  localStorage.setItem('llmApiKey', CONFIG.llmApiKey);
+  localStorage.setItem('calendarId', CONFIG.calendarId);
+  localStorage.setItem('calendarApiKey', CONFIG.calendarApiKey);
+
   // Language
   var pendingLang = document.getElementById('langSeg').dataset.pending || currentLang;
   if (pendingLang !== currentLang) {
@@ -2937,6 +3087,8 @@ function saveConfig() {
   localStorage.setItem('voiceURI', selectedVoiceURI);
 
   applyI18n();
+  renderToday();
+  refreshTodayFromCalendar();
   showToast(t('settings.saved'));
   closeConfig();
 }
@@ -3039,6 +3191,7 @@ initLocation();
 updateFavCount();
 renderRecentSearches();
 renderToday();
+refreshTodayFromCalendar();
 initTTSIcon();
 if (window.speechSynthesis) {
   loadVoices();
