@@ -19,6 +19,8 @@ function prepareContext(body) {
     recentSearches: Array.isArray(body.recentSearches) ? body.recentSearches : [],
     userId: body.userId || 'anonymous',
     skipLLM: (body.inputType || '') === 'chip',
+    // 개인 구독 LLM (설정 > 내 연동 설정에서 입력한 경우만). 없으면 서버 기본값(.env) 사용.
+    llmOverride: body.llmProvider ? { provider: body.llmProvider, apiKey: body.llmApiKey } : null,
   };
 }
 
@@ -59,12 +61,13 @@ function defaultIntent(ctx) {
   };
 }
 
-async function callLLMTool({ systemPrompt, userMessage, toolSchema, toolChoiceName }) {
-  const provider = process.env.LLM_PROVIDER || 'gemini';
+async function callLLMTool({ systemPrompt, userMessage, toolSchema, toolChoiceName, override }) {
+  const provider = (override && override.provider) || process.env.LLM_PROVIDER || 'gemini';
+  const overrideKey = override && override.provider === provider ? override.apiKey : null;
 
   if (provider === 'gemini') {
     const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = overrideKey || process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
@@ -86,7 +89,7 @@ async function callLLMTool({ systemPrompt, userMessage, toolSchema, toolChoiceNa
 
   if (provider === 'claude') {
     const model = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = overrideKey || process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY가 설정되지 않았습니다.');
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -110,6 +113,33 @@ async function callLLMTool({ systemPrompt, userMessage, toolSchema, toolChoiceNa
     return block?.input || null;
   }
 
+  if (provider === 'openai') {
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const apiKey = overrideKey || process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다.');
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        temperature: 0.3,
+        max_tokens: 800,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        tools: [
+          { type: 'function', function: { name: toolSchema.name, description: toolSchema.description, parameters: toolSchema.parameters } },
+        ],
+        tool_choice: { type: 'function', function: { name: toolChoiceName } },
+      }),
+    });
+    if (!res.ok) throw new Error(`OpenAI API 오류: HTTP ${res.status}`);
+    const data = await res.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    return toolCall ? JSON.parse(toolCall.function.arguments) : null;
+  }
+
   throw new Error(`알 수 없는 LLM_PROVIDER: ${provider}`);
 }
 
@@ -131,6 +161,7 @@ async function resolveIntent(ctx) {
       userMessage,
       toolSchema: INTENT_TOOL_SCHEMA,
       toolChoiceName: 'resolve_intent',
+      override: ctx.llmOverride,
     });
     return args ? { ...defaultIntent(ctx), ...args } : defaultIntent(ctx);
   } catch (err) {
@@ -188,7 +219,7 @@ const CURATE_TOOL_SCHEMA = {
   },
 };
 
-async function curateResults({ candidates, originalText, filters, lang, spokenFallback }) {
+async function curateResults({ candidates, originalText, filters, lang, spokenFallback, override }) {
   const fallback = {
     candidates,
     spoken: spokenFallback || '',
@@ -213,6 +244,7 @@ async function curateResults({ candidates, originalText, filters, lang, spokenFa
       userMessage,
       toolSchema: CURATE_TOOL_SCHEMA,
       toolChoiceName: 'curate_results',
+      override,
     });
     if (!args) return fallback;
     const ordered = (args.rankedIndices || [])
@@ -328,6 +360,7 @@ async function runMockPipeline(body) {
     filters: intent.filters || [],
     lang: ctx.lang,
     spokenFallback: intent.spoken,
+    override: ctx.llmOverride,
   });
 
   return {

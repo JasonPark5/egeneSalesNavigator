@@ -3,29 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zentia 음성 길찾기</title>
+  <title>E-GENE™ 세일즈 내비게이터</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
   <link rel="shortcut icon" href="icons/icon-192.png" />
-  <meta name="theme-color" content="#6366f1" />
+  <meta name="theme-color" content="#C30813" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Zentia Solutions" />
+  <meta name="apple-mobile-web-app-title" content="E-GENE™" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
   <style>
     :root {
-      --primary: #6366f1;
-      --primary-dark: #4f52d8;
-      --primary-light: #eef2ff;
+      --primary: #C30813;
+      --primary-dark: #9c0710;
+      --primary-light: #fdecea;
+      --accent-orange: #EA7537;
       --bg: #f8f8fa;
       --card-bg: #ffffff;
       --text: #111111;
       --text-muted: #9ca3af;
       --text-secondary: #6b7280;
       --border: #f0f0f0;
-      --border-focus: #6366f1;
+      --border-focus: #C30813;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
       --shadow-lg: 0 8px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.04);
@@ -39,7 +41,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+      font-family: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -132,7 +134,7 @@
     .tab-btn.active {
       background: var(--primary);
       color: #fff;
-      box-shadow: 0 1px 4px rgba(99,102,241,0.25);
+      box-shadow: 0 1px 4px rgba(195,8,19,0.25);
     }
 
     /* ─── Transport toggle ────────────────────── */
@@ -245,7 +247,7 @@
       border-color: var(--primary);
       color: var(--primary);
       background: var(--primary-light);
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+      box-shadow: 0 0 0 3px rgba(195,8,19,0.08);
     }
 
     /* ─── Message bubbles ─────────────────────── */
@@ -345,7 +347,7 @@
     }
     .candidate-card.selected {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.12), var(--shadow-md);
+      box-shadow: 0 0 0 3px rgba(195,8,19,0.12), var(--shadow-md);
       background: #fafaff;
     }
     .candidate-card.selected .card-num {
@@ -838,7 +840,7 @@
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: rgba(99,102,241,0.15);
+      background: rgba(195,8,19,0.15);
       opacity: 0;
       transform: scale(1);
       pointer-events: none;
@@ -869,18 +871,18 @@
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: linear-gradient(145deg, #818cf8, #6366f1);
+      background: linear-gradient(145deg, #e0374a, #C30813);
       border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 16px rgba(99,102,241,0.35), 0 2px 4px rgba(99,102,241,0.2);
+      box-shadow: 0 4px 16px rgba(195,8,19,0.35), 0 2px 4px rgba(195,8,19,0.2);
       transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
     .mic-btn:hover {
       transform: scale(1.04);
-      box-shadow: 0 6px 20px rgba(99,102,241,0.45), 0 2px 6px rgba(99,102,241,0.25);
+      box-shadow: 0 6px 20px rgba(195,8,19,0.45), 0 2px 6px rgba(195,8,19,0.25);
     }
     .mic-btn:active { transform: scale(0.97); }
     .mic-btn svg {
@@ -916,7 +918,7 @@
     }
     .text-input-row:focus-within {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+      box-shadow: 0 0 0 3px rgba(195,8,19,0.08);
     }
     .text-input {
       flex: 1;
@@ -1139,6 +1141,148 @@
       transition: background 0.15s;
     }
     .inapp-btn-secondary:hover { background: var(--border); }
+
+    /* ─── Today tab ────────────────────────────── */
+    .today-scroll {
+      flex: 1; overflow-y: auto;
+      padding: 16px 16px 92px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .today-scroll::-webkit-scrollbar { width: 0; }
+    .briefing-card {
+      padding: 14px; border-radius: var(--radius-xl);
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--bg) 75%);
+      border: 1px solid #f6cfcb;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .briefing-play-btn {
+      flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(145deg, #e0374a, var(--primary));
+      border: none; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(195,8,19,.3); cursor: pointer;
+    }
+    .briefing-label {
+      font-size: 11px; font-weight: 700; color: var(--primary);
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px;
+    }
+    .briefing-text { font-size: 14px; line-height: 1.55; color: var(--text); }
+    .today-date-row { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+    .today-date-row .date-title { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
+    .today-date-row .cal-status { font-size: 12px; color: var(--text-muted); }
+    .today-empty {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      gap: 10px; padding: 48px 16px; color: var(--text-secondary);
+    }
+
+    .timeline { position: relative; }
+    .timeline-line { position: absolute; left: 15px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+    .timeline-row { display: flex; gap: 12px; margin-bottom: 6px; position: relative; }
+    .timeline-time { width: 30px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+    .timeline-time .time-label { font-size: 12px; font-weight: 700; }
+    .timeline-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; box-shadow: 0 0 0 3px var(--bg); }
+    .event-card {
+      flex: 1; background: var(--card-bg); border: 1.5px solid var(--border);
+      border-radius: var(--radius-md); padding: 14px; box-shadow: var(--shadow-sm);
+    }
+    .event-card.resolved { border-color: #f6cfcb; }
+    .event-card .event-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .event-card .event-title { font-size: 15px; font-weight: 700; }
+    .event-badge {
+      flex-shrink: 0; font-size: 10px; font-weight: 700; color: var(--primary);
+      background: var(--primary-light); border: 1px solid #f6cfcb;
+      padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+    }
+    .event-loc { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 12px; color: var(--text-secondary); }
+    .event-loc svg { flex-shrink: 0; }
+    .event-travel-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    }
+    .event-travel-info { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); font-weight: 600; }
+    .event-go-btn {
+      background: var(--primary); color: #fff; border: none; border-radius: 100px;
+      padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+    }
+    .warning-strip-row { display: flex; gap: 12px; margin-bottom: 6px; }
+    .warning-strip {
+      flex: 1; display: flex; align-items: center; gap: 8px;
+      background: #fef3c7; border-radius: 10px; padding: 8px 12px;
+    }
+    .warning-strip span { font-size: 11.5px; color: #92400e; line-height: 1.4; }
+    .infer-box { margin-top: 8px; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
+    .infer-box .infer-hint { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+    .infer-box .infer-name { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 4px; }
+    .confirm-chip {
+      border: 1.5px solid var(--border); background: var(--card-bg); border-radius: 100px;
+      padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .confirm-chip.yes { color: var(--primary); border-color: var(--primary); }
+    .confirm-chip.no { color: var(--text-muted); }
+    .infer-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+    /* ─── Favorites: time-pattern + frequency ─── */
+    .fav-section-label {
+      font-size: 12px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px;
+    }
+    .pattern-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+    .pattern-scroll::-webkit-scrollbar { height: 0; }
+    .pattern-card {
+      flex-shrink: 0; min-width: 132px; background: var(--card-bg);
+      border: 1.5px solid #f6cfcb; border-radius: 14px; padding: 12px;
+    }
+    .pattern-card .pattern-icon {
+      width: 28px; height: 28px; border-radius: 8px; background: var(--primary-light);
+      display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
+    }
+    .pattern-card .pattern-name { font-size: 13px; font-weight: 700; }
+    .pattern-card .pattern-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+    .fav-visit-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ─── Global assistant FAB + sheet ─────────── */
+    .assistant-fab {
+      position: fixed; right: 18px; bottom: 22px; z-index: 40;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: linear-gradient(145deg, #e0374a, var(--primary)); border: none;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(195,8,19,.35), 0 2px 4px rgba(195,8,19,.2);
+      cursor: pointer;
+      max-width: 480px; margin: 0 auto;
+    }
+    .assistant-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(17,17,17,0.42); z-index: 49;
+    }
+    .assistant-backdrop.open { display: block; }
+    .assistant-sheet {
+      display: none; position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+      width: 100%; max-width: 480px; background: var(--card-bg);
+      border-radius: 22px 22px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,0.18);
+      padding: 14px 20px 28px; z-index: 50;
+      flex-direction: column; align-items: center; gap: 14px;
+    }
+    .assistant-sheet.open { display: flex; }
+    .assistant-handle { width: 36px; height: 4px; border-radius: 2px; background: #e5e7eb; }
+    .assistant-title { font-size: 15px; font-weight: 700; text-align: center; }
+    .assistant-status { font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 3px; }
+    .assistant-transcript { min-height: 20px; text-align: center; font-size: 14px; color: var(--text); padding: 0 8px; }
+    .assistant-mic-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+    .assistant-mic {
+      position: relative; width: 68px; height: 68px; border-radius: 50%; border: none;
+      background: linear-gradient(145deg, #e0374a, var(--primary));
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(195,8,19,.35), 0 2px 4px rgba(195,8,19,.2);
+    }
+    .assistant-mic.recording {
+      background: linear-gradient(145deg, #f3985f, var(--accent-orange));
+      box-shadow: 0 4px 16px rgba(234,117,55,.4), 0 2px 4px rgba(234,117,55,.2);
+    }
+    .assistant-suggestions { display: flex; gap: 8px; overflow-x: auto; width: 100%; padding: 2px 2px 4px; }
+    .assistant-suggestions::-webkit-scrollbar { height: 0; }
+    .suggestion-chip {
+      flex-shrink: 0; background: var(--bg); border: 1.5px solid var(--border); border-radius: 100px;
+      padding: 9px 14px; font-size: 12.5px; font-weight: 500; color: var(--text);
+      white-space: nowrap; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -1146,11 +1290,11 @@
 <!-- Header -->
 <div class="header">
   <div class="header-logo">
-    <img src="icons/icon-192.png" alt="Zentia" style="width:32px;height:32px;border-radius:7px;" />
+    <img src="icons/icon-192.png" alt="E-GENE" style="width:32px;height:32px;border-radius:7px;" />
   </div>
   <div class="header-title">
-    <span style="font-weight:800;letter-spacing:0.5px;color:#1a3353;">ZENTIA</span>
-    <span style="font-weight:400;color:#6b7280;font-size:14px;" data-i18n="header.subtitle"> 음성 길찾기</span>
+    <span style="font-weight:800;letter-spacing:0.5px;color:var(--primary);">E-GENE&trade;</span>
+    <span style="font-weight:400;color:#6b7280;font-size:14px;" data-i18n="header.subtitle"> 세일즈 내비게이터</span>
   </div>
   <button class="icon-btn" id="ttsToggleBtn" onclick="toggleTTS()" data-i18n-title="tts.title" title="TTS 켜기/끄기">
     <svg id="ttsIconOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1175,19 +1319,28 @@
 <!-- Tabs -->
 <div class="tab-bar">
   <div class="tab-group">
-    <button class="tab-btn active" id="tab-chat" onclick="switchTab('chat')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <span data-i18n="tab.chat">채팅</span>
+    <button class="tab-btn active" id="tab-today" onclick="switchTab('today')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span data-i18n="tab.today">오늘</span>
     </button>
     <button class="tab-btn" id="tab-fav" onclick="switchTab('fav')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       <span data-i18n="tab.fav">즐겨찾기</span> <span id="fav-count"></span>
     </button>
+    <button class="tab-btn" id="tab-search" onclick="switchTab('search')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span data-i18n="tab.search">검색</span>
+    </button>
   </div>
 </div>
 
-<!-- Chat Panel -->
-<div class="panel active" id="panel-chat" style="overflow:hidden;">
+<!-- Today Panel -->
+<div class="panel active" id="panel-today">
+  <div class="today-scroll" id="todayPanel"></div>
+</div>
+
+<!-- Search Panel -->
+<div class="panel" id="panel-search" style="overflow:hidden;">
   <!-- Transport toggle -->
   <div class="transport-bar">
     <button class="transport-btn active" id="btn-transit" onclick="setTransport('transit')" data-i18n="transport.transit">🚇 대중교통</button>
@@ -1261,6 +1414,41 @@
   <div class="fav-panel" id="favPanel"></div>
 </div>
 
+<!-- Global assistant -->
+<button class="assistant-fab" id="assistantFab" onclick="openAssistant()">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+    <line x1="12" y1="19" x2="12" y2="23"/>
+    <line x1="8" y1="23" x2="16" y2="23"/>
+  </svg>
+</button>
+
+<div class="assistant-backdrop" id="assistantBackdrop" onclick="closeAssistant()"></div>
+<div class="assistant-sheet" id="assistantSheet">
+  <div class="assistant-handle"></div>
+  <div>
+    <div class="assistant-title" data-i18n="assistant.title">무엇을 도와드릴까요?</div>
+    <div class="assistant-status" id="assistantStatus" data-i18n="assistant.idle">탭해서 말씀해주세요</div>
+  </div>
+  <div class="assistant-transcript" id="assistantTranscript"></div>
+  <div class="assistant-mic-wrap">
+    <button class="assistant-mic" id="assistantMic" onclick="toggleAssistantRecording()">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+  </div>
+  <div class="assistant-suggestions">
+    <div class="suggestion-chip" data-i18n="assistant.suggest1" onclick="handleAssistantCommand(t('assistant.suggest1'))">다음 미팅까지 얼마나 걸려?</div>
+    <div class="suggestion-chip" data-i18n="assistant.suggest2" onclick="handleAssistantCommand(t('assistant.suggest2'))">즐겨찾기 보여줘</div>
+    <div class="suggestion-chip" data-i18n="assistant.suggest3" onclick="handleAssistantCommand(t('assistant.suggest3'))">내일 3시 미팅 잡아줘</div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1326,6 +1514,27 @@
       </div>
     </details>
 
+    <!-- Personal integrations: bring-your-own LLM key / Calendar -->
+    <details class="advanced-details" id="integrationsDetails">
+      <summary data-i18n="settings.integrations">내 연동 설정</summary>
+
+      <label style="margin-top:10px;" data-i18n="settings.llmProvider">LLM 제공자</label>
+      <select id="llmProviderSelect" class="voice-select" style="width:100%;margin-bottom:6px;">
+        <option value="">—</option>
+        <option value="gemini">Gemini</option>
+        <option value="claude">Claude</option>
+        <option value="openai">OpenAI</option>
+      </select>
+      <input type="password" id="llmApiKeyInput" data-i18n-ph="settings.llmApiKey.ph" placeholder="개인 API 키" autocomplete="off" />
+      <div class="modal-note" data-i18n="settings.llmNote">비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.</div>
+
+      <label style="margin-top:4px;" data-i18n="settings.calendarId">Google Calendar ID</label>
+      <input type="text" id="calendarIdInput" data-i18n-ph="settings.calendarId.ph" placeholder="you@company.com" autocomplete="off" />
+      <label style="margin-top:4px;" data-i18n="settings.calendarApiKey">Google Calendar API 키</label>
+      <input type="password" id="calendarApiKeyInput" data-i18n-ph="settings.calendarApiKey.ph" placeholder="Calendar API 키" autocomplete="off" />
+      <div class="modal-note" data-i18n="settings.calendarNote">캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.</div>
+    </details>
+
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeConfig()" data-i18n="settings.cancel">취소</button>
       <button class="btn-primary" onclick="saveConfig()" data-i18n="settings.save">저장</button>
@@ -1340,6 +1549,12 @@
 const CONFIG = {
   // 로컬 ActionFlow 브릿지 서버(server/) 주소. server/.env의 PORT와 맞춰주세요.
   webhookUrl: localStorage.getItem('webhookUrl') || 'http://localhost:4000/api/search',
+  // 개인 LLM 구독 키 (설정 > 내 연동 설정). 비워두면 서버 기본 키(server/.env) 사용.
+  llmProvider: localStorage.getItem('llmProvider') || '',
+  llmApiKey: localStorage.getItem('llmApiKey') || '',
+  // 개인 Google Calendar (설정 > 내 연동 설정). 비워두면 오늘 탭은 예시 일정을 보여줌.
+  calendarId: localStorage.getItem('calendarId') || '',
+  calendarApiKey: localStorage.getItem('calendarApiKey') || '',
 };
 
 // ========================
@@ -1353,8 +1568,8 @@ let availableVoices = [];
 
 const I18N = {
   ko: {
-    'app.title': 'Zentia 음성 길찾기',
-    'header.subtitle': '음성 길찾기',
+    'app.title': 'E-GENE™ 세일즈 내비게이터',
+    'header.subtitle': '세일즈 내비게이터',
     'tts.title': 'TTS 켜기/끄기',
     'tts.on': 'TTS 켜짐',
     'tts.off': 'TTS 꺼짐',
@@ -1369,6 +1584,15 @@ const I18N = {
     'settings.webhookLabel': 'API 서버 URL (ActionFlow 연동)',
     'settings.webhookNote': '로컬 브릿지 서버(server/)를 실행한 뒤 표시되는 API 주소를 입력하세요.',
     'settings.uidLabel': '내 ID',
+    'settings.integrations': '내 연동 설정',
+    'settings.llmProvider': 'LLM 제공자',
+    'settings.llmApiKey.ph': '개인 API 키',
+    'settings.llmNote': '비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.',
+    'settings.calendarId': 'Google Calendar ID',
+    'settings.calendarId.ph': 'you@company.com',
+    'settings.calendarApiKey': 'Google Calendar API 키',
+    'settings.calendarApiKey.ph': 'Calendar API 키',
+    'settings.calendarNote': '캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.',
     'settings.cancel': '취소',
     'settings.save': '저장',
     'settings.webhookSaved': 'API 서버 URL이 저장되었습니다.',
@@ -1376,9 +1600,46 @@ const I18N = {
     'settings.saved': '설정이 저장되었습니다.',
     'settings.webhookNeeded': '설정이 필요합니다. 오른쪽 상단 설정 버튼을 눌러 API 서버 URL을 입력해주세요.',
     'settings.webhookNeededToast': 'API 서버 URL을 설정해주세요.',
-    'voice.previewSample': '안녕하세요. 젠시아 음성 길찾기입니다.',
-    'tab.chat': '채팅',
+    'voice.previewSample': '안녕하세요. E-GENE 세일즈 내비게이터입니다.',
+    'tab.today': '오늘',
     'tab.fav': '즐겨찾기',
+    'tab.search': '검색',
+    'today.briefingLabel': '오늘의 브리핑',
+    'today.calStatus': 'Google Calendar 연동됨',
+    'today.calStatusMock': '예시 일정',
+    'today.empty.title': '오늘은 일정이 없어요',
+    'today.empty.desc': '즐겨찾기나 검색에서 목적지를 찾아보세요',
+    'today.locConfirmed': '위치 확인됨',
+    'today.recommendDeparture': '출발 권장',
+    'today.goBtn': '길찾기',
+    'today.warning': '다음 미팅까지 이동시간이 빠듯해요 (예상 {0}분 · 여유 {1}분)',
+    'today.briefing': '오늘 외부 미팅 {0}건, 이동 총 {1}분 예상돼요. 첫 미팅은 {2}, {3} 출발을 권장해요.',
+    'today.inferHint': '장소가 명시돼 있지 않아요. 지난 방문 이력 기준 여기로 추정해요:',
+    'today.confirmYes': '맞아요',
+    'today.confirmNo': '다른 곳이에요',
+    'today.confirmed': '일정 장소로 저장했어요',
+    'today.needsEdit': '캘린더에서 장소를 직접 입력해주세요',
+    'today.briefingSimple': '오늘 일정 {0}건이 있어요.',
+    'today.viaSearchHint': '정확한 이동시간은 검색에서 확인하세요',
+    'today.noLocationHint': '이 일정엔 위치가 없어요. 검색으로 찾아볼까요?',
+    'today.findLocation': '검색으로 찾기',
+    'today.calendarError': 'Google Calendar를 불러오지 못했어요. 설정을 확인해주세요.',
+    'today.untitled': '(제목 없음)',
+    'fav.patternLabel': '지금 이 시간대에 자주 가는 곳',
+    'fav.frequentLabel': '자주 가는 곳',
+    'fav.visitCount': '회 방문',
+    'assistant.title': '무엇을 도와드릴까요?',
+    'assistant.idle': '탭해서 말씀해주세요',
+    'assistant.listening': '듣고 있어요…',
+    'assistant.unsupported': '이 브라우저는 음성 인식을 지원하지 않아요',
+    'assistant.fallback': '아직 학습 중인 명령이에요. 검색으로 연결할게요.',
+    'assistant.calendarSoon': '자연어 일정 등록은 Google Calendar 연동 후 지원 예정이에요.',
+    'assistant.favRouted': '즐겨찾기 탭으로 이동했어요',
+    'assistant.nextEventNone': '오늘 남은 일정이 없어요',
+    'assistant.nextEventEta': '다음 일정까지 이동시간은 약',
+    'assistant.suggest1': '다음 미팅까지 얼마나 걸려?',
+    'assistant.suggest2': '즐겨찾기 보여줘',
+    'assistant.suggest3': '내일 3시 미팅 잡아줘',
     'transport.transit': '🚇 대중교통',
     'transport.car': '🚗 자동차',
     'transport.transit_short': '대중교통',
@@ -1449,8 +1710,8 @@ const I18N = {
     'inapp.openChrome': 'Chrome으로 열기',
   },
   en: {
-    'app.title': 'Zentia Voice Navigation',
-    'header.subtitle': 'Voice Nav',
+    'app.title': 'E-GENE™ Sales Navigator',
+    'header.subtitle': 'Sales Navigator',
     'tts.title': 'Toggle TTS',
     'tts.on': 'TTS on',
     'tts.off': 'TTS off',
@@ -1465,6 +1726,15 @@ const I18N = {
     'settings.webhookLabel': 'API Server URL (ActionFlow bridge)',
     'settings.webhookNote': 'Start the local bridge server (server/) and paste its API URL.',
     'settings.uidLabel': 'My ID',
+    'settings.integrations': 'My integrations',
+    'settings.llmProvider': 'LLM provider',
+    'settings.llmApiKey.ph': 'Personal API key',
+    'settings.llmNote': "Leave blank to use the default key set in the local server (server/.env). If you enter one, it's sent with every search — stored only in this browser.",
+    'settings.calendarId': 'Google Calendar ID',
+    'settings.calendarId.ph': 'you@company.com',
+    'settings.calendarApiKey': 'Google Calendar API key',
+    'settings.calendarApiKey.ph': 'Calendar API key',
+    'settings.calendarNote': 'Share your calendar as "public" and issue an API key to show real events in the Today tab. Leave blank to show sample events.',
     'settings.cancel': 'Cancel',
     'settings.save': 'Save',
     'settings.webhookSaved': 'API server URL saved.',
@@ -1472,9 +1742,46 @@ const I18N = {
     'settings.saved': 'Settings saved.',
     'settings.webhookNeeded': 'Setup required. Tap the settings icon and enter the API server URL.',
     'settings.webhookNeededToast': 'Please set the API server URL.',
-    'voice.previewSample': 'Hello, this is Zentia voice navigation.',
-    'tab.chat': 'Chat',
+    'voice.previewSample': 'Hello, this is E-GENE sales navigator.',
+    'tab.today': 'Today',
     'tab.fav': 'Favorites',
+    'tab.search': 'Search',
+    'today.briefingLabel': "Today's briefing",
+    'today.calStatus': 'Google Calendar connected',
+    'today.calStatusMock': 'Sample events',
+    'today.empty.title': 'No events today',
+    'today.empty.desc': 'Try Favorites or Search to find a destination',
+    'today.locConfirmed': 'Location confirmed',
+    'today.recommendDeparture': 'recommended departure',
+    'today.goBtn': 'Go',
+    'today.warning': 'Travel time to the next meeting looks tight (need {0} min, only {1} min free)',
+    'today.briefing': 'You have {0} external meeting(s) today, about {1} min of travel. First up: {2} — leave by {3}.',
+    'today.inferHint': 'No location was set. Based on your visit history, we guessed:',
+    'today.confirmYes': 'Yes',
+    'today.confirmNo': "That's not it",
+    'today.confirmed': 'Saved as the event location',
+    'today.needsEdit': 'Please add the location in your calendar',
+    'today.briefingSimple': 'You have {0} event(s) today.',
+    'today.viaSearchHint': 'Check Search for the exact travel time',
+    'today.noLocationHint': "This event has no location. Want to search for it?",
+    'today.findLocation': 'Search for it',
+    'today.calendarError': "Couldn't load Google Calendar. Please check your settings.",
+    'today.untitled': '(No title)',
+    'fav.patternLabel': 'Frequent at this time of day',
+    'fav.frequentLabel': 'Frequent places',
+    'fav.visitCount': ' visits',
+    'assistant.title': 'How can I help?',
+    'assistant.idle': 'Tap and speak',
+    'assistant.listening': 'Listening…',
+    'assistant.unsupported': "This browser doesn't support voice recognition",
+    'assistant.fallback': "Still learning that one. Let's search instead.",
+    'assistant.calendarSoon': 'Natural-language scheduling ships with Google Calendar integration.',
+    'assistant.favRouted': 'Switched to Favorites',
+    'assistant.nextEventNone': 'No events left today',
+    'assistant.nextEventEta': 'About',
+    'assistant.suggest1': 'How long until my next meeting?',
+    'assistant.suggest2': 'Show my favorites',
+    'assistant.suggest3': 'Book a meeting tomorrow at 3pm',
     'transport.transit': '🚇 Transit',
     'transport.car': '🚗 Car',
     'transport.transit_short': 'Transit',
@@ -1576,6 +1883,7 @@ function applyI18n() {
     tip.innerHTML = '💡 ' + t('tip.chips', (chipRadius / 1000)) + '<br>' + t('tip.elsewhere');
   }
   renderFavorites && document.getElementById('panel-fav') && renderFavorites();
+  renderToday && document.getElementById('panel-today') && renderToday();
   renderRecentSearches && renderRecentSearches();
 }
 
@@ -1836,11 +2144,220 @@ function setLocStatus(msg, type) {
 // TABS
 // ========================
 function switchTab(tab) {
-  document.getElementById('tab-chat').classList.toggle('active', tab === 'chat');
+  document.getElementById('tab-today').classList.toggle('active', tab === 'today');
   document.getElementById('tab-fav').classList.toggle('active', tab === 'fav');
-  document.getElementById('panel-chat').classList.toggle('active', tab === 'chat');
+  document.getElementById('tab-search').classList.toggle('active', tab === 'search');
+  document.getElementById('panel-today').classList.toggle('active', tab === 'today');
   document.getElementById('panel-fav').classList.toggle('active', tab === 'fav');
+  document.getElementById('panel-search').classList.toggle('active', tab === 'search');
+  document.getElementById('assistantFab').style.display = tab === 'search' ? 'none' : 'flex';
+  if (tab === 'today') renderToday();
   if (tab === 'fav') renderFavorites();
+}
+
+// ========================
+// TODAY TAB (mock — no LLM, no live calendar yet)
+// ========================
+// TODO: 실제 Google Calendar 연동 시 이 배열을 API 응답으로 교체.
+// resolved:false 인 일정은 캘린더에 주소가 없어 장소를 추정한 경우를 흉내낸 것.
+let TODAY_EVENTS = [
+  {
+    time: '10:00',
+    title: '한빛시스템 제품 데모',
+    resolved: true,
+    locationName: '판교 테크노밸리 A동 12층',
+    lat: 37.4020, lng: 127.1085,
+    travelMinutes: 39,
+    transportMode: 'car',
+  },
+  {
+    time: '11:15',
+    title: '김이사님 미팅',
+    resolved: false,
+    inferredName: '강남파이낸스센터 21층',
+    lat: 37.5013, lng: 127.0396,
+    travelMinutes: 27,
+    transportMode: 'transit',
+  },
+];
+const MOCK_TODAY_EVENTS = TODAY_EVENTS;
+let calendarConnected = false;
+const MEETING_DURATION_MIN = 60;
+
+function timeToMinutes(hhmm) {
+  var p = hhmm.split(':');
+  return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+}
+function minutesToTime(mins) {
+  mins = ((mins % 1440) + 1440) % 1440;
+  var h = Math.floor(mins / 60), m = mins % 60;
+  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+function minLabel(n) { return currentLang === 'en' ? n + ' min' : n + '분'; }
+
+function eventLocationName(ev) { return ev.resolved ? ev.locationName : ev.inferredName; }
+
+function renderToday() {
+  var panel = document.getElementById('todayPanel');
+  var events = TODAY_EVENTS;
+
+  if (!events.length) {
+    panel.innerHTML =
+      '<div class="today-empty">' +
+        '<div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>' +
+        '<h2>' + t('today.empty.title') + '</h2><p>' + t('today.empty.desc') + '</p>' +
+      '</div>';
+    return;
+  }
+
+  var today = new Date();
+  var dateLabel = (today.getMonth() + 1) + (currentLang === 'en' ? '/' + today.getDate() : '월 ' + today.getDate() + '일 일정');
+
+  var knownEvents = events.filter(function(e) { return e.travelKnown !== false; });
+  var briefingText;
+  if (knownEvents.length) {
+    var totalTravel = knownEvents.reduce(function(sum, e) { return sum + e.travelMinutes; }, 0);
+    var first = knownEvents[0];
+    var firstDeparture = minutesToTime(timeToMinutes(first.time) - first.travelMinutes);
+    briefingText = t('today.briefing', events.length, totalTravel, eventLocationName(first), firstDeparture);
+  } else {
+    briefingText = t('today.briefingSimple', events.length);
+  }
+
+  var html = '';
+  html += '<div class="briefing-card">' +
+    '<button class="briefing-play-btn" onclick="speak(document.getElementById(\'briefingText\').textContent)">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>' +
+    '</button>' +
+    '<div><div class="briefing-label">' + t('today.briefingLabel') + '</div>' +
+    '<div class="briefing-text" id="briefingText">' + escHtml(briefingText) + '</div></div>' +
+  '</div>';
+
+  html += '<div class="today-date-row"><div class="date-title">' + escHtml(dateLabel) + '</div><div class="cal-status">' + (calendarConnected ? t('today.calStatus') : t('today.calStatusMock')) + '</div></div>';
+
+  html += '<div class="timeline"><div class="timeline-line"></div>';
+  events.forEach(function(ev, i) {
+    var dotColor = ev.resolved ? 'var(--primary)' : 'var(--accent-orange)';
+    var modeLabel = ev.transportMode === 'car' ? t('transport.car') : t('transport.transit');
+
+    html += '<div class="timeline-row">' +
+      '<div class="timeline-time"><div class="time-label">' + ev.time + '</div><div class="timeline-dot" style="background:' + dotColor + ';"></div></div>' +
+      '<div class="event-card' + (ev.resolved ? ' resolved' : '') + '">' +
+        '<div class="event-top"><div class="event-title">' + escHtml(ev.title) + '</div>' +
+        (ev.resolved ? '<span class="event-badge">' + t('today.locConfirmed') + '</span>' : '') +
+        '</div>';
+
+    if (ev.resolved && ev.travelKnown !== false) {
+      html +=
+        '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
+        '<div class="event-travel-row">' +
+          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + ' · ' + minutesToTime(timeToMinutes(ev.time) - ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
+          '<button class="event-go-btn" onclick="navigateTo(' + ev.lat + ',' + ev.lng + ',\'' + escAttr(ev.locationName) + '\',\'' + ev.transportMode + '\')">' + t('today.goBtn') + '</button>' +
+        '</div>';
+    } else if (ev.resolved && ev.travelKnown === false) {
+      // 실제 캘린더 일정: 정확한 좌표/이동시간을 모르므로 검색으로 넘겨 좌표를 찾음
+      html +=
+        '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
+        '<div class="event-travel-row">' +
+          '<div class="event-travel-info">' + t('today.viaSearchHint') + '</div>' +
+          '<button class="event-go-btn" onclick="findEventLocation(' + i + ')">' + t('today.goBtn') + '</button>' +
+        '</div>';
+    } else if (ev.inferredName) {
+      html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.inferHint') + '</div>' +
+        '<div class="infer-name">' + escHtml(ev.inferredName) + '</div>' +
+        '<div class="infer-actions">' +
+          '<button class="confirm-chip yes" onclick="confirmEventLocation(' + i + ', true)">' + t('today.confirmYes') + '</button>' +
+          '<button class="confirm-chip no" onclick="confirmEventLocation(' + i + ', false)">' + t('today.confirmNo') + '</button>' +
+        '</div></div>';
+    } else {
+      html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.noLocationHint') + '</div>' +
+        '<div class="infer-actions"><button class="confirm-chip yes" onclick="findEventLocation(' + i + ')">' + t('today.findLocation') + '</button></div>' +
+      '</div>';
+    }
+    html += '</div></div>';
+
+    var next = events[i + 1];
+    if (next && ev.travelKnown !== false && next.travelKnown !== false) {
+      var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
+      if (freeMin < next.travelMinutes) {
+        html += '<div class="warning-strip-row"><div style="width:30px;flex-shrink:0;"></div>' +
+          '<div class="warning-strip">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 3l9.5 17H2.5L12 3z"/><line x1="12" y1="9" x2="12" y2="13.5"/><line x1="12" y1="16.5" x2="12" y2="16.6"/></svg>' +
+            '<span>' + escHtml(t('today.warning', next.travelMinutes, Math.max(freeMin, 0))) + '</span>' +
+          '</div></div>';
+      }
+    }
+  });
+  html += '</div>';
+
+  panel.innerHTML = html;
+}
+
+function confirmEventLocation(index, isCorrect) {
+  var ev = TODAY_EVENTS[index];
+  if (!ev) return;
+  if (isCorrect) {
+    ev.resolved = true;
+    ev.locationName = ev.inferredName;
+    showToast(t('today.confirmed'));
+  } else {
+    showToast(t('today.needsEdit'));
+  }
+  renderToday();
+}
+
+// 실제 좌표/이동시간을 모르는 일정은 기존 검색 파이프라인(카카오 검색)으로 넘겨 찾음
+function findEventLocation(index) {
+  var ev = TODAY_EVENTS[index];
+  if (!ev) return;
+  switchTab('search');
+  sendText(eventLocationName(ev) || ev.title, '', 'text');
+}
+
+// ─── Google Calendar (개인 연동, 설정에서 Calendar ID + API 키를 넣은 경우) ───
+async function refreshTodayFromCalendar() {
+  var calId = CONFIG.calendarId, apiKey = CONFIG.calendarApiKey;
+  if (!calId || !apiKey) {
+    calendarConnected = false;
+    TODAY_EVENTS = MOCK_TODAY_EVENTS;
+    renderToday();
+    return;
+  }
+
+  var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  var dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
+  var url = 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(calId) + '/events' +
+    '?key=' + encodeURIComponent(apiKey) +
+    '&timeMin=' + encodeURIComponent(dayStart.toISOString()) +
+    '&timeMax=' + encodeURIComponent(dayEnd.toISOString()) +
+    '&singleEvents=true&orderBy=startTime';
+
+  try {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    var items = (data.items || []).filter(function(item) { return item.start && item.start.dateTime; });
+    TODAY_EVENTS = items.map(function(item) {
+      var start = new Date(item.start.dateTime);
+      var hh = ('0' + start.getHours()).slice(-2);
+      var mm = ('0' + start.getMinutes()).slice(-2);
+      var title = item.summary || t('today.untitled');
+      return {
+        time: hh + ':' + mm,
+        title: title,
+        resolved: !!item.location,
+        locationName: item.location || '',
+        inferredName: '',
+        travelKnown: false,
+        transportMode: transportMode,
+      };
+    });
+    calendarConnected = true;
+    renderToday();
+  } catch (err) {
+    calendarConnected = false;
+    showToast(t('today.calendarError'));
+  }
 }
 
 // ========================
@@ -1901,6 +2418,102 @@ function stopRecording() {
   document.getElementById('micWrap').classList.remove('recording-active');
   document.getElementById('micHint').textContent = t('mic.hint');
   document.getElementById('micHint').classList.remove('recording');
+}
+
+// ========================
+// GLOBAL ASSISTANT (mock command router — no LLM yet)
+// ========================
+// TODO: 키워드 매칭 대신 LLM 의도분류로 교체 (idea #4: 전역 음성 명령 라우터)
+let assistantRecognition = null;
+let assistantRecording = false;
+
+function openAssistant() {
+  document.getElementById('assistantBackdrop').classList.add('open');
+  document.getElementById('assistantSheet').classList.add('open');
+  document.getElementById('assistantTranscript').textContent = '';
+  document.getElementById('assistantStatus').textContent = t('assistant.idle');
+}
+
+function closeAssistant() {
+  if (assistantRecording) stopAssistantRecording();
+  document.getElementById('assistantBackdrop').classList.remove('open');
+  document.getElementById('assistantSheet').classList.remove('open');
+}
+
+function toggleAssistantRecording() {
+  if (assistantRecording) { stopAssistantRecording(); } else { startAssistantRecording(); }
+}
+
+function startAssistantRecording() {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast(t('assistant.unsupported'));
+    return;
+  }
+  assistantRecognition = new SR();
+  assistantRecognition.lang = currentLang === 'en' ? 'en-US' : 'ko-KR';
+  assistantRecognition.interimResults = false;
+  assistantRecognition.maxAlternatives = 1;
+
+  assistantRecognition.onstart = function() {
+    assistantRecording = true;
+    document.getElementById('assistantMic').classList.add('recording');
+    document.getElementById('assistantStatus').textContent = t('assistant.listening');
+  };
+  assistantRecognition.onresult = function(e) {
+    var transcript = e.results[0][0].transcript;
+    document.getElementById('assistantTranscript').textContent = '“' + transcript + '”';
+    handleAssistantCommand(transcript);
+  };
+  assistantRecognition.onerror = function() { stopAssistantRecording(); };
+  assistantRecognition.onend = function() { stopAssistantRecording(); };
+  assistantRecognition.start();
+}
+
+function stopAssistantRecording() {
+  assistantRecording = false;
+  if (assistantRecognition) { try { assistantRecognition.stop(); } catch (e) {} assistantRecognition = null; }
+  document.getElementById('assistantMic').classList.remove('recording');
+  document.getElementById('assistantStatus').textContent = t('assistant.idle');
+}
+
+function nextTodayEventEta() {
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  var next = TODAY_EVENTS.find(function(ev) { return timeToMinutes(ev.time) > nowMin; });
+  return next || null;
+}
+
+function handleAssistantCommand(text) {
+  var q = text.toLowerCase();
+
+  if (q.includes('즐겨찾기') || q.includes('favorite')) {
+    closeAssistant();
+    switchTab('fav');
+    showToast(t('assistant.favRouted'));
+    return;
+  }
+
+  if ((q.includes('일정') || q.includes('미팅') || q.includes('약속') || q.includes('meeting') || q.includes('schedule')) &&
+      (q.includes('잡아') || q.includes('등록') || q.includes('예약') || q.includes('book'))) {
+    closeAssistant();
+    showToast(t('assistant.calendarSoon'));
+    return;
+  }
+
+  if (q.includes('얼마나') || q.includes('걸려') || q.includes('이동시간') || q.includes('eta') || q.includes('how long')) {
+    var next = nextTodayEventEta();
+    var msg = next
+      ? t('assistant.nextEventEta') + ' ' + minLabel(next.travelMinutes) + ' (' + eventLocationName(next) + ')'
+      : t('assistant.nextEventNone');
+    document.getElementById('assistantTranscript').textContent = msg;
+    speak(msg);
+    return;
+  }
+
+  // Fallback: route to the search tab as a normal place search
+  closeAssistant();
+  switchTab('search');
+  sendText(text, '', 'voice');
 }
 
 // ========================
@@ -2004,6 +2617,9 @@ function doSearch(text, loadingId, categoryGroupCode, inputType) {
       favorites: favs,
       recentSearches: recent,
       localTime: new Date().toISOString(),
+      // 개인 구독 LLM 키 (설정에서 입력한 경우만). 서버는 비어 있으면 server/.env 기본값을 씀.
+      llmProvider: CONFIG.llmProvider || undefined,
+      llmApiKey: CONFIG.llmApiKey || undefined,
     }),
   })
   .then(function(r) {
@@ -2203,6 +2819,7 @@ function showCandidates(candidates, topPick) {
 // ========================
 function navigateTo(dlat, dlng, dname, mode) {
   mode = mode || transportMode;
+  logVisit(dlat, dlng, dname);
   var slat = currentLocation ? currentLocation.lat : '';
   var slng = currentLocation ? currentLocation.lng : '';
   var appname = 'com.example.mapservice';
@@ -2277,47 +2894,124 @@ function removeFavorite(lat, lng) {
   showToast(t('fav.deleted'));
 }
 
+// ─── Visit log (no LLM — plain frequency/recency tracking) ───
+function getVisitLog() {
+  try { return JSON.parse(localStorage.getItem('visitLog') || '[]'); } catch (e) { return []; }
+}
+
+function logVisit(lat, lng, name) {
+  var log = getVisitLog();
+  var idx = log.findIndex(function(v) { return Math.abs(v.lat - lat) < 0.0001 && Math.abs(v.lng - lng) < 0.0001; });
+  var now = Date.now();
+  var hour = new Date(now).getHours();
+  if (idx >= 0) {
+    log[idx].count += 1;
+    log[idx].lastVisited = now;
+    log[idx].hours.push(hour);
+    if (log[idx].hours.length > 20) log[idx].hours = log[idx].hours.slice(-20);
+  } else {
+    log.push({ lat: lat, lng: lng, name: name, count: 1, lastVisited: now, hours: [hour] });
+  }
+  if (log.length > 100) log = log.slice(-100);
+  localStorage.setItem('visitLog', JSON.stringify(log));
+}
+
+function addFavoriteFromVisit(lat, lng, name) {
+  var favs = getFavorites();
+  if (!favs.some(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; })) {
+    favs.unshift({ lat: lat, lng: lng, name: name, address: '', category: '', savedAt: Date.now() });
+    saveFavorites(favs);
+    showToast(t('fav.added', name));
+  }
+  renderFavorites();
+}
+
 function renderFavorites() {
   var panel = document.getElementById('favPanel');
   var favs = getFavorites();
-  panel.innerHTML = '';
+  var visits = getVisitLog();
 
-  if (favs.length === 0) {
-    panel.innerHTML =
-      '<div class="fav-empty">' +
+  function visitFor(lat, lng) {
+    return visits.find(function(v) { return Math.abs(v.lat - lat) < 0.0001 && Math.abs(v.lng - lng) < 0.0001; });
+  }
+
+  var favKeys = {};
+  favs.forEach(function(f) { favKeys[f.lat.toFixed(4) + ',' + f.lng.toFixed(4)] = true; });
+
+  var merged = favs.map(function(f) {
+    var v = visitFor(f.lat, f.lng);
+    return { fav: f, count: v ? v.count : 0, lastVisited: v ? v.lastVisited : f.savedAt, isFav: true };
+  }).concat(
+    visits.filter(function(v) { return v.count >= 3 && !favKeys[v.lat.toFixed(4) + ',' + v.lng.toFixed(4)]; })
+      .map(function(v) {
+        return { fav: { lat: v.lat, lng: v.lng, name: v.name, address: '', category: '' }, count: v.count, lastVisited: v.lastVisited, isFav: false };
+      })
+  );
+  merged.sort(function(a, b) { return (b.count * 1e13 + b.lastVisited) - (a.count * 1e13 + a.lastVisited); });
+
+  var hourNow = new Date().getHours();
+  var patterns = visits.filter(function(v) {
+    return v.count >= 2 && v.hours.some(function(h) { return Math.abs(h - hourNow) <= 1; });
+  }).sort(function(a, b) { return b.count - a.count; }).slice(0, 3);
+
+  var html = '';
+
+  if (patterns.length) {
+    html += '<div><div class="fav-section-label">' + t('fav.patternLabel') + '</div><div class="pattern-scroll">';
+    patterns.forEach(function(v) {
+      html += '<div class="pattern-card">' +
+        '<div class="pattern-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg></div>' +
+        '<div class="pattern-name">' + escHtml(v.name) + '</div>' +
+        '<div class="pattern-meta">' + v.count + t('fav.visitCount') + '</div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+  }
+
+  if (merged.length === 0) {
+    html += '<div class="fav-empty">' +
         '<div class="fav-empty-icon">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' +
         '</div>' +
         '<p>' + t('fav.empty') + '</p>' +
       '</div>';
+    panel.innerHTML = html;
     return;
   }
 
-  favs.forEach(function(f) {
-    var item = document.createElement('div');
-    item.className = 'fav-item';
-    item.innerHTML =
-      '<div class="fav-row1">' +
-        '<div class="fav-pin">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>' +
-        '</div>' +
-        '<div class="fav-info">' +
-          '<div class="fav-name">' + escHtml(f.name) +
-            (f.alias
-              ? '<span class="fav-alias-badge" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.edit')) + '">' + escHtml(f.alias) + '</span>'
-              : '<button class="fav-alias-btn" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.set')) + '">' + t('fav.alias.add') + '</button>'
-            ) +
+  html += '<div><div class="fav-section-label">' + t('fav.frequentLabel') + '</div><div style="display:flex;flex-direction:column;gap:8px;">';
+  merged.forEach(function(m) {
+    var f = m.fav;
+    html +=
+      '<div class="fav-item">' +
+        '<div class="fav-row1">' +
+          '<div class="fav-pin">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>' +
           '</div>' +
-          '<div class="fav-address">' + escHtml(f.address || '') + '</div>' +
+          '<div class="fav-info">' +
+            '<div class="fav-name">' + escHtml(f.name) +
+              (m.isFav
+                ? (f.alias
+                    ? '<span class="fav-alias-badge" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.edit')) + '">' + escHtml(f.alias) + '</span>'
+                    : '<button class="fav-alias-btn" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.set')) + '">' + t('fav.alias.add') + '</button>')
+                : '') +
+            '</div>' +
+            '<div class="fav-address">' + escHtml(f.address || '') + '</div>' +
+            (m.count ? '<div class="fav-visit-meta">' + m.count + t('fav.visitCount') + '</div>' : '') +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div class="fav-row2">' +
-        '<button class="fav-transit-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'transit\')">' + t('transport.transit') + '</button>' +
-        '<button class="fav-car-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'car\')">' + t('transport.car') + '</button>' +
-        '<button class="fav-delete-btn" onclick="removeFavorite(' + f.lat + ',' + f.lng + ')">🗑</button>' +
+        '<div class="fav-row2">' +
+          '<button class="fav-transit-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'transit\')">' + t('transport.transit') + '</button>' +
+          '<button class="fav-car-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'car\')">' + t('transport.car') + '</button>' +
+          (m.isFav
+            ? '<button class="fav-delete-btn" onclick="removeFavorite(' + f.lat + ',' + f.lng + ')">🗑</button>'
+            : '<button class="fav-delete-btn" onclick="addFavoriteFromVisit(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\')">☆</button>') +
+        '</div>' +
       '</div>';
-    panel.appendChild(item);
   });
+  html += '</div></div>';
+
+  panel.innerHTML = html;
 }
 
 function updateFavCount() {
@@ -2331,6 +3025,10 @@ function updateFavCount() {
 function openConfig() {
   document.getElementById('webhookInput').value = CONFIG.webhookUrl;
   document.getElementById('userIdDisplay').textContent = userId;
+  document.getElementById('llmProviderSelect').value = CONFIG.llmProvider;
+  document.getElementById('llmApiKeyInput').value = CONFIG.llmApiKey;
+  document.getElementById('calendarIdInput').value = CONFIG.calendarId;
+  document.getElementById('calendarApiKeyInput').value = CONFIG.calendarApiKey;
   // Language segmented control
   document.querySelectorAll('#langSeg .seg-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.val === currentLang);
@@ -2363,6 +3061,16 @@ function saveConfig() {
   CONFIG.webhookUrl = url;
   localStorage.setItem('webhookUrl', url);
 
+  // Personal LLM / Calendar integrations
+  CONFIG.llmProvider = document.getElementById('llmProviderSelect').value;
+  CONFIG.llmApiKey = document.getElementById('llmApiKeyInput').value.trim();
+  CONFIG.calendarId = document.getElementById('calendarIdInput').value.trim();
+  CONFIG.calendarApiKey = document.getElementById('calendarApiKeyInput').value.trim();
+  localStorage.setItem('llmProvider', CONFIG.llmProvider);
+  localStorage.setItem('llmApiKey', CONFIG.llmApiKey);
+  localStorage.setItem('calendarId', CONFIG.calendarId);
+  localStorage.setItem('calendarApiKey', CONFIG.calendarApiKey);
+
   // Language
   var pendingLang = document.getElementById('langSeg').dataset.pending || currentLang;
   if (pendingLang !== currentLang) {
@@ -2379,6 +3087,8 @@ function saveConfig() {
   localStorage.setItem('voiceURI', selectedVoiceURI);
 
   applyI18n();
+  renderToday();
+  refreshTodayFromCalendar();
   showToast(t('settings.saved'));
   closeConfig();
 }
@@ -2480,6 +3190,8 @@ detectInAppBrowser();
 initLocation();
 updateFavCount();
 renderRecentSearches();
+renderToday();
+refreshTodayFromCalendar();
 initTTSIcon();
 if (window.speechSynthesis) {
   loadVoices();

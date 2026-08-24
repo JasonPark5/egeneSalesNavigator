@@ -1,13 +1,13 @@
 {
-  "name": "Zentia 길찾기",
-  "short_name": "Zentia",
+  "name": "E-GENE™ 세일즈 내비게이터",
+  "short_name": "E-GENE",
   "description": "음성으로 목적지를 말하면 네이버 지도로 길찾기",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#6366f1",
-  "theme_color": "#6366f1",
+  "background_color": "#C30813",
+  "theme_color": "#C30813",
   "lang": "ko",
   "icons": [
     {
