@@ -15,6 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="E-GENE™" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --primary: #C30813;
@@ -1141,6 +1142,7 @@
       transition: background 0.15s;
     }
     .inapp-btn-secondary:hover { background: var(--border); }
+    .calendar-connect-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
 
     /* ─── Today tab ────────────────────────────── */
     .today-scroll {
@@ -1528,11 +1530,12 @@
       <input type="password" id="llmApiKeyInput" data-i18n-ph="settings.llmApiKey.ph" placeholder="개인 API 키" autocomplete="off" />
       <div class="modal-note" data-i18n="settings.llmNote">비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.</div>
 
-      <label style="margin-top:4px;" data-i18n="settings.calendarId">Google Calendar ID</label>
-      <input type="text" id="calendarIdInput" data-i18n-ph="settings.calendarId.ph" placeholder="you@company.com" autocomplete="off" />
-      <label style="margin-top:4px;" data-i18n="settings.calendarApiKey">Google Calendar API 키</label>
-      <input type="password" id="calendarApiKeyInput" data-i18n-ph="settings.calendarApiKey.ph" placeholder="Calendar API 키" autocomplete="off" />
-      <div class="modal-note" data-i18n="settings.calendarNote">캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.</div>
+      <label style="margin-top:14px;" data-i18n="settings.calendar">Google Calendar</label>
+      <div class="calendar-connect-row">
+        <span id="calendarStatus" class="modal-note" style="margin:0;flex:1;" data-i18n="settings.calendarNotConnected">연결 안 됨 — 예시 일정 표시 중</span>
+        <button type="button" class="btn-mini" id="calendarConnectBtn" onclick="onCalendarConnectClick()" data-i18n="settings.calendarConnect">연결하기</button>
+      </div>
+      <div class="modal-note" data-i18n="settings.calendarNote">Google 계정으로 연결하면 오늘 탭에 실제 일정이 표시돼요. 연결하지 않으면 예시 일정이 표시됩니다.</div>
     </details>
 
     <div class="modal-actions">
@@ -1552,10 +1555,13 @@ const CONFIG = {
   // 개인 LLM 구독 키 (설정 > 내 연동 설정). 비워두면 서버 기본 키(server/.env) 사용.
   llmProvider: localStorage.getItem('llmProvider') || '',
   llmApiKey: localStorage.getItem('llmApiKey') || '',
-  // 개인 Google Calendar (설정 > 내 연동 설정). 비워두면 오늘 탭은 예시 일정을 보여줌.
-  calendarId: localStorage.getItem('calendarId') || '',
-  calendarApiKey: localStorage.getItem('calendarApiKey') || '',
 };
+
+// Google Cloud Console에서 발급받는 OAuth Client ID (앱 전체에서 하나, 사용자별 값 아님).
+// Client ID는 비밀값이 아니라 프론트 코드에 그대로 넣어도 안전합니다.
+// 발급 전까지는 비워두면 "Google 계정으로 연결" 버튼이 안내 메시지만 보여줍니다.
+const GOOGLE_CLIENT_ID = '';
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 
 // ========================
 // SETTINGS (multi-language / voice / chip radius)
@@ -1588,11 +1594,13 @@ const I18N = {
     'settings.llmProvider': 'LLM 제공자',
     'settings.llmApiKey.ph': '개인 API 키',
     'settings.llmNote': '비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.',
-    'settings.calendarId': 'Google Calendar ID',
-    'settings.calendarId.ph': 'you@company.com',
-    'settings.calendarApiKey': 'Google Calendar API 키',
-    'settings.calendarApiKey.ph': 'Calendar API 키',
-    'settings.calendarNote': '캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.',
+    'settings.calendar': 'Google Calendar',
+    'settings.calendarConnect': '연결하기',
+    'settings.calendarDisconnect': '연결 해제',
+    'settings.calendarNotConnected': '연결 안 됨 — 예시 일정 표시 중',
+    'settings.calendarConnected': '연결됨',
+    'settings.calendarNote': 'Google 계정으로 연결하면 오늘 탭에 실제 일정이 표시돼요. 연결하지 않으면 예시 일정이 표시됩니다.',
+    'settings.calendarUnavailable': '아직 준비 중이에요 (Google OAuth 설정 필요)',
     'settings.cancel': '취소',
     'settings.save': '저장',
     'settings.webhookSaved': 'API 서버 URL이 저장되었습니다.',
@@ -1624,6 +1632,7 @@ const I18N = {
     'today.noLocationHint': '이 일정엔 위치가 없어요. 검색으로 찾아볼까요?',
     'today.findLocation': '검색으로 찾기',
     'today.calendarError': 'Google Calendar를 불러오지 못했어요. 설정을 확인해주세요.',
+    'today.calendarExpired': '연결이 만료됐어요. 설정에서 다시 연결해주세요.',
     'today.untitled': '(제목 없음)',
     'fav.patternLabel': '지금 이 시간대에 자주 가는 곳',
     'fav.frequentLabel': '자주 가는 곳',
@@ -1730,11 +1739,13 @@ const I18N = {
     'settings.llmProvider': 'LLM provider',
     'settings.llmApiKey.ph': 'Personal API key',
     'settings.llmNote': "Leave blank to use the default key set in the local server (server/.env). If you enter one, it's sent with every search — stored only in this browser.",
-    'settings.calendarId': 'Google Calendar ID',
-    'settings.calendarId.ph': 'you@company.com',
-    'settings.calendarApiKey': 'Google Calendar API key',
-    'settings.calendarApiKey.ph': 'Calendar API key',
-    'settings.calendarNote': 'Share your calendar as "public" and issue an API key to show real events in the Today tab. Leave blank to show sample events.',
+    'settings.calendar': 'Google Calendar',
+    'settings.calendarConnect': 'Connect',
+    'settings.calendarDisconnect': 'Disconnect',
+    'settings.calendarNotConnected': 'Not connected — showing sample events',
+    'settings.calendarConnected': 'Connected',
+    'settings.calendarNote': 'Connect your Google account to show real events in the Today tab. Sample events are shown otherwise.',
+    'settings.calendarUnavailable': 'Not set up yet (needs Google OAuth config)',
     'settings.cancel': 'Cancel',
     'settings.save': 'Save',
     'settings.webhookSaved': 'API server URL saved.',
@@ -1766,6 +1777,7 @@ const I18N = {
     'today.noLocationHint': "This event has no location. Want to search for it?",
     'today.findLocation': 'Search for it',
     'today.calendarError': "Couldn't load Google Calendar. Please check your settings.",
+    'today.calendarExpired': 'Your connection expired. Please reconnect in Settings.',
     'today.untitled': '(No title)',
     'fav.patternLabel': 'Frequent at this time of day',
     'fav.frequentLabel': 'Frequent places',
@@ -1884,6 +1896,7 @@ function applyI18n() {
   }
   renderFavorites && document.getElementById('panel-fav') && renderFavorites();
   renderToday && document.getElementById('panel-today') && renderToday();
+  updateCalendarConnectUI();
   renderRecentSearches && renderRecentSearches();
 }
 
@@ -2314,10 +2327,66 @@ function findEventLocation(index) {
   sendText(eventLocationName(ev) || ev.title, '', 'text');
 }
 
-// ─── Google Calendar (개인 연동, 설정에서 Calendar ID + API 키를 넣은 경우) ───
+// ─── Google Calendar (Google Identity Services — "Google 계정으로 연결" 버튼) ───
+// GOOGLE_CLIENT_ID는 Google Cloud Console에서 한 번만 발급받는 앱 전체 값 (CONFIG.js 상단 참고).
+// 사용자별 API 키를 입력받는 방식이 아니라, 각자 자기 구글 계정으로 로그인해서 자기 캘린더를 봅니다.
+let googleTokenClient = null;
+let googleAccessToken = null;
+
+function isGoogleAuthReady() {
+  return !!GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
+}
+
+function initGoogleAuth() {
+  if (!isGoogleAuthReady() || googleTokenClient) return;
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: GOOGLE_CALENDAR_SCOPE,
+    callback: function(response) {
+      if (response && response.access_token) {
+        googleAccessToken = response.access_token;
+        calendarConnected = true;
+        updateCalendarConnectUI();
+        refreshTodayFromCalendar();
+      }
+    },
+  });
+}
+
+function onCalendarConnectClick() {
+  if (calendarConnected) {
+    disconnectGoogleCalendar();
+    return;
+  }
+  if (!isGoogleAuthReady()) {
+    showToast(t('settings.calendarUnavailable'));
+    return;
+  }
+  initGoogleAuth();
+  googleTokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function disconnectGoogleCalendar() {
+  if (googleAccessToken && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+    google.accounts.oauth2.revoke(googleAccessToken, function() {});
+  }
+  googleAccessToken = null;
+  calendarConnected = false;
+  TODAY_EVENTS = MOCK_TODAY_EVENTS;
+  updateCalendarConnectUI();
+  renderToday();
+}
+
+function updateCalendarConnectUI() {
+  var statusEl = document.getElementById('calendarStatus');
+  var btnEl = document.getElementById('calendarConnectBtn');
+  if (!statusEl || !btnEl) return;
+  statusEl.textContent = calendarConnected ? t('settings.calendarConnected') : t('settings.calendarNotConnected');
+  btnEl.textContent = calendarConnected ? t('settings.calendarDisconnect') : t('settings.calendarConnect');
+}
+
 async function refreshTodayFromCalendar() {
-  var calId = CONFIG.calendarId, apiKey = CONFIG.calendarApiKey;
-  if (!calId || !apiKey) {
+  if (!googleAccessToken) {
     calendarConnected = false;
     TODAY_EVENTS = MOCK_TODAY_EVENTS;
     renderToday();
@@ -2326,14 +2395,23 @@ async function refreshTodayFromCalendar() {
 
   var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   var dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
-  var url = 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(calId) + '/events' +
-    '?key=' + encodeURIComponent(apiKey) +
-    '&timeMin=' + encodeURIComponent(dayStart.toISOString()) +
+  var url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
+    '?timeMin=' + encodeURIComponent(dayStart.toISOString()) +
     '&timeMax=' + encodeURIComponent(dayEnd.toISOString()) +
     '&singleEvents=true&orderBy=startTime';
 
   try {
-    var res = await fetch(url);
+    var res = await fetch(url, { headers: { Authorization: 'Bearer ' + googleAccessToken } });
+    if (res.status === 401) {
+      // 토큰 만료 — 다시 연결해야 함
+      googleAccessToken = null;
+      calendarConnected = false;
+      updateCalendarConnectUI();
+      showToast(t('today.calendarExpired'));
+      TODAY_EVENTS = MOCK_TODAY_EVENTS;
+      renderToday();
+      return;
+    }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
     var items = (data.items || []).filter(function(item) { return item.start && item.start.dateTime; });
@@ -2352,7 +2430,6 @@ async function refreshTodayFromCalendar() {
         transportMode: transportMode,
       };
     });
-    calendarConnected = true;
     renderToday();
   } catch (err) {
     calendarConnected = false;
@@ -3027,8 +3104,7 @@ function openConfig() {
   document.getElementById('userIdDisplay').textContent = userId;
   document.getElementById('llmProviderSelect').value = CONFIG.llmProvider;
   document.getElementById('llmApiKeyInput').value = CONFIG.llmApiKey;
-  document.getElementById('calendarIdInput').value = CONFIG.calendarId;
-  document.getElementById('calendarApiKeyInput').value = CONFIG.calendarApiKey;
+  updateCalendarConnectUI();
   // Language segmented control
   document.querySelectorAll('#langSeg .seg-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.val === currentLang);
@@ -3061,15 +3137,11 @@ function saveConfig() {
   CONFIG.webhookUrl = url;
   localStorage.setItem('webhookUrl', url);
 
-  // Personal LLM / Calendar integrations
+  // Personal LLM integration (Calendar connect/disconnect saves itself immediately — see onCalendarConnectClick)
   CONFIG.llmProvider = document.getElementById('llmProviderSelect').value;
   CONFIG.llmApiKey = document.getElementById('llmApiKeyInput').value.trim();
-  CONFIG.calendarId = document.getElementById('calendarIdInput').value.trim();
-  CONFIG.calendarApiKey = document.getElementById('calendarApiKeyInput').value.trim();
   localStorage.setItem('llmProvider', CONFIG.llmProvider);
   localStorage.setItem('llmApiKey', CONFIG.llmApiKey);
-  localStorage.setItem('calendarId', CONFIG.calendarId);
-  localStorage.setItem('calendarApiKey', CONFIG.calendarApiKey);
 
   // Language
   var pendingLang = document.getElementById('langSeg').dataset.pending || currentLang;
@@ -3088,7 +3160,6 @@ function saveConfig() {
 
   applyI18n();
   renderToday();
-  refreshTodayFromCalendar();
   showToast(t('settings.saved'));
   closeConfig();
 }
