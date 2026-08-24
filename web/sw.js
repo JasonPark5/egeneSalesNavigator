@@ -1,4 +1,4 @@
-const CACHE = 'zentia-v7';
+const CACHE = 'egene-v1';
 const ASSETS = [
   '/',
   '/index.html',
