@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>E-GENE™ 세일즈 내비게이터</title>
+  <title>E-GENE™ Sales Navigator</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
@@ -1301,7 +1301,7 @@
   </div>
   <div class="header-title">
     <span style="font-weight:800;letter-spacing:0.5px;color:var(--primary);">E-GENE&trade;</span>
-    <span style="font-weight:400;color:#6b7280;font-size:14px;" data-i18n="header.subtitle"> 세일즈 내비게이터</span>
+    <span style="font-weight:400;color:#6b7280;font-size:14px;" data-i18n="header.subtitle"> Sales Navigator</span>
   </div>
   <button class="icon-btn" id="ttsToggleBtn" onclick="toggleTTS()" data-i18n-title="tts.title" title="TTS 켜기/끄기">
     <svg id="ttsIconOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1571,8 +1571,8 @@ let availableVoices = [];
 
 const I18N = {
   ko: {
-    'app.title': 'E-GENE™ 세일즈 내비게이터',
-    'header.subtitle': '세일즈 내비게이터',
+    'app.title': 'E-GENE™ Sales Navigator',
+    'header.subtitle': 'Sales Navigator',
     'tts.title': 'TTS 켜기/끄기',
     'tts.on': 'TTS 켜짐',
     'tts.off': 'TTS 꺼짐',
@@ -1605,7 +1605,7 @@ const I18N = {
     'settings.saved': '설정이 저장되었습니다.',
     'settings.webhookNeeded': '설정이 필요합니다. 오른쪽 상단 설정 버튼을 눌러 API 서버 URL을 입력해주세요.',
     'settings.webhookNeededToast': 'API 서버 URL을 설정해주세요.',
-    'voice.previewSample': '안녕하세요. E-GENE 세일즈 내비게이터입니다.',
+    'voice.previewSample': '안녕하세요. E-GENE Sales Navigator입니다.',
     'tab.today': '오늘',
     'tab.fav': '즐겨찾기',
     'tab.search': '검색',
@@ -2348,14 +2348,50 @@ async function kakaoLocateSearch(query, mode) {
   return (root && root.candidates) || [];
 }
 
+// 구글 캘린더 위치 문자열에서 "장소명"만 뽑아내기.
+// 보통 "장소명, 상세주소"처럼 콤마로 나뉘지만, 콤마가 없거나 콤마 앞부분에마저
+// 국가/시도명이 섞여 있는 경우(예: "삼성전자캠퍼스 대한민국 경기도 수원시")를
+// 대비해, 국가/광역시·도 이름이 나오는 지점에서도 한 번 더 잘라냄.
+var ADDRESS_ADMIN_MARKERS = [
+  '대한민국',
+  '서울특별시', '서울시',
+  '부산광역시', '부산시',
+  '대구광역시', '대구시',
+  '인천광역시', '인천시',
+  '광주광역시', '광주시',
+  '대전광역시', '대전시',
+  '울산광역시', '울산시',
+  '세종특별자치시', '세종시',
+  '경기도', '강원특별자치도', '강원도',
+  '충청북도', '충청남도', '전북특별자치도', '전라북도', '전라남도',
+  '경상북도', '경상남도', '제주특별자치도', '제주도',
+];
+
+function extractPlaceName(raw) {
+  var s = (raw || '').trim();
+  if (!s) return s;
+  var commaIdx = s.indexOf(',');
+  var candidate = (commaIdx >= 0 ? s.slice(0, commaIdx) : s).trim();
+
+  var cutIdx = -1;
+  ADDRESS_ADMIN_MARKERS.forEach(function(marker) {
+    var idx = candidate.indexOf(marker);
+    if (idx > 0 && (cutIdx === -1 || idx < cutIdx)) cutIdx = idx;
+  });
+  if (cutIdx > 0) candidate = candidate.slice(0, cutIdx).trim();
+
+  // 잘라내고 남은 게 국가/시도명 자체뿐이면(장소명 없이 주소만 있던 경우) 원문을 그대로 씀
+  if (!candidate || ADDRESS_ADMIN_MARKERS.indexOf(candidate) !== -1) return s;
+  return candidate;
+}
+
 // 실제 좌표/이동시간을 모르는 일정(주로 실제 캘린더 이벤트)은 뒤에서 조용히
 // 카카오 검색을 돌려 1등 결과로 바로 길찾기까지 실행. 못 찾으면 검색탭으로 안내.
 async function resolveAndNavigateEvent(index) {
   var ev = TODAY_EVENTS[index];
   if (!ev) return;
   var raw = eventLocationName(ev) || ev.title || '';
-  // 구글 캘린더 위치는 보통 "장소명, 상세주소" 형태라 앞부분(장소명)만 쓰면 검색이 더 잘 맞음
-  var placeName = raw.split(',')[0].trim() || raw;
+  var placeName = extractPlaceName(raw);
   var mode = ev.transportMode || transportMode;
 
   if (!placeName) { switchTab('search'); return; }
