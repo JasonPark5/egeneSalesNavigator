@@ -1638,6 +1638,8 @@ const I18N = {
     'today.calendarConnectSuccess': 'Google Calendar에 연결됐어요!',
     'today.calendarConnectFailed': '연결에 실패했어요. 다시 시도해주세요.',
     'today.untitled': '(제목 없음)',
+    'today.locating': '위치를 찾는 중이에요…',
+    'today.locateNotFound': '위치를 찾지 못했어요. 검색에서 직접 찾아주세요.',
     'fav.patternLabel': '지금 이 시간대에 자주 가는 곳',
     'fav.frequentLabel': '자주 가는 곳',
     'fav.visitCount': '회 방문',
@@ -1785,6 +1787,8 @@ const I18N = {
     'today.calendarConnectSuccess': 'Connected to Google Calendar!',
     'today.calendarConnectFailed': 'Connection failed. Please try again.',
     'today.untitled': '(No title)',
+    'today.locating': 'Finding the location…',
+    'today.locateNotFound': "Couldn't find it. Please search manually.",
     'fav.patternLabel': 'Frequent at this time of day',
     'fav.frequentLabel': 'Frequent places',
     'fav.visitCount': ' visits',
@@ -2279,7 +2283,7 @@ function renderToday() {
         '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
         '<div class="event-travel-row">' +
           '<div class="event-travel-info">' + t('today.viaSearchHint') + '</div>' +
-          '<button class="event-go-btn" onclick="findEventLocation(' + i + ')">' + t('today.goBtn') + '</button>' +
+          '<button class="event-go-btn" onclick="resolveAndNavigateEvent(' + i + ')">' + t('today.goBtn') + '</button>' +
         '</div>';
     } else if (ev.inferredName) {
       html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.inferHint') + '</div>' +
@@ -2290,7 +2294,7 @@ function renderToday() {
         '</div></div>';
     } else {
       html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.noLocationHint') + '</div>' +
-        '<div class="infer-actions"><button class="confirm-chip yes" onclick="findEventLocation(' + i + ')">' + t('today.findLocation') + '</button></div>' +
+        '<div class="infer-actions"><button class="confirm-chip yes" onclick="resolveAndNavigateEvent(' + i + ')">' + t('today.findLocation') + '</button></div>' +
       '</div>';
     }
     html += '</div></div>';
@@ -2325,12 +2329,49 @@ function confirmEventLocation(index, isCorrect) {
   renderToday();
 }
 
-// 실제 좌표/이동시간을 모르는 일정은 기존 검색 파이프라인(카카오 검색)으로 넘겨 찾음
-function findEventLocation(index) {
+// 실제 좌표/이동시간을 모르는 일정(주로 실제 캘린더 이벤트)은 뒤에서 조용히
+// 카카오 검색을 돌려 1등 결과로 바로 길찾기까지 실행. 못 찾으면 검색탭으로 안내.
+async function resolveAndNavigateEvent(index) {
   var ev = TODAY_EVENTS[index];
   if (!ev) return;
-  switchTab('search');
-  sendText(eventLocationName(ev) || ev.title, '', 'text');
+  var raw = eventLocationName(ev) || ev.title || '';
+  // 구글 캘린더 위치는 보통 "장소명, 상세주소" 형태라 앞부분(장소명)만 쓰면 검색이 더 잘 맞음
+  var query = raw.split(',')[0].trim() || raw;
+  if (!query) { switchTab('search'); return; }
+
+  showToast(t('today.locating'));
+  try {
+    var res = await fetch(CONFIG.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: query,
+        lat: currentLocation ? currentLocation.lat : 37.5665,
+        lng: currentLocation ? currentLocation.lng : 126.9780,
+        transportMode: ev.transportMode || transportMode,
+        inputType: 'chip', // LLM 스킵, 바로 카카오 키워드 검색
+        userId: userId,
+        lang: currentLang,
+        chipRadius: chipRadius,
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    var root = Array.isArray(data) ? data[0] : data;
+    var candidates = (root && root.candidates) || [];
+    if (candidates.length > 0) {
+      var top = candidates[0];
+      navigateTo(top.lat, top.lng, top.name, ev.transportMode || transportMode);
+    } else {
+      showToast(t('today.locateNotFound'));
+      switchTab('search');
+      sendText(query, '', 'text');
+    }
+  } catch (err) {
+    console.error('[Today] 위치 검색 실패:', err);
+    switchTab('search');
+    sendText(query, '', 'text');
+  }
 }
 
 // ─── Google Calendar (Google Identity Services — "Google 계정으로 연결" 버튼) ───
@@ -2343,11 +2384,42 @@ function isGoogleAuthReady() {
   return !!GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
 }
 
-// 액세스 토큰 자체는 저장하지 않고(짧은 수명 + 민감정보), "이전에 연결했었다"는
-// 사실만 localStorage에 남겨서, 페이지를 새로고침해도 조용히(팝업 없이) 다시
-// 로그인을 시도합니다 — 구글이 이미 동의한 사용자로 인식하면 소리없이 성공합니다.
-const GOOGLE_RECONNECT_FLAG = 'googleCalendarWasConnected';
-let googleSilentAttemptInFlight = false;
+// 액세스 토큰(수명 ~1시간)을 sessionStorage에 넣어서 새로고침해도 그대로 유지되게 함
+// (탭을 닫으면 사라짐 — 이 정도면 해커톤 데모엔 충분하고, "조용한 재로그인" 팝업이
+// 매번 뜨는 것보다 훨씬 예측 가능함).
+const GOOGLE_TOKEN_STORAGE_KEY = 'googleCalendarToken';
+
+function saveGoogleToken(token, expiresInSeconds) {
+  var expiresAt = Date.now() + (expiresInSeconds || 3600) * 1000;
+  sessionStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY, JSON.stringify({ token: token, expiresAt: expiresAt }));
+}
+function loadGoogleToken() {
+  try {
+    var raw = sessionStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed.token || !parsed.expiresAt || Date.now() >= parsed.expiresAt) {
+      sessionStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
+      return null;
+    }
+    return parsed.token;
+  } catch (e) {
+    return null;
+  }
+}
+function clearGoogleToken() {
+  sessionStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
+}
+
+// 페이지 로드 시 세션에 남은 토큰이 있으면 팝업 없이 바로 복원
+function restoreGoogleSession() {
+  var token = loadGoogleToken();
+  if (!token) return;
+  googleAccessToken = token;
+  calendarConnected = true;
+  updateCalendarConnectUI();
+  refreshTodayFromCalendar();
+}
 
 function initGoogleAuth() {
   if (!isGoogleAuthReady() || googleTokenClient) return;
@@ -2355,44 +2427,21 @@ function initGoogleAuth() {
     client_id: GOOGLE_CLIENT_ID,
     scope: GOOGLE_CALENDAR_SCOPE,
     callback: function(response) {
-      var wasSilent = googleSilentAttemptInFlight;
-      googleSilentAttemptInFlight = false;
       if (response && response.access_token) {
         googleAccessToken = response.access_token;
         calendarConnected = true;
-        localStorage.setItem(GOOGLE_RECONNECT_FLAG, '1');
+        saveGoogleToken(response.access_token, response.expires_in);
         updateCalendarConnectUI();
         refreshTodayFromCalendar();
-        if (!wasSilent) showToast(t('today.calendarConnectSuccess'));
-      } else if (!wasSilent) {
+        showToast(t('today.calendarConnectSuccess'));
+      } else {
         showToast(t('today.calendarConnectFailed'));
       }
     },
     error_callback: function() {
-      var wasSilent = googleSilentAttemptInFlight;
-      googleSilentAttemptInFlight = false;
-      // 조용한 재연결 시도가 실패한 건 흔한 일(토큰 만료 등)이라 사용자에게 굳이 알리지 않음
-      if (!wasSilent) showToast(t('today.calendarConnectFailed'));
+      showToast(t('today.calendarConnectFailed'));
     },
   });
-}
-
-// 새로고침 직후, 이전에 연결했던 적이 있으면 팝업 없이 재연결을 시도
-function attemptSilentGoogleReconnect() {
-  if (!isGoogleAuthReady() || localStorage.getItem(GOOGLE_RECONNECT_FLAG) !== '1') return;
-  initGoogleAuth();
-  googleSilentAttemptInFlight = true;
-  googleTokenClient.requestAccessToken({ prompt: '' });
-}
-
-// GIS 스크립트는 async라 언제 로드될지 알 수 없어서, 준비될 때까지 짧게 재시도
-function waitForGoogleThenReconnect(attemptsLeft) {
-  if (isGoogleAuthReady()) {
-    attemptSilentGoogleReconnect();
-    return;
-  }
-  if (attemptsLeft <= 0) return;
-  setTimeout(function() { waitForGoogleThenReconnect(attemptsLeft - 1); }, 300);
 }
 
 function onCalendarConnectClick() {
@@ -2414,7 +2463,7 @@ function disconnectGoogleCalendar() {
   }
   googleAccessToken = null;
   calendarConnected = false;
-  localStorage.removeItem(GOOGLE_RECONNECT_FLAG);
+  clearGoogleToken();
   TODAY_EVENTS = MOCK_TODAY_EVENTS;
   updateCalendarConnectUI();
   renderToday();
@@ -2449,7 +2498,7 @@ async function refreshTodayFromCalendar() {
       // 토큰 만료 — 다시 연결해야 함
       googleAccessToken = null;
       calendarConnected = false;
-      localStorage.removeItem(GOOGLE_RECONNECT_FLAG);
+      clearGoogleToken();
       updateCalendarConnectUI();
       showToast(t('today.calendarExpired'));
       TODAY_EVENTS = MOCK_TODAY_EVENTS;
@@ -3313,8 +3362,7 @@ initLocation();
 updateFavCount();
 renderRecentSearches();
 renderToday();
-refreshTodayFromCalendar();
-waitForGoogleThenReconnect(20);
+restoreGoogleSession();
 initTTSIcon();
 if (window.speechSynthesis) {
   loadVoices();
