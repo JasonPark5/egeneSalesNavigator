@@ -2343,26 +2343,56 @@ function isGoogleAuthReady() {
   return !!GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
 }
 
+// 액세스 토큰 자체는 저장하지 않고(짧은 수명 + 민감정보), "이전에 연결했었다"는
+// 사실만 localStorage에 남겨서, 페이지를 새로고침해도 조용히(팝업 없이) 다시
+// 로그인을 시도합니다 — 구글이 이미 동의한 사용자로 인식하면 소리없이 성공합니다.
+const GOOGLE_RECONNECT_FLAG = 'googleCalendarWasConnected';
+let googleSilentAttemptInFlight = false;
+
 function initGoogleAuth() {
   if (!isGoogleAuthReady() || googleTokenClient) return;
   googleTokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: GOOGLE_CALENDAR_SCOPE,
     callback: function(response) {
+      var wasSilent = googleSilentAttemptInFlight;
+      googleSilentAttemptInFlight = false;
       if (response && response.access_token) {
         googleAccessToken = response.access_token;
         calendarConnected = true;
+        localStorage.setItem(GOOGLE_RECONNECT_FLAG, '1');
         updateCalendarConnectUI();
         refreshTodayFromCalendar();
-        showToast(t('today.calendarConnectSuccess'));
-      } else {
+        if (!wasSilent) showToast(t('today.calendarConnectSuccess'));
+      } else if (!wasSilent) {
         showToast(t('today.calendarConnectFailed'));
       }
     },
     error_callback: function() {
-      showToast(t('today.calendarConnectFailed'));
+      var wasSilent = googleSilentAttemptInFlight;
+      googleSilentAttemptInFlight = false;
+      // 조용한 재연결 시도가 실패한 건 흔한 일(토큰 만료 등)이라 사용자에게 굳이 알리지 않음
+      if (!wasSilent) showToast(t('today.calendarConnectFailed'));
     },
   });
+}
+
+// 새로고침 직후, 이전에 연결했던 적이 있으면 팝업 없이 재연결을 시도
+function attemptSilentGoogleReconnect() {
+  if (!isGoogleAuthReady() || localStorage.getItem(GOOGLE_RECONNECT_FLAG) !== '1') return;
+  initGoogleAuth();
+  googleSilentAttemptInFlight = true;
+  googleTokenClient.requestAccessToken({ prompt: '' });
+}
+
+// GIS 스크립트는 async라 언제 로드될지 알 수 없어서, 준비될 때까지 짧게 재시도
+function waitForGoogleThenReconnect(attemptsLeft) {
+  if (isGoogleAuthReady()) {
+    attemptSilentGoogleReconnect();
+    return;
+  }
+  if (attemptsLeft <= 0) return;
+  setTimeout(function() { waitForGoogleThenReconnect(attemptsLeft - 1); }, 300);
 }
 
 function onCalendarConnectClick() {
@@ -2384,6 +2414,7 @@ function disconnectGoogleCalendar() {
   }
   googleAccessToken = null;
   calendarConnected = false;
+  localStorage.removeItem(GOOGLE_RECONNECT_FLAG);
   TODAY_EVENTS = MOCK_TODAY_EVENTS;
   updateCalendarConnectUI();
   renderToday();
@@ -2418,6 +2449,7 @@ async function refreshTodayFromCalendar() {
       // 토큰 만료 — 다시 연결해야 함
       googleAccessToken = null;
       calendarConnected = false;
+      localStorage.removeItem(GOOGLE_RECONNECT_FLAG);
       updateCalendarConnectUI();
       showToast(t('today.calendarExpired'));
       TODAY_EVENTS = MOCK_TODAY_EVENTS;
@@ -2445,6 +2477,9 @@ async function refreshTodayFromCalendar() {
     renderToday();
   } catch (err) {
     calendarConnected = false;
+    updateCalendarConnectUI();
+    TODAY_EVENTS = MOCK_TODAY_EVENTS;
+    renderToday();
     showToast(t('today.calendarError'));
   }
 }
@@ -3275,6 +3310,7 @@ updateFavCount();
 renderRecentSearches();
 renderToday();
 refreshTodayFromCalendar();
+waitForGoogleThenReconnect(20);
 initTTSIcon();
 if (window.speechSynthesis) {
   loadVoices();
