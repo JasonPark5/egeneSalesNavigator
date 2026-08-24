@@ -982,6 +982,8 @@
       padding: 26px 24px 22px;
       width: 92%;
       max-width: 400px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
       box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0,0,0,0.04);
       animation: modalIn 0.2s ease;
     }
@@ -1076,7 +1078,7 @@
       font-size: 13px;
       opacity: 0;
       transition: opacity 0.25s ease, transform 0.25s ease;
-      z-index: 50;
+      z-index: 150;
       pointer-events: none;
       white-space: nowrap;
       max-width: 90vw;
@@ -1633,6 +1635,8 @@ const I18N = {
     'today.findLocation': '검색으로 찾기',
     'today.calendarError': 'Google Calendar를 불러오지 못했어요. 설정을 확인해주세요.',
     'today.calendarExpired': '연결이 만료됐어요. 설정에서 다시 연결해주세요.',
+    'today.calendarConnectSuccess': 'Google Calendar에 연결됐어요!',
+    'today.calendarConnectFailed': '연결에 실패했어요. 다시 시도해주세요.',
     'today.untitled': '(제목 없음)',
     'fav.patternLabel': '지금 이 시간대에 자주 가는 곳',
     'fav.frequentLabel': '자주 가는 곳',
@@ -1778,6 +1782,8 @@ const I18N = {
     'today.findLocation': 'Search for it',
     'today.calendarError': "Couldn't load Google Calendar. Please check your settings.",
     'today.calendarExpired': 'Your connection expired. Please reconnect in Settings.',
+    'today.calendarConnectSuccess': 'Connected to Google Calendar!',
+    'today.calendarConnectFailed': 'Connection failed. Please try again.',
     'today.untitled': '(No title)',
     'fav.patternLabel': 'Frequent at this time of day',
     'fav.frequentLabel': 'Frequent places',
@@ -2348,7 +2354,13 @@ function initGoogleAuth() {
         calendarConnected = true;
         updateCalendarConnectUI();
         refreshTodayFromCalendar();
+        showToast(t('today.calendarConnectSuccess'));
+      } else {
+        showToast(t('today.calendarConnectFailed'));
       }
+    },
+    error_callback: function() {
+      showToast(t('today.calendarConnectFailed'));
     },
   });
 }
