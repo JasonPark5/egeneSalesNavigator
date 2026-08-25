@@ -1,0 +1,73 @@
+name: Deploy to GitHub Pages (static demo)
+
+# server/ 없이 web/만 정적으로 배포하는 "임시" 데모용 워크플로우.
+# Kakao 검색 + LLM 호출을 브라우저에서 직접 하도록 web/pipeline-client.js가 대신 동작하며,
+# 이 워크플로우가 배포 빌드 시 아래 repo secret 값을 web/index.html의 플레이스홀더에 주입한다.
+#
+# 필요한 repo secret (Settings > Secrets and variables > Actions):
+#   OPENAI_API_KEY  - 데모 방문자가 자기 키 없이도 AI 추천을 쓸 수 있게 하는 기본 OpenAI 키
+#   KAKAO_JS_KEY    - Kakao Developers에서 발급받은 "JavaScript" 키 (REST 키 아님).
+#                     이 사이트가 배포될 도메인(https://<owner>.github.io)을
+#                     Kakao Developers 콘솔의 "Web 플랫폼"에 허용 도메인으로 등록해야 함.
+#
+# 주의: 이 키들은 배포된 정적 페이지 소스에 그대로 노출됩니다 (누구나 조회 가능).
+# 사내 해커톤 검증용 임시 배포 목적으로만 사용하세요.
+
+on:
+  push:
+    branches:
+      - main
+      - claude/n8nmapservice-actionflow-migration-giree8
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject build-time keys into a copy of web/
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          KAKAO_JS_KEY: ${{ secrets.KAKAO_JS_KEY }}
+        run: |
+          cp -r web pages-build
+          node -e '
+            const fs = require("fs");
+            const path = "pages-build/index.html";
+            let html = fs.readFileSync(path, "utf8");
+            html = html.split("__BUILD_LLM_PROVIDER__").join("openai");
+            html = html.split("__BUILD_LLM_API_KEY__").join(process.env.OPENAI_API_KEY || "");
+            html = html.split("__BUILD_KAKAO_JS_KEY__").join(process.env.KAKAO_JS_KEY || "");
+            fs.writeFileSync(path, html);
+          '
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'pages-build'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

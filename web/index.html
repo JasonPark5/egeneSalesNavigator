@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>E-GENE™ 세일즈 내비게이터</title>
+  <title>E-GENE™ Sales Navigator</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
@@ -15,6 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="E-GENE™" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --primary: #C30813;
@@ -894,6 +895,9 @@
       background: linear-gradient(145deg, #f87171, #ef4444);
       box-shadow: 0 4px 16px rgba(239,68,68,0.4), 0 2px 4px rgba(239,68,68,0.2);
     }
+    .mic-wrap-inline { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .mic-btn.compact { width: 40px; height: 40px; }
+    .mic-btn.compact svg { width: 17px; height: 17px; }
     .mic-hint {
       font-size: 12px;
       color: var(--text-muted);
@@ -981,6 +985,8 @@
       padding: 26px 24px 22px;
       width: 92%;
       max-width: 400px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
       box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0,0,0,0.04);
       animation: modalIn 0.2s ease;
     }
@@ -1075,7 +1081,7 @@
       font-size: 13px;
       opacity: 0;
       transition: opacity 0.25s ease, transform 0.25s ease;
-      z-index: 50;
+      z-index: 150;
       pointer-events: none;
       white-space: nowrap;
       max-width: 90vw;
@@ -1141,6 +1147,7 @@
       transition: background 0.15s;
     }
     .inapp-btn-secondary:hover { background: var(--border); }
+    .calendar-connect-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
 
     /* ─── Today tab ────────────────────────────── */
     .today-scroll {
@@ -1294,7 +1301,7 @@
   </div>
   <div class="header-title">
     <span style="font-weight:800;letter-spacing:0.5px;color:var(--primary);">E-GENE&trade;</span>
-    <span style="font-weight:400;color:#6b7280;font-size:14px;" data-i18n="header.subtitle"> 세일즈 내비게이터</span>
+    <span style="font-weight:400;color:#6b7280;font-size:14px;" data-i18n="header.subtitle"> Sales Navigator</span>
   </div>
   <button class="icon-btn" id="ttsToggleBtn" onclick="toggleTTS()" data-i18n-title="tts.title" title="TTS 켜기/끄기">
     <svg id="ttsIconOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1347,32 +1354,7 @@
     <button class="transport-btn" id="btn-car" onclick="setTransport('car')" data-i18n="transport.car">🚗 자동차</button>
   </div>
 
-  <!-- Mic + Location (always visible) -->
-  <div class="action-header">
-    <div class="mic-row">
-      <div class="mic-wrap" id="micWrap">
-        <div class="mic-ring pulse-ring-1"></div>
-        <div class="mic-ring pulse-ring-2"></div>
-        <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div class="mic-hint" id="micHint" data-i18n="mic.hint">버튼을 누르고 말씀하세요</div>
-    <div class="location-status">
-      <div class="loc-dot" id="locDot"></div>
-      <span id="locStatus" data-i18n="loc.loading">위치 정보 가져오는 중...</span>
-      <button id="locRefreshBtn" onclick="refreshLocation()" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:13px;color:var(--text-muted);line-height:1;" data-i18n-title="loc.refresh" title="위치 새로고침">↻</button>
-    </div>
-    <div class="location-landmark" id="locationLandmark" style="display:none;font-size:11px;color:var(--text-muted);text-align:center;">📍 <span id="landmarkText"></span></div>
-  </div>
-
-  <!-- Persistent chips (always visible) -->
+  <!-- Persistent chips (always visible, top) -->
   <div class="persistent-chips">
     <div class="chip" onclick="sendChip('FD6')"><span class="chip-icon">🍽️</span><span data-i18n="chip.FD6">맛집</span></div>
     <div class="chip" onclick="sendChip('CE7')"><span class="chip-icon">☕</span><span data-i18n="chip.CE7">카페</span></div>
@@ -1397,7 +1379,23 @@
 
   <!-- Text input (bottom) -->
   <div class="input-area">
+    <div class="location-status">
+      <div class="loc-dot" id="locDot"></div>
+      <span id="locStatus" data-i18n="loc.loading">위치 정보 가져오는 중...</span>
+      <button id="locRefreshBtn" onclick="refreshLocation()" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:13px;color:var(--text-muted);line-height:1;" data-i18n-title="loc.refresh" title="위치 새로고침">↻</button>
+    </div>
+    <div class="location-landmark" id="locationLandmark" style="display:none;font-size:11px;color:var(--text-muted);text-align:center;">📍 <span id="landmarkText"></span></div>
     <div class="text-input-row">
+      <div class="mic-wrap-inline" id="micWrap">
+        <button class="mic-btn compact" id="micBtn" onclick="toggleRecording()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+      </div>
       <input type="text" class="text-input" id="textInput" data-i18n-ph="input.placeholder" placeholder="목적지를 입력하세요" />
       <button class="send-btn" onclick="sendTextFromInput()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1406,6 +1404,7 @@
         </svg>
       </button>
     </div>
+    <div class="mic-hint" id="micHint" data-i18n="mic.hint" style="margin-top:5px;">버튼을 누르고 말씀하세요</div>
   </div>
 </div>
 
@@ -1495,6 +1494,13 @@
       <button type="button" class="btn-mini" onclick="previewVoice()" data-i18n="settings.voice.preview">미리듣기</button>
     </div>
 
+    <!-- Default transport mode -->
+    <label data-i18n="settings.transport" style="margin-top:14px;">기본 이동수단</label>
+    <div class="seg-group" id="transportSeg">
+      <button type="button" class="seg-btn" data-val="car" onclick="setTransportPick('car')" data-i18n="transport.car">🚗 자동차</button>
+      <button type="button" class="seg-btn" data-val="transit" onclick="setTransportPick('transit')" data-i18n="transport.transit">🚇 대중교통</button>
+    </div>
+
     <!-- Chip radius -->
     <label style="margin-top:14px;">
       <span data-i18n="settings.chipRadius">칩 검색 반경</span>
@@ -1528,11 +1534,12 @@
       <input type="password" id="llmApiKeyInput" data-i18n-ph="settings.llmApiKey.ph" placeholder="개인 API 키" autocomplete="off" />
       <div class="modal-note" data-i18n="settings.llmNote">비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.</div>
 
-      <label style="margin-top:4px;" data-i18n="settings.calendarId">Google Calendar ID</label>
-      <input type="text" id="calendarIdInput" data-i18n-ph="settings.calendarId.ph" placeholder="you@company.com" autocomplete="off" />
-      <label style="margin-top:4px;" data-i18n="settings.calendarApiKey">Google Calendar API 키</label>
-      <input type="password" id="calendarApiKeyInput" data-i18n-ph="settings.calendarApiKey.ph" placeholder="Calendar API 키" autocomplete="off" />
-      <div class="modal-note" data-i18n="settings.calendarNote">캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.</div>
+      <label style="margin-top:14px;" data-i18n="settings.calendar">Google Calendar</label>
+      <div class="calendar-connect-row">
+        <span id="calendarStatus" class="modal-note" style="margin:0;flex:1;" data-i18n="settings.calendarNotConnected">연결 안 됨 — 예시 일정 표시 중</span>
+        <button type="button" class="btn-mini" id="calendarConnectBtn" onclick="onCalendarConnectClick()" data-i18n="settings.calendarConnect">연결하기</button>
+      </div>
+      <div class="modal-note" data-i18n="settings.calendarNote">Google 계정으로 연결하면 오늘 탭에 실제 일정이 표시돼요. 연결하지 않으면 예시 일정이 표시됩니다.</div>
     </details>
 
     <div class="modal-actions">
@@ -1543,6 +1550,15 @@
 </div>
 
 <script>
+// 정적(GitHub Pages 등) 배포 빌드 시 GitHub Actions가 repo secret 값으로 치환합니다.
+// 저장소에는 플레이스홀더만 커밋되며, 로컬에서 그대로 열면(server/ 없이) 빈 값으로
+// 취급돼 설정 화면에서 직접 키를 입력해야 동작합니다. (server/ 로컬 개발에는 영향 없음)
+window.__DEFAULT_LLM_PROVIDER__ = "__BUILD_LLM_PROVIDER__";
+window.__DEFAULT_LLM_API_KEY__ = "__BUILD_LLM_API_KEY__";
+window.__DEFAULT_KAKAO_JS_KEY__ = "__BUILD_KAKAO_JS_KEY__";
+</script>
+<script src="pipeline-client.js"></script>
+<script>
 // ========================
 // CONFIG & STATE
 // ========================
@@ -1552,10 +1568,13 @@ const CONFIG = {
   // 개인 LLM 구독 키 (설정 > 내 연동 설정). 비워두면 서버 기본 키(server/.env) 사용.
   llmProvider: localStorage.getItem('llmProvider') || '',
   llmApiKey: localStorage.getItem('llmApiKey') || '',
-  // 개인 Google Calendar (설정 > 내 연동 설정). 비워두면 오늘 탭은 예시 일정을 보여줌.
-  calendarId: localStorage.getItem('calendarId') || '',
-  calendarApiKey: localStorage.getItem('calendarApiKey') || '',
 };
+
+// Google Cloud Console에서 발급받는 OAuth Client ID (앱 전체에서 하나, 사용자별 값 아님).
+// Client ID는 비밀값이 아니라 프론트 코드에 그대로 넣어도 안전합니다.
+// 발급 전까지는 비워두면 "Google 계정으로 연결" 버튼이 안내 메시지만 보여줍니다.
+const GOOGLE_CLIENT_ID = '713919915373-2qd7kduon7u1gestp2tfoqulfupqaiku.apps.googleusercontent.com';
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 
 // ========================
 // SETTINGS (multi-language / voice / chip radius)
@@ -1568,8 +1587,8 @@ let availableVoices = [];
 
 const I18N = {
   ko: {
-    'app.title': 'E-GENE™ 세일즈 내비게이터',
-    'header.subtitle': '세일즈 내비게이터',
+    'app.title': 'E-GENE™ Sales Navigator',
+    'header.subtitle': 'Sales Navigator',
     'tts.title': 'TTS 켜기/끄기',
     'tts.on': 'TTS 켜짐',
     'tts.off': 'TTS 꺼짐',
@@ -1578,6 +1597,7 @@ const I18N = {
     'settings.voice': '음성',
     'settings.voice.none': '시스템 기본',
     'settings.voice.preview': '미리듣기',
+    'settings.transport': '기본 이동수단',
     'settings.chipRadius': '칩 검색 반경',
     'settings.chipRadius.hint': '"칩"으로 검색할 때 현재 위치 기준 반경',
     'settings.advanced': '고급 설정',
@@ -1588,11 +1608,13 @@ const I18N = {
     'settings.llmProvider': 'LLM 제공자',
     'settings.llmApiKey.ph': '개인 API 키',
     'settings.llmNote': '비워두면 로컬 서버(server/.env)에 설정된 기본 키를 사용해요. 여기 입력하면 검색할 때마다 이 키가 함께 전송됩니다 — 이 브라우저에만 저장돼요.',
-    'settings.calendarId': 'Google Calendar ID',
-    'settings.calendarId.ph': 'you@company.com',
-    'settings.calendarApiKey': 'Google Calendar API 키',
-    'settings.calendarApiKey.ph': 'Calendar API 키',
-    'settings.calendarNote': '캘린더를 "공개"로 공유하고 API 키를 발급하면 오늘 탭에 실제 일정이 표시돼요. 비워두면 예시 일정이 표시됩니다.',
+    'settings.calendar': 'Google Calendar',
+    'settings.calendarConnect': '연결하기',
+    'settings.calendarDisconnect': '연결 해제',
+    'settings.calendarNotConnected': '연결 안 됨 — 예시 일정 표시 중',
+    'settings.calendarConnected': '연결됨',
+    'settings.calendarNote': 'Google 계정으로 연결하면 오늘 탭에 실제 일정이 표시돼요. 연결하지 않으면 예시 일정이 표시됩니다.',
+    'settings.calendarUnavailable': '아직 준비 중이에요 (Google OAuth 설정 필요)',
     'settings.cancel': '취소',
     'settings.save': '저장',
     'settings.webhookSaved': 'API 서버 URL이 저장되었습니다.',
@@ -1600,7 +1622,7 @@ const I18N = {
     'settings.saved': '설정이 저장되었습니다.',
     'settings.webhookNeeded': '설정이 필요합니다. 오른쪽 상단 설정 버튼을 눌러 API 서버 URL을 입력해주세요.',
     'settings.webhookNeededToast': 'API 서버 URL을 설정해주세요.',
-    'voice.previewSample': '안녕하세요. E-GENE 세일즈 내비게이터입니다.',
+    'voice.previewSample': '안녕하세요. E-GENE Sales Navigator입니다.',
     'tab.today': '오늘',
     'tab.fav': '즐겨찾기',
     'tab.search': '검색',
@@ -1624,7 +1646,12 @@ const I18N = {
     'today.noLocationHint': '이 일정엔 위치가 없어요. 검색으로 찾아볼까요?',
     'today.findLocation': '검색으로 찾기',
     'today.calendarError': 'Google Calendar를 불러오지 못했어요. 설정을 확인해주세요.',
+    'today.calendarExpired': '연결이 만료됐어요. 설정에서 다시 연결해주세요.',
+    'today.calendarConnectSuccess': 'Google Calendar에 연결됐어요!',
+    'today.calendarConnectFailed': '연결에 실패했어요. 다시 시도해주세요.',
     'today.untitled': '(제목 없음)',
+    'today.locating': '위치를 찾는 중이에요…',
+    'today.locateNotFound': '위치를 찾지 못했어요. 검색에서 직접 찾아주세요.',
     'fav.patternLabel': '지금 이 시간대에 자주 가는 곳',
     'fav.frequentLabel': '자주 가는 곳',
     'fav.visitCount': '회 방문',
@@ -1720,6 +1747,7 @@ const I18N = {
     'settings.voice': 'Voice',
     'settings.voice.none': 'System default',
     'settings.voice.preview': 'Preview',
+    'settings.transport': 'Default transport',
     'settings.chipRadius': 'Chip search radius',
     'settings.chipRadius.hint': 'Radius from your location for "chip" searches',
     'settings.advanced': 'Advanced',
@@ -1730,11 +1758,13 @@ const I18N = {
     'settings.llmProvider': 'LLM provider',
     'settings.llmApiKey.ph': 'Personal API key',
     'settings.llmNote': "Leave blank to use the default key set in the local server (server/.env). If you enter one, it's sent with every search — stored only in this browser.",
-    'settings.calendarId': 'Google Calendar ID',
-    'settings.calendarId.ph': 'you@company.com',
-    'settings.calendarApiKey': 'Google Calendar API key',
-    'settings.calendarApiKey.ph': 'Calendar API key',
-    'settings.calendarNote': 'Share your calendar as "public" and issue an API key to show real events in the Today tab. Leave blank to show sample events.',
+    'settings.calendar': 'Google Calendar',
+    'settings.calendarConnect': 'Connect',
+    'settings.calendarDisconnect': 'Disconnect',
+    'settings.calendarNotConnected': 'Not connected — showing sample events',
+    'settings.calendarConnected': 'Connected',
+    'settings.calendarNote': 'Connect your Google account to show real events in the Today tab. Sample events are shown otherwise.',
+    'settings.calendarUnavailable': 'Not set up yet (needs Google OAuth config)',
     'settings.cancel': 'Cancel',
     'settings.save': 'Save',
     'settings.webhookSaved': 'API server URL saved.',
@@ -1766,7 +1796,12 @@ const I18N = {
     'today.noLocationHint': "This event has no location. Want to search for it?",
     'today.findLocation': 'Search for it',
     'today.calendarError': "Couldn't load Google Calendar. Please check your settings.",
+    'today.calendarExpired': 'Your connection expired. Please reconnect in Settings.',
+    'today.calendarConnectSuccess': 'Connected to Google Calendar!',
+    'today.calendarConnectFailed': 'Connection failed. Please try again.',
     'today.untitled': '(No title)',
+    'today.locating': 'Finding the location…',
+    'today.locateNotFound': "Couldn't find it. Please search manually.",
     'fav.patternLabel': 'Frequent at this time of day',
     'fav.frequentLabel': 'Frequent places',
     'fav.visitCount': ' visits',
@@ -1884,13 +1919,16 @@ function applyI18n() {
   }
   renderFavorites && document.getElementById('panel-fav') && renderFavorites();
   renderToday && document.getElementById('panel-today') && renderToday();
+  updateCalendarConnectUI();
   renderRecentSearches && renderRecentSearches();
 }
 
 let currentLocation = null;
 let currentLandmark = '';        // 현재 위치 도로명/장소명 (Nominatim)
 let locationReady = null;       // Promise: GPS + Nominatim 모두 완료
-let transportMode = 'transit';
+// 기본 이동수단(설정에서 저장한 값) — 검색탭 토글/음성 명령으로 바뀌는 현재 세션의 transportMode와는 별개.
+let defaultTransportMode = localStorage.getItem('transportModeDefault') || 'car';
+let transportMode = defaultTransportMode;
 let isRecording = false;
 let recognition = null;
 let lastCandidates = [];
@@ -2014,7 +2052,12 @@ function checkFavoriteVoice(text) {
   var favs = getFavorites();
   if (!favs.length) return false;
   var clean = text.replace(/(으로|로|에|까지|가줘|가자|갈래|안내|길찾기)/g,'').trim();
-  var match = favs.find(function(f) { return (f.alias && clean.includes(f.alias)) || (f.name && clean.includes(f.name)); });
+  // 별칭이 발화 전체(부가어 제거 후)와 정확히 같을 때만 즉시 처리.
+  // 부분일치(includes)를 쓰면 '집' 별칭이 '맛집'/'밥집'/'술집' 같은 단어 속 '집'과도
+  // 매칭돼 버리고, '집 근처 편의점'처럼 별칭이 목적지가 아니라 기준 위치로만 쓰인
+  // 경우까지 즉시 집으로 이동시켜 버린다. 그런 애매한 경우는 서버 LLM의 의도 분석
+  // (navigate_favorite vs search)으로 넘긴다.
+  var match = favs.find(function(f) { return (f.alias && clean === f.alias) || (f.name && clean === f.name); });
   if (match) {
     addUserMessage(text);
     speak(t('fav.aliasGoTts', match.name));
@@ -2134,10 +2177,12 @@ function fetchNearbyLandmark(lat, lng) {
 
 function setLocStatus(msg, type) {
   var el = document.getElementById('locStatus');
+  if (!el) return;
   el.textContent = msg;
   el.dataset.set = '1';
   el.removeAttribute('data-i18n');
-  document.getElementById('locDot').className = 'loc-dot' + (type ? ' ' + type : '');
+  var dot = document.getElementById('locDot');
+  if (dot) dot.className = 'loc-dot' + (type ? ' ' + type : '');
 }
 
 // ========================
@@ -2260,7 +2305,7 @@ function renderToday() {
         '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
         '<div class="event-travel-row">' +
           '<div class="event-travel-info">' + t('today.viaSearchHint') + '</div>' +
-          '<button class="event-go-btn" onclick="findEventLocation(' + i + ')">' + t('today.goBtn') + '</button>' +
+          '<button class="event-go-btn" onclick="resolveAndNavigateEvent(' + i + ')">' + t('today.goBtn') + '</button>' +
         '</div>';
     } else if (ev.inferredName) {
       html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.inferHint') + '</div>' +
@@ -2271,7 +2316,7 @@ function renderToday() {
         '</div></div>';
     } else {
       html += '<div class="infer-box"><div class="infer-hint">📍 ' + t('today.noLocationHint') + '</div>' +
-        '<div class="infer-actions"><button class="confirm-chip yes" onclick="findEventLocation(' + i + ')">' + t('today.findLocation') + '</button></div>' +
+        '<div class="infer-actions"><button class="confirm-chip yes" onclick="resolveAndNavigateEvent(' + i + ')">' + t('today.findLocation') + '</button></div>' +
       '</div>';
     }
     html += '</div></div>';
@@ -2306,18 +2351,213 @@ function confirmEventLocation(index, isCorrect) {
   renderToday();
 }
 
-// 실제 좌표/이동시간을 모르는 일정은 기존 검색 파이프라인(카카오 검색)으로 넘겨 찾음
-function findEventLocation(index) {
-  var ev = TODAY_EVENTS[index];
-  if (!ev) return;
-  switchTab('search');
-  sendText(eventLocationName(ev) || ev.title, '', 'text');
+// 카카오 키워드 검색 1회 실행 (LLM 스킵, 거리 제한 없이 정확도순 — "이 이름의 장소를
+// 정확히 찾기" 용도. "칩"(주변 카테고리 탐색, 반경 제한)과는 다른 모드라 혼동하지 말 것.
+async function kakaoLocateSearch(query, mode) {
+  var payload = {
+    text: query,
+    lat: currentLocation ? currentLocation.lat : 37.5665,
+    lng: currentLocation ? currentLocation.lng : 126.9780,
+    transportMode: mode,
+    inputType: 'locate', // LLM 스킵 + 반경 제한 없이 정확도순 검색
+    userId: userId,
+    lang: currentLang,
+  };
+  var data;
+  if (shouldUseClientPipeline()) {
+    data = await window.runClientPipeline(payload);
+  } else {
+    var res = await fetch(CONFIG.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  }
+  var root = Array.isArray(data) ? data[0] : data;
+  return (root && root.candidates) || [];
 }
 
-// ─── Google Calendar (개인 연동, 설정에서 Calendar ID + API 키를 넣은 경우) ───
+// 구글 캘린더 위치 문자열에서 "장소명"만 뽑아내기.
+// 보통 "장소명, 상세주소"처럼 콤마로 나뉘지만, 콤마가 없거나 콤마 앞부분에마저
+// 국가/시도명이 섞여 있는 경우(예: "삼성전자캠퍼스 대한민국 경기도 수원시")를
+// 대비해, 국가/광역시·도 이름이 나오는 지점에서도 한 번 더 잘라냄.
+var ADDRESS_ADMIN_MARKERS = [
+  '대한민국',
+  '서울특별시', '서울시',
+  '부산광역시', '부산시',
+  '대구광역시', '대구시',
+  '인천광역시', '인천시',
+  '광주광역시', '광주시',
+  '대전광역시', '대전시',
+  '울산광역시', '울산시',
+  '세종특별자치시', '세종시',
+  '경기도', '강원특별자치도', '강원도',
+  '충청북도', '충청남도', '전북특별자치도', '전라북도', '전라남도',
+  '경상북도', '경상남도', '제주특별자치도', '제주도',
+];
+
+function extractPlaceName(raw) {
+  var s = (raw || '').trim();
+  if (!s) return s;
+  var commaIdx = s.indexOf(',');
+  var candidate = (commaIdx >= 0 ? s.slice(0, commaIdx) : s).trim();
+
+  var cutIdx = -1;
+  ADDRESS_ADMIN_MARKERS.forEach(function(marker) {
+    var idx = candidate.indexOf(marker);
+    if (idx > 0 && (cutIdx === -1 || idx < cutIdx)) cutIdx = idx;
+  });
+  if (cutIdx > 0) candidate = candidate.slice(0, cutIdx).trim();
+
+  // 잘라내고 남은 게 국가/시도명 자체뿐이면(장소명 없이 주소만 있던 경우) 원문을 그대로 씀
+  if (!candidate || ADDRESS_ADMIN_MARKERS.indexOf(candidate) !== -1) return s;
+  return candidate;
+}
+
+// 실제 좌표/이동시간을 모르는 일정(주로 실제 캘린더 이벤트)은 뒤에서 조용히
+// 카카오 검색을 돌려 1등 결과로 바로 길찾기까지 실행. 못 찾으면 검색탭으로 안내.
+async function resolveAndNavigateEvent(index) {
+  var ev = TODAY_EVENTS[index];
+  if (!ev) return;
+  var raw = eventLocationName(ev) || ev.title || '';
+  var placeName = extractPlaceName(raw);
+  var mode = ev.transportMode || transportMode;
+
+  if (!placeName) { switchTab('search'); return; }
+
+  showToast(t('today.locating'));
+  try {
+    var candidates = await kakaoLocateSearch(placeName, mode);
+    console.log('[Today] "' + placeName + '" 검색 결과 ' + candidates.length + '건');
+
+    // 장소명만으로 못 찾으면, 원문 전체(주소 포함)로 한 번 더 시도
+    if (candidates.length === 0 && raw !== placeName) {
+      candidates = await kakaoLocateSearch(raw, mode);
+      console.log('[Today] "' + raw + '" (원문) 검색 결과 ' + candidates.length + '건');
+    }
+
+    if (candidates.length > 0) {
+      var top = candidates[0];
+      navigateTo(top.lat, top.lng, top.name, mode);
+    } else {
+      showToast(t('today.locateNotFound'));
+      switchTab('search');
+      sendText(placeName, '', 'text');
+    }
+  } catch (err) {
+    console.error('[Today] 위치 검색 실패:', err);
+    switchTab('search');
+    sendText(placeName, '', 'text');
+  }
+}
+
+// ─── Google Calendar (Google Identity Services — "Google 계정으로 연결" 버튼) ───
+// GOOGLE_CLIENT_ID는 Google Cloud Console에서 한 번만 발급받는 앱 전체 값 (CONFIG.js 상단 참고).
+// 사용자별 API 키를 입력받는 방식이 아니라, 각자 자기 구글 계정으로 로그인해서 자기 캘린더를 봅니다.
+let googleTokenClient = null;
+let googleAccessToken = null;
+
+function isGoogleAuthReady() {
+  return !!GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
+}
+
+// 액세스 토큰(수명 ~1시간)을 localStorage에 넣어서 새로고침은 물론 브라우저를
+// 껐다 켜도 유지되게 함. 토큰 자체는 만료되면(401) 자동으로 지워지고 재연결을
+// 요구하니, 계속 저장해둬도 실질적인 위험은 낮음(해커톤 로컬 앱 기준).
+const GOOGLE_TOKEN_STORAGE_KEY = 'googleCalendarToken';
+
+function saveGoogleToken(token, expiresInSeconds) {
+  var expiresAt = Date.now() + (expiresInSeconds || 3600) * 1000;
+  localStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY, JSON.stringify({ token: token, expiresAt: expiresAt }));
+}
+function loadGoogleToken() {
+  try {
+    var raw = localStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed.token || !parsed.expiresAt || Date.now() >= parsed.expiresAt) {
+      localStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
+      return null;
+    }
+    return parsed.token;
+  } catch (e) {
+    return null;
+  }
+}
+function clearGoogleToken() {
+  localStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
+}
+
+// 페이지 로드 시 세션에 남은 토큰이 있으면 팝업 없이 바로 복원
+function restoreGoogleSession() {
+  var token = loadGoogleToken();
+  if (!token) return;
+  googleAccessToken = token;
+  calendarConnected = true;
+  updateCalendarConnectUI();
+  refreshTodayFromCalendar();
+}
+
+function initGoogleAuth() {
+  if (!isGoogleAuthReady() || googleTokenClient) return;
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: GOOGLE_CALENDAR_SCOPE,
+    callback: function(response) {
+      if (response && response.access_token) {
+        googleAccessToken = response.access_token;
+        calendarConnected = true;
+        saveGoogleToken(response.access_token, response.expires_in);
+        updateCalendarConnectUI();
+        refreshTodayFromCalendar();
+        showToast(t('today.calendarConnectSuccess'));
+      } else {
+        showToast(t('today.calendarConnectFailed'));
+      }
+    },
+    error_callback: function() {
+      showToast(t('today.calendarConnectFailed'));
+    },
+  });
+}
+
+function onCalendarConnectClick() {
+  if (calendarConnected) {
+    disconnectGoogleCalendar();
+    return;
+  }
+  if (!isGoogleAuthReady()) {
+    showToast(t('settings.calendarUnavailable'));
+    return;
+  }
+  initGoogleAuth();
+  googleTokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function disconnectGoogleCalendar() {
+  if (googleAccessToken && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+    google.accounts.oauth2.revoke(googleAccessToken, function() {});
+  }
+  googleAccessToken = null;
+  calendarConnected = false;
+  clearGoogleToken();
+  TODAY_EVENTS = MOCK_TODAY_EVENTS;
+  updateCalendarConnectUI();
+  renderToday();
+}
+
+function updateCalendarConnectUI() {
+  var statusEl = document.getElementById('calendarStatus');
+  var btnEl = document.getElementById('calendarConnectBtn');
+  if (!statusEl || !btnEl) return;
+  statusEl.textContent = calendarConnected ? t('settings.calendarConnected') : t('settings.calendarNotConnected');
+  btnEl.textContent = calendarConnected ? t('settings.calendarDisconnect') : t('settings.calendarConnect');
+}
+
 async function refreshTodayFromCalendar() {
-  var calId = CONFIG.calendarId, apiKey = CONFIG.calendarApiKey;
-  if (!calId || !apiKey) {
+  if (!googleAccessToken) {
     calendarConnected = false;
     TODAY_EVENTS = MOCK_TODAY_EVENTS;
     renderToday();
@@ -2326,15 +2566,28 @@ async function refreshTodayFromCalendar() {
 
   var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   var dayEnd = new Date(); dayEnd.setHours(23, 59, 59, 999);
-  var url = 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(calId) + '/events' +
-    '?key=' + encodeURIComponent(apiKey) +
-    '&timeMin=' + encodeURIComponent(dayStart.toISOString()) +
+  var url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
+    '?timeMin=' + encodeURIComponent(dayStart.toISOString()) +
     '&timeMax=' + encodeURIComponent(dayEnd.toISOString()) +
     '&singleEvents=true&orderBy=startTime';
 
   try {
-    var res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var res = await fetch(url, { headers: { Authorization: 'Bearer ' + googleAccessToken } });
+    if (res.status === 401) {
+      // 토큰 만료 — 다시 연결해야 함
+      googleAccessToken = null;
+      calendarConnected = false;
+      clearGoogleToken();
+      updateCalendarConnectUI();
+      showToast(t('today.calendarExpired'));
+      TODAY_EVENTS = MOCK_TODAY_EVENTS;
+      renderToday();
+      return;
+    }
+    if (!res.ok) {
+      var errBody = await res.text().catch(function() { return ''; });
+      throw new Error('HTTP ' + res.status + (errBody ? ' — ' + errBody.slice(0, 300) : ''));
+    }
     var data = await res.json();
     var items = (data.items || []).filter(function(item) { return item.start && item.start.dateTime; });
     TODAY_EVENTS = items.map(function(item) {
@@ -2352,10 +2605,13 @@ async function refreshTodayFromCalendar() {
         transportMode: transportMode,
       };
     });
-    calendarConnected = true;
     renderToday();
   } catch (err) {
     calendarConnected = false;
+    updateCalendarConnectUI();
+    TODAY_EVENTS = MOCK_TODAY_EVENTS;
+    renderToday();
+    console.error('[Calendar] 이벤트를 불러오지 못했습니다:', err);
     showToast(t('today.calendarError'));
   }
 }
@@ -2367,6 +2623,14 @@ function setTransport(mode) {
   transportMode = mode;
   document.getElementById('btn-transit').classList.toggle('active', mode === 'transit');
   document.getElementById('btn-car').classList.toggle('active', mode === 'car');
+}
+// 설정 화면의 "기본 이동수단" 선택 — 언어 설정과 동일하게 저장(Save) 시에만 실제 반영됨
+// (검색탭 토글이나 음성 명령으로 일시적으로 바뀐 이동수단이 기본값을 덮어쓰지 않도록 분리).
+function setTransportPick(mode) {
+  document.querySelectorAll('#transportSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === mode);
+  });
+  document.getElementById('transportSeg').dataset.pending = mode;
 }
 
 // ========================
@@ -2591,7 +2855,18 @@ function sendText(text, categoryGroupCode, inputType) {
   wait.then(function() { return doSearch(text, loadingId, categoryGroupCode, inputType); });
 }
 
-function doSearch(text, loadingId, categoryGroupCode, inputType) {
+// 서버(server/) 없이 GitHub Pages 같은 순수 정적 호스팅에 올렸을 때를 위한 클라이언트
+// 사이드 파이프라인(pipeline-client.js, 로드되면 window.runClientPipeline로 노출됨).
+// 로컬 개발(localhost)에서는 지금까지처럼 항상 server/의 Node 브릿지를 그대로 쓰고,
+// 그 외 호스트(GitHub Pages 등)에서는 서버가 없으므로 자동으로 클라이언트 파이프라인을 씀.
+// 설정에서 webhookUrl을 직접 비우면 로컬에서도 클라이언트 파이프라인을 강제로 테스트해볼 수 있다.
+function shouldUseClientPipeline() {
+  if (typeof window.runClientPipeline !== 'function') return false;
+  var isLocalDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  return !CONFIG.webhookUrl || !isLocalDev;
+}
+
+function buildSearchPayload(text, categoryGroupCode, inputType) {
   // 즐겨찾기 / 최근검색을 LLM 컨텍스트로 같이 전송 (chip은 굳이 안 보내도 됨)
   var favs = (typeof getFavorites === 'function' ? getFavorites() : []).map(function(f) {
     return { name: f.name, alias: f.alias || '', lat: f.lat, lng: f.lng };
@@ -2599,28 +2874,78 @@ function doSearch(text, loadingId, categoryGroupCode, inputType) {
   var recent = (typeof getRecentSearches === 'function' ? getRecentSearches() : []).slice(0, 5).map(function(r) {
     return { text: r.text, code: r.code || '' };
   });
+  return {
+    text,
+    lat: currentLocation ? currentLocation.lat : 37.5665,
+    lng: currentLocation ? currentLocation.lng : 126.9780,
+    landmark: currentLandmark || '',
+    transportMode,
+    categoryGroupCode: categoryGroupCode || '',
+    inputType: inputType || 'text',
+    userId,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    chipRadius,
+    lang: currentLang,
+    favorites: favs,
+    recentSearches: recent,
+    localTime: new Date().toISOString(),
+    // 개인 구독 LLM 키 (설정에서 입력한 경우만). 서버 모드에선 비어 있으면 server/.env 기본값을 씀.
+    llmProvider: CONFIG.llmProvider || undefined,
+    llmApiKey: CONFIG.llmApiKey || undefined,
+  };
+}
+
+function handleSearchResult(data) {
+  // 응답이 배열로 감싸져 오는 경우 처리 (백엔드 구현에 따라 다를 수 있음)
+  var root = Array.isArray(data) ? data[0] : data;
+  var candidates = root.candidates || (Array.isArray(root) ? root : []);
+  var mode = root.transportMode || transportMode;
+  var dest = root.destination || '';
+  var spoken = root.spoken || '';
+  var topPick = root.topPick || null;
+  var clarification = root.clarification || '';
+
+  if (mode !== transportMode) setTransport(mode);
+
+  // (1) 의도가 모호 → 추가 질문만 띄우고 종료
+  if (clarification) {
+    addBotMessage('🤖 ' + clarification);
+    if (ttsEnabled) speak(clarification);
+    return;
+  }
+
+  if (candidates.length === 0) {
+    addBotMessage(t('search.noResults'));
+    speak(t('search.noResultsTts'));
+  } else {
+    if (dest) addBotMessage(t('search.summary', dest, mode === 'transit' ? t('transport.transit_short') : t('transport.car_short')));
+    showCandidates(candidates, topPick);
+    // LLM이 추천 멘트를 만들었으면 그걸로, 아니면 fallback
+    if (spoken) speak(spoken);
+    else speak(t('search.summaryTts', candidates.length, candidates[0].distanceLabel || '', candidates[0].name));
+  }
+}
+
+function doSearch(text, loadingId, categoryGroupCode, inputType) {
+  var payload = buildSearchPayload(text, categoryGroupCode, inputType);
+
+  if (shouldUseClientPipeline()) {
+    return window.runClientPipeline(payload)
+      .then(function(data) {
+        removeMessage(loadingId);
+        handleSearchResult(data);
+      })
+      .catch(function(err) {
+        removeMessage(loadingId);
+        addBotMessage(t('search.error', err.message));
+        showToast(t('search.networkErr'));
+      });
+  }
+
   return fetch(CONFIG.webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text,
-      lat: currentLocation ? currentLocation.lat : 37.5665,
-      lng: currentLocation ? currentLocation.lng : 126.9780,
-      landmark: currentLandmark || '',
-      transportMode,
-      categoryGroupCode: categoryGroupCode || '',
-      inputType: inputType || 'text',
-      userId,
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      chipRadius,
-      lang: currentLang,
-      favorites: favs,
-      recentSearches: recent,
-      localTime: new Date().toISOString(),
-      // 개인 구독 LLM 키 (설정에서 입력한 경우만). 서버는 비어 있으면 server/.env 기본값을 씀.
-      llmProvider: CONFIG.llmProvider || undefined,
-      llmApiKey: CONFIG.llmApiKey || undefined,
-    }),
+    body: JSON.stringify(payload),
   })
   .then(function(r) {
     if (!r.ok) throw new Error('서버 오류 ' + r.status);
@@ -2639,34 +2964,7 @@ function doSearch(text, loadingId, categoryGroupCode, inputType) {
       addBotMessage(t('search.respFormat', raw.slice(0, 100)));
       return;
     }
-    // 응답이 배열로 감싸져 오는 경우 처리 (백엔드 구현에 따라 다를 수 있음)
-    var root = Array.isArray(data) ? data[0] : data;
-    var candidates = root.candidates || (Array.isArray(root) ? root : []);
-    var mode = root.transportMode || transportMode;
-    var dest = root.destination || '';
-    var spoken = root.spoken || '';
-    var topPick = root.topPick || null;
-    var clarification = root.clarification || '';
-
-    if (mode !== transportMode) setTransport(mode);
-
-    // (1) 의도가 모호 → 추가 질문만 띄우고 종료
-    if (clarification) {
-      addBotMessage('🤖 ' + clarification);
-      if (ttsEnabled) speak(clarification);
-      return;
-    }
-
-    if (candidates.length === 0) {
-      addBotMessage(t('search.noResults'));
-      speak(t('search.noResultsTts'));
-    } else {
-      if (dest) addBotMessage(t('search.summary', dest, mode === 'transit' ? t('transport.transit_short') : t('transport.car_short')));
-      showCandidates(candidates, topPick);
-      // LLM이 추천 멘트를 만들었으면 그걸로, 아니면 fallback
-      if (spoken) speak(spoken);
-      else speak(t('search.summaryTts', candidates.length, candidates[0].distanceLabel || '', candidates[0].name));
-    }
+    handleSearchResult(data);
   })
   .catch(function(err) {
     removeMessage(loadingId);
@@ -2861,8 +3159,16 @@ function saveFavorites(favs) {
   updateFavCount();
 }
 
+// 두 좌표가 "같은 장소"인지 판정하는 유일한 기준 — 즐겨찾기/방문로그 전체에서
+// 이 함수 하나만 씀 (예전엔 곳에 따라 오차범위 비교와 소수점 4자리 반올림 비교가
+// 섞여 있어서, 카카오 검색이 같은 장소를 미세하게 다른 좌표로 돌려줄 때 같은
+// 장소가 "즐겨찾기됨"과 "자주 가는 곳"으로 중복 표시되는 버그가 있었음).
+function sameCoord(lat1, lng1, lat2, lng2) {
+  return Math.abs(lat1 - lat2) < 0.0001 && Math.abs(lng1 - lng2) < 0.0001;
+}
+
 function isFavorite(lat, lng) {
-  return getFavorites().some(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; });
+  return getFavorites().some(function(f) { return sameCoord(f.lat, f.lng, lat, lng); });
 }
 
 function toggleFavoriteFromCard(btn) {
@@ -2874,7 +3180,7 @@ function toggleFavoriteFromCard(btn) {
   var category = card.dataset.category;
 
   var favs = getFavorites();
-  var idx = favs.findIndex(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; });
+  var idx = favs.findIndex(function(f) { return sameCoord(f.lat, f.lng, lat, lng); });
   if (idx >= 0) {
     favs.splice(idx, 1);
     btn.textContent = '☆';
@@ -2888,7 +3194,7 @@ function toggleFavoriteFromCard(btn) {
 }
 
 function removeFavorite(lat, lng) {
-  var favs = getFavorites().filter(function(f) { return !(Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001); });
+  var favs = getFavorites().filter(function(f) { return !sameCoord(f.lat, f.lng, lat, lng); });
   saveFavorites(favs);
   renderFavorites();
   showToast(t('fav.deleted'));
@@ -2901,7 +3207,7 @@ function getVisitLog() {
 
 function logVisit(lat, lng, name) {
   var log = getVisitLog();
-  var idx = log.findIndex(function(v) { return Math.abs(v.lat - lat) < 0.0001 && Math.abs(v.lng - lng) < 0.0001; });
+  var idx = log.findIndex(function(v) { return sameCoord(v.lat, v.lng, lat, lng); });
   var now = Date.now();
   var hour = new Date(now).getHours();
   if (idx >= 0) {
@@ -2918,7 +3224,7 @@ function logVisit(lat, lng, name) {
 
 function addFavoriteFromVisit(lat, lng, name) {
   var favs = getFavorites();
-  if (!favs.some(function(f) { return Math.abs(f.lat - lat) < 0.0001 && Math.abs(f.lng - lng) < 0.0001; })) {
+  if (!favs.some(function(f) { return sameCoord(f.lat, f.lng, lat, lng); })) {
     favs.unshift({ lat: lat, lng: lng, name: name, address: '', category: '', savedAt: Date.now() });
     saveFavorites(favs);
     showToast(t('fav.added', name));
@@ -2932,20 +3238,18 @@ function renderFavorites() {
   var visits = getVisitLog();
 
   function visitFor(lat, lng) {
-    return visits.find(function(v) { return Math.abs(v.lat - lat) < 0.0001 && Math.abs(v.lng - lng) < 0.0001; });
+    return visits.find(function(v) { return sameCoord(v.lat, v.lng, lat, lng); });
   }
-
-  var favKeys = {};
-  favs.forEach(function(f) { favKeys[f.lat.toFixed(4) + ',' + f.lng.toFixed(4)] = true; });
 
   var merged = favs.map(function(f) {
     var v = visitFor(f.lat, f.lng);
     return { fav: f, count: v ? v.count : 0, lastVisited: v ? v.lastVisited : f.savedAt, isFav: true };
   }).concat(
-    visits.filter(function(v) { return v.count >= 3 && !favKeys[v.lat.toFixed(4) + ',' + v.lng.toFixed(4)]; })
-      .map(function(v) {
-        return { fav: { lat: v.lat, lng: v.lng, name: v.name, address: '', category: '' }, count: v.count, lastVisited: v.lastVisited, isFav: false };
-      })
+    visits.filter(function(v) {
+      return v.count >= 3 && !favs.some(function(f) { return sameCoord(f.lat, f.lng, v.lat, v.lng); });
+    }).map(function(v) {
+      return { fav: { lat: v.lat, lng: v.lng, name: v.name, address: '', category: '' }, count: v.count, lastVisited: v.lastVisited, isFav: false };
+    })
   );
   merged.sort(function(a, b) { return (b.count * 1e13 + b.lastVisited) - (a.count * 1e13 + a.lastVisited); });
 
@@ -3027,12 +3331,16 @@ function openConfig() {
   document.getElementById('userIdDisplay').textContent = userId;
   document.getElementById('llmProviderSelect').value = CONFIG.llmProvider;
   document.getElementById('llmApiKeyInput').value = CONFIG.llmApiKey;
-  document.getElementById('calendarIdInput').value = CONFIG.calendarId;
-  document.getElementById('calendarApiKeyInput').value = CONFIG.calendarApiKey;
+  updateCalendarConnectUI();
   // Language segmented control
   document.querySelectorAll('#langSeg .seg-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.val === currentLang);
   });
+  // Default transport mode segmented control
+  document.querySelectorAll('#transportSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === defaultTransportMode);
+  });
+  document.getElementById('transportSeg').dataset.pending = '';
   // Chip radius slider
   var km = chipRadius / 1000;
   document.getElementById('radiusSlider').value = km;
@@ -3061,15 +3369,11 @@ function saveConfig() {
   CONFIG.webhookUrl = url;
   localStorage.setItem('webhookUrl', url);
 
-  // Personal LLM / Calendar integrations
+  // Personal LLM integration (Calendar connect/disconnect saves itself immediately — see onCalendarConnectClick)
   CONFIG.llmProvider = document.getElementById('llmProviderSelect').value;
   CONFIG.llmApiKey = document.getElementById('llmApiKeyInput').value.trim();
-  CONFIG.calendarId = document.getElementById('calendarIdInput').value.trim();
-  CONFIG.calendarApiKey = document.getElementById('calendarApiKeyInput').value.trim();
   localStorage.setItem('llmProvider', CONFIG.llmProvider);
   localStorage.setItem('llmApiKey', CONFIG.llmApiKey);
-  localStorage.setItem('calendarId', CONFIG.calendarId);
-  localStorage.setItem('calendarApiKey', CONFIG.calendarApiKey);
 
   // Language
   var pendingLang = document.getElementById('langSeg').dataset.pending || currentLang;
@@ -3077,6 +3381,13 @@ function saveConfig() {
     currentLang = pendingLang;
     localStorage.setItem('lang', currentLang);
   }
+  // Default transport mode
+  var pendingTransport = document.getElementById('transportSeg').dataset.pending || defaultTransportMode;
+  if (pendingTransport !== defaultTransportMode) {
+    defaultTransportMode = pendingTransport;
+    localStorage.setItem('transportModeDefault', defaultTransportMode);
+  }
+  setTransport(defaultTransportMode);
   // Radius
   var km = parseInt(document.getElementById('radiusSlider').value, 10) || 5;
   chipRadius = km * 1000;
@@ -3088,7 +3399,6 @@ function saveConfig() {
 
   applyI18n();
   renderToday();
-  refreshTodayFromCalendar();
   showToast(t('settings.saved'));
   closeConfig();
 }
@@ -3186,12 +3496,13 @@ function copyPageUrl() {
 // INIT
 // ========================
 applyI18n();
+setTransport(defaultTransportMode);
 detectInAppBrowser();
 initLocation();
 updateFavCount();
 renderRecentSearches();
 renderToday();
-refreshTodayFromCalendar();
+restoreGoogleSession();
 initTTSIcon();
 if (window.speechSynthesis) {
   loadVoices();
