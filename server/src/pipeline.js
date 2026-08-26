@@ -427,9 +427,43 @@ async function generateBriefing(body) {
   }
 }
 
+// ─── 자동차 이동시간 (NAVER Directions 5) ────────────────────────────
+// 이 API는 브라우저에서 직접 fetch/XHR로 호출하면 CORS로 막힌다 — NCP 포럼에도
+// 동일 증상 리포트가 있고, 실제로 확인함(TypeError: Failed to fetch). 그래서
+// 서버-서버 호출로만 씀(서버는 CORS 제약이 없음). GitHub Pages처럼 server/ 없이
+// 브라우저에서만 도는 배포에서는 이 API를 쓸 방법이 없어서, 그쪽은 처음부터
+// 직선거리 기반 추정치로 감(web/index.html의 resolveCarTravelMinutes 참고).
+async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng }) {
+  const clientId = process.env.NAVER_CLIENT_ID;
+  const clientSecret = process.env.NAVER_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error('NAVER_CLIENT_ID/NAVER_CLIENT_SECRET이 설정되지 않았습니다.');
+  const url =
+    `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving` +
+    `?start=${originLng},${originLat}&goal=${destLng},${destLat}&option=trafast`;
+  const res = await fetch(url, {
+    headers: {
+      'x-ncp-apigw-api-key-id': clientId,
+      'x-ncp-apigw-api-key': clientSecret,
+    },
+  });
+  if (!res.ok) throw new Error(`Naver Directions API 오류: HTTP ${res.status}`);
+  const data = await res.json();
+  const route = data.route && data.route.trafast && data.route.trafast[0];
+  if (!route || !route.summary) throw new Error('Naver Directions 응답에 경로 정보가 없습니다.');
+  return Math.max(Math.round(route.summary.duration / 60000), 1);
+}
+
 async function runMockPipeline(body) {
   if ((body.inputType || '') === 'briefing') {
     return generateBriefing(body);
+  }
+  if ((body.inputType || '') === 'travel-time') {
+    try {
+      const travelMinutes = await fetchNaverDrivingMinutes(body);
+      return { travelMinutes, real: true };
+    } catch (err) {
+      return { travelMinutes: null, real: false, error: String(err.message || err) };
+    }
   }
   const ctx = prepareContext(body);
 
