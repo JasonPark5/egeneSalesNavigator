@@ -171,6 +171,18 @@
     /* ─── Panels ──────────────────────────────── */
     .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
     .panel.active { display: flex; }
+    /* 탭 스와이프 전환 애니메이션 — 실제로 3개 패널이 나란히 붙어 움직이는 캐러셀은 아니고,
+       switchTab()으로 활성화되는 패널에 방향에 맞는 슬라이드 인 효과만 줘서 스와이프 느낌을 낸다. */
+    .panel.slide-from-right { animation: panelSlideFromRight 0.22s ease; }
+    .panel.slide-from-left { animation: panelSlideFromLeft 0.22s ease; }
+    @keyframes panelSlideFromRight {
+      from { transform: translateX(28px); opacity: 0.4; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes panelSlideFromLeft {
+      from { transform: translateX(-28px); opacity: 0.4; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
 
     /* ─── Chat area ───────────────────────────── */
     .chat-area {
@@ -2188,7 +2200,13 @@ function setLocStatus(msg, type) {
 // ========================
 // TABS
 // ========================
-function switchTab(tab) {
+// 탭 순서(왼쪽→오른쪽) — 스와이프 방향/다음·이전 탭 계산에 씀
+var TAB_ORDER = ['today', 'fav', 'search'];
+
+function switchTab(tab, opts) {
+  var fromTab = TAB_ORDER.find(function(t) { return document.getElementById('panel-' + t).classList.contains('active'); });
+  var direction = opts && opts.direction; // 'next' | 'prev' | undefined(스와이프 아닌 탭 클릭 등)
+
   document.getElementById('tab-today').classList.toggle('active', tab === 'today');
   document.getElementById('tab-fav').classList.toggle('active', tab === 'fav');
   document.getElementById('tab-search').classList.toggle('active', tab === 'search');
@@ -2198,7 +2216,67 @@ function switchTab(tab) {
   document.getElementById('assistantFab').style.display = tab === 'search' ? 'none' : 'flex';
   if (tab === 'today') renderToday();
   if (tab === 'fav') renderFavorites();
+
+  if (fromTab && fromTab !== tab) {
+    if (!direction) {
+      direction = TAB_ORDER.indexOf(tab) > TAB_ORDER.indexOf(fromTab) ? 'next' : 'prev';
+    }
+    var activePanel = document.getElementById('panel-' + tab);
+    var animClass = direction === 'next' ? 'slide-from-right' : 'slide-from-left';
+    activePanel.classList.remove('slide-from-right', 'slide-from-left');
+    // 리플로우를 강제해서 같은 클래스를 다시 넣어도 애니메이션이 재생되게 함
+    void activePanel.offsetWidth;
+    activePanel.classList.add(animClass);
+    activePanel.addEventListener('animationend', function handler() {
+      activePanel.classList.remove(animClass);
+      activePanel.removeEventListener('animationend', handler);
+    });
+  }
 }
+
+// ========================
+// TAB SWIPE (모바일 좌우 스와이프로 탭 전환)
+// ========================
+(function() {
+  var startX = 0, startY = 0, tracking = false;
+  var SWIPE_THRESHOLD = 60; // px
+  var SWIPE_RATIO = 1.5; // 가로 이동이 세로 이동보다 이만큼은 커야 스와이프로 인정 (세로 스크롤과 구분)
+
+  function isInsideHorizontalScroller(el) {
+    return !!(el && el.closest && el.closest('.pattern-scroll, .assistant-suggestions'));
+  }
+
+  document.addEventListener('touchstart', function(e) {
+    if (document.getElementById('configModal').classList.contains('open')) return;
+    if (document.getElementById('assistantSheet').classList.contains('open')) return;
+    var target = e.target;
+    if (isInsideHorizontalScroller(target)) return;
+    if (target.closest && target.closest('input, textarea, select')) return;
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e) {
+    if (!tracking) return;
+    tracking = false;
+    var touch = e.changedTouches && e.changedTouches[0];
+    if (!touch) return;
+    var dx = touch.clientX - startX;
+    var dy = touch.clientY - startY;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return; // 세로 스크롤 의도로 판단
+
+    var currentTab = TAB_ORDER.find(function(t) { return document.getElementById('panel-' + t).classList.contains('active'); });
+    var idx = TAB_ORDER.indexOf(currentTab);
+    if (dx < 0 && idx < TAB_ORDER.length - 1) {
+      switchTab(TAB_ORDER[idx + 1], { direction: 'next' }); // 왼쪽으로 스와이프 → 다음 탭
+    } else if (dx > 0 && idx > 0) {
+      switchTab(TAB_ORDER[idx - 1], { direction: 'prev' }); // 오른쪽으로 스와이프 → 이전 탭
+    }
+  }, { passive: true });
+})();
 
 // ========================
 // TODAY TAB (mock — no LLM, no live calendar yet)
