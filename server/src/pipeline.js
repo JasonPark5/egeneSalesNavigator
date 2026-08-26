@@ -383,7 +383,9 @@ const BRIEFING_TOOL_SCHEMA = {
           'travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 경우에만 있습니다 ' +
           '(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). ' +
           'travelTimeKnown:false인 일정은 몇 시에 무슨 일정이 있다고만 언급하고, 이동시간·출발 권장 시각을 ' +
-          '지어내지 마세요. 날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
+          '지어내지 마세요. estimated:true인 일정은 실제 길찾기가 아니라 직선거리 기반 추정치이므로, ' +
+          "'정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 부드럽게 표현하세요. " +
+          '날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
           'tightGapWarnings가 있으면 반드시 언급하세요.',
       },
     },
