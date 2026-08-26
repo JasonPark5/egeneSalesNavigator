@@ -1576,11 +1576,8 @@
 window.__DEFAULT_LLM_PROVIDER__ = "__BUILD_LLM_PROVIDER__";
 window.__DEFAULT_LLM_API_KEY__ = "__BUILD_LLM_API_KEY__";
 window.__DEFAULT_KAKAO_JS_KEY__ = "__BUILD_KAKAO_JS_KEY__";
-// Naver Directions 5(길찾기) API — 브라우저 직접 호출 전용 시크릿. 이 키는 도메인
-// 제한이 없는 순수 API 키/시크릿이라(Kakao JS 키와 달리) 노출 시 그대로 도용 가능한
-// 위험을 감수하고 넣은 것 — 사내 해커톤 임시 데모 목적으로만 사용.
-window.__DEFAULT_NAVER_CLIENT_ID__ = "__BUILD_NAVER_CLIENT_ID__";
-window.__DEFAULT_NAVER_CLIENT_SECRET__ = "__BUILD_NAVER_CLIENT_SECRET__";
+// NAVER Directions 5(길찾기) API는 브라우저에서 CORS로 막혀 있어 여기서 쓰지 않는다 —
+// server/를 통해서만 호출함(server/.env의 NAVER_CLIENT_ID/NAVER_CLIENT_SECRET).
 </script>
 <script src="pipeline-client.js"></script>
 <script>
@@ -2342,35 +2339,31 @@ function minLabel(n) { return currentLang === 'en' ? n + ' min' : n + '분'; }
 function eventLocationName(ev) { return ev.resolved ? ev.locationName : ev.inferredName; }
 
 // ─── 자동차 이동시간 ─────────────────────────────────────────────
-// 1순위: Naver Directions 5(실시간 길찾기) API — 월 6만 건 무료, 실제 교통상황 반영.
-// 이 키는 Kakao JS 키와 달리 도메인 제한이 없는 순수 시크릿이라, 노출을 감수하고
-// 브라우저에서 직접 호출한다(임시 데모 목적, README에 위험 명시).
-// 2순위(키 없음/호출 실패/CORS 등): 직선거리 + 평균속도 추정으로 폴백 — 이 경우만
-// UI에 "(추정)" 표시, LLM 브리핑에도 estimated 플래그로 넘겨 단정적이지 않게 표현.
-// 대중교통은 정확한 추정이 어려워 생략 — 자동차 기준으로만 제공.
-function buildTimeSecret(name) {
-  var v = (typeof window !== 'undefined' && window[name]) || '';
-  return /^__BUILD_[A-Z_]+__$/.test(v) ? '' : v;
-}
-async function estimateCarTravelMinutesReal(originLat, originLng, destLat, destLng) {
-  var clientId = buildTimeSecret('__DEFAULT_NAVER_CLIENT_ID__');
-  var clientSecret = buildTimeSecret('__DEFAULT_NAVER_CLIENT_SECRET__');
-  if (!clientId || !clientSecret) throw new Error('Naver Directions 키 없음');
-  var url = 'https://maps.apigw.ntruss.com/map-direction/v1/driving' +
-    '?start=' + originLng + ',' + originLat +
-    '&goal=' + destLng + ',' + destLat +
-    '&option=trafast';
-  var res = await fetch(url, {
-    headers: {
-      'x-ncp-apigw-api-key-id': clientId,
-      'x-ncp-apigw-api-key': clientSecret,
-    },
-  });
-  if (!res.ok) throw new Error('Naver Directions API 오류: HTTP ' + res.status);
-  var data = await res.json();
-  var route = data.route && data.route.trafast && data.route.trafast[0];
-  if (!route || !route.summary) throw new Error('Naver Directions 응답에 경로 정보 없음');
-  return Math.max(Math.round(route.summary.duration / 60000), 1);
+// 1순위: NAVER Directions 5(실시간 길찾기) API — 월 6만 건 무료, 실제 교통상황 반영.
+// 이 API는 브라우저에서 직접 호출하면 CORS로 막힌다(NCP 포럼에도 동일 리포트 있고,
+// 실제로 TypeError: Failed to fetch로 확인됨) — 그래서 server/를 통해서만 쓴다
+// (server/src/pipeline.js의 fetchNaverDrivingMinutes, 서버-서버 호출이라 CORS 제약 없음).
+// server/ 없이 브라우저에서만 도는 배포(GitHub Pages)에서는 이 API를 쓸 방법이
+// 아예 없어서, 그쪽은 처음부터 2순위(직선거리 추정)로 감.
+// 2순위: 직선거리 + 평균속도 추정 — 이 경우만 UI에 "(추정)" 표시, LLM 브리핑에도
+// estimated 플래그로 넘겨 단정적이지 않게 표현. 대중교통은 정확한 추정이 어려워 생략.
+async function resolveCarTravelMinutes(originLat, originLng, destLat, destLng) {
+  if (!shouldUseClientPipeline()) {
+    try {
+      var res = await fetch(CONFIG.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputType: 'travel-time', originLat: originLat, originLng: originLng, destLat: destLat, destLng: destLng }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      if (data.real && data.travelMinutes) return { minutes: data.travelMinutes, real: true };
+      throw new Error(data.error || 'Naver Directions 응답 없음');
+    } catch (err) {
+      console.warn('[Today] 서버 경유 Naver Directions 실패, 추정치로 대체:', err);
+    }
+  }
+  return { minutes: estimateCarTravelMinutes(originLat, originLng, destLat, destLng), real: false };
 }
 function haversineKm(lat1, lng1, lat2, lng2) {
   var R = 6371;
@@ -2407,14 +2400,9 @@ async function resolveEventTravelTimes(events) {
       ev.lat = top.lat;
       ev.lng = top.lng;
       ev.transportMode = 'car';
-      try {
-        ev.travelMinutes = await estimateCarTravelMinutesReal(origin.lat, origin.lng, top.lat, top.lng);
-        ev.travelEstimated = false; // 실제 API 값 — 정확
-      } catch (naverErr) {
-        console.warn('[Today] Naver Directions 실패, 추정치로 대체:', ev.title, naverErr);
-        ev.travelMinutes = estimateCarTravelMinutes(origin.lat, origin.lng, top.lat, top.lng);
-        ev.travelEstimated = true; // 직선거리 기반 추정치
-      }
+      var result = await resolveCarTravelMinutes(origin.lat, origin.lng, top.lat, top.lng);
+      ev.travelMinutes = result.minutes;
+      ev.travelEstimated = !result.real;
       ev.travelKnown = true;
     } catch (err) {
       console.error('[Today] "' + ev.title + '" 위치 확인 실패:', err);
