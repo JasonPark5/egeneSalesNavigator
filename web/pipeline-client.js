@@ -415,7 +415,64 @@
     return found ? found[0] : '';
   }
 
+  // ─── 오늘의 브리핑 (캘린더 연동 + LLM) ───────────────────────────────
+  // 시간 계산은 index.html의 computeScheduleFacts가 이미 끝내서 scheduleFacts로 넘겨준다.
+  // LLM은 그 사실을 자연스러운 1~2문장 음성 브리핑으로 "표현"만 함 (curateResults와 같은 근거 제한 원칙).
+  var BRIEFING_TOOL_SCHEMA = {
+    name: 'generate_briefing',
+    description: '오늘 일정 사실을 바탕으로 자연스러운 음성 브리핑 문장을 만듭니다.',
+    parameters: {
+      type: 'object',
+      properties: {
+        briefingText: {
+          type: 'string',
+          description:
+            '1~2문장의 자연스러운 음성 브리핑. scheduleFacts에 있는 사실(미팅 수, 이동시간, 출발 권장 시각, ' +
+            'tightGapWarnings)만 사용하세요. 날씨/교통상황/시설 등 제공되지 않은 정보는 지어내지 마세요. ' +
+            'tightGapWarnings가 있으면 반드시 언급하세요.',
+        },
+      },
+      required: ['briefingText'],
+    },
+  };
+
+  async function generateBriefing(body) {
+    var lang = (body.lang || 'ko').trim();
+    var scheduleFacts = body.scheduleFacts || { events: [], tightGapWarnings: [] };
+    var llmOverride = body.llmProvider ? { provider: body.llmProvider, apiKey: body.llmApiKey } : null;
+
+    if (!scheduleFacts.events || !scheduleFacts.events.length) return { briefingText: '' };
+
+    var langDirective =
+      lang === 'en'
+        ? "IMPORTANT: The user's UI language is English. Write briefingText in English only. "
+        : '중요: 사용자 UI 언어는 한국어입니다. briefingText를 한국어로 작성하세요. ';
+    var systemPrompt =
+      langDirective +
+      '당신은 외근이 많은 영업직 사용자를 위한 아침 일정 브리핑 어시스턴트입니다. ' +
+      '제공된 오늘 일정 사실만 바탕으로 자연스럽게 소리내어 읽기 좋은 1~2문장 브리핑을 작성하세요. ' +
+      '사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 지어내지 마세요. ' +
+      langDirective;
+    var userMessage = '# 오늘 일정 사실\n' + JSON.stringify(scheduleFacts);
+
+    try {
+      var args = await callLLMTool({
+        systemPrompt: systemPrompt,
+        userMessage: userMessage,
+        toolSchema: BRIEFING_TOOL_SCHEMA,
+        toolChoiceName: 'generate_briefing',
+        override: llmOverride,
+      });
+      return { briefingText: (args && args.briefingText) || '' };
+    } catch (err) {
+      return { briefingText: '', _llmError: String((err && err.message) || err) };
+    }
+  }
+
   async function runClientPipeline(body) {
+    if ((body.inputType || '') === 'briefing') {
+      return generateBriefing(body);
+    }
     var ctx = prepareContext(body);
 
     if (ctx.skipLLM) {

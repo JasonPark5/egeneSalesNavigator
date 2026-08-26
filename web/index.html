@@ -2320,6 +2320,33 @@ function minLabel(n) { return currentLang === 'en' ? n + ' min' : n + '분'; }
 
 function eventLocationName(ev) { return ev.resolved ? ev.locationName : ev.inferredName; }
 
+// 브리핑 LLM에 넘길 "사실"들을 여기서 미리 계산해둔다 (시간 계산은 LLM이 아니라 JS가 함 —
+// LLM은 이 사실을 자연스러운 문장으로 바꾸기만 하고 새로운 사실을 지어내지 않도록).
+// 타이트한 구간 경고는 타임라인에 이미 표시되는 것과 같은 로직(renderToday 안의 freeMin 계산)을 재사용.
+function computeScheduleFacts(events) {
+  var known = events.filter(function(e) { return e.travelKnown !== false; });
+  var facts = known.map(function(e) {
+    return {
+      title: e.title,
+      time: e.time,
+      location: eventLocationName(e),
+      travelMinutes: e.travelMinutes,
+      transportMode: e.transportMode === 'car' ? 'car' : 'transit',
+      departBy: minutesToTime(timeToMinutes(e.time) - e.travelMinutes),
+    };
+  });
+  var warnings = [];
+  for (var i = 0; i < events.length - 1; i++) {
+    var ev = events[i], next = events[i + 1];
+    if (ev.travelKnown === false || next.travelKnown === false) continue;
+    var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
+    if (freeMin < next.travelMinutes) {
+      warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: next.travelMinutes });
+    }
+  }
+  return { eventCount: events.length, knownEventCount: known.length, events: facts, tightGapWarnings: warnings };
+}
+
 function renderToday() {
   var panel = document.getElementById('todayPanel');
   var events = TODAY_EVENTS;
@@ -2414,6 +2441,38 @@ function renderToday() {
   html += '</div>';
 
   panel.innerHTML = html;
+  refreshBriefingWithLLM(events);
+}
+
+// 브리핑을 즉시 템플릿 문구로 먼저 보여준 뒤(위 renderToday), 백그라운드에서 LLM이 만든
+// 더 자연스러운 버전으로 텍스트만 교체한다 — 실패해도 템플릿 문구가 이미 떠 있으니 조용히 무시.
+var briefingRequestId = 0;
+function refreshBriefingWithLLM(events) {
+  var known = events.filter(function(e) { return e.travelKnown !== false; });
+  if (!known.length) return;
+  var myRequestId = ++briefingRequestId;
+  var payload = {
+    inputType: 'briefing',
+    lang: currentLang,
+    scheduleFacts: computeScheduleFacts(events),
+    llmProvider: CONFIG.llmProvider || undefined,
+    llmApiKey: CONFIG.llmApiKey || undefined,
+  };
+  var call = shouldUseClientPipeline()
+    ? window.runClientPipeline(payload)
+    : fetch(CONFIG.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(function(r) { return r.ok ? r.json() : null; });
+
+  call.then(function(data) {
+    if (myRequestId !== briefingRequestId) return; // 그 사이 다른 요청이 새로 시작됨 — 이 결과는 버림
+    var root = Array.isArray(data) ? data[0] : data;
+    var text = root && root.briefingText;
+    var el = document.getElementById('briefingText');
+    if (text && el) el.textContent = text;
+  }).catch(function() { /* 조용히 실패 — 템플릿 문구 그대로 둠 */ });
 }
 
 function confirmEventLocation(index, isCorrect) {
