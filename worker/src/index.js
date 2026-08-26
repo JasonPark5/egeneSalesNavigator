@@ -23,10 +23,6 @@ function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: JSON_HEADERS });
 }
 
-function redirect(location, status) {
-  return new Response(null, { status: status || 302, headers: { Location: location } });
-}
-
 export default {
   async fetch(request, env, ctx) {
     // pipeline.js는 process.env.OPENAI_API_KEY 등을 그대로 참조하는 코드다.
