@@ -28,10 +28,18 @@ export default {
     // pipeline.js는 process.env.OPENAI_API_KEY 등을 그대로 참조하는 코드다.
     // nodejs_compat 플래그가 process 전역 자체는 만들어주지만 Worker 시크릿/환경변수를
     // process.env에 자동으로 채워주지는 않으므로, 요청마다 이 Worker의 env(=대시보드에
-    // 등록한 시크릿/변수)를 process.env에 직접 연결해준다. process.env 자체를 통째로
-    // 재할당하면 실제 workerd 런타임에서 재할당이 막혀 있을 가능성이 있어, 기존 객체를
-    // 그대로 두고 속성만 덮어쓰는 Object.assign을 쓴다(더 안전한 방식).
-    Object.assign(process.env, env);
+    // 등록한 시크릿/변수)를 process.env에 직접 연결해준다.
+    //
+    // Object.assign(process.env, env)는 안 됨 — Cloudflare의 "Secret" 타입 바인딩은
+    // JSON.stringify/스프레드로 새어나가지 않도록 env 객체에 non-enumerable 속성으로
+    // 노출되는데, Object.assign은 enumerable 속성만 복사한다. 그래서 env.GOOGLE_CLIENT_SECRET처럼
+    // env에서 직접 읽는 값은 되지만, process.env.KAKAO_REST_API_KEY처럼 이 브리지를 거치는
+    // 값은 조용히 undefined가 되는 걸 실제로 겪었다("Runtime variables and secrets"애 정확히
+    // 등록해도 pipeline.js가 못 읽는 증상). Object.getOwnPropertyNames는 non-enumerable
+    // 속성도 포함하므로 이걸로 순회해야 시크릿까지 전부 복사된다.
+    for (const key of Object.getOwnPropertyNames(env)) {
+      process.env[key] = env[key];
+    }
 
     const url = new URL(request.url);
     const isHttps = url.protocol === 'https:';
