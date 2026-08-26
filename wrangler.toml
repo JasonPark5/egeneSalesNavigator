@@ -19,10 +19,11 @@ binding = "ASSETS"
 # 대시보드에서 로그(Observability > Logs)를 켜면 "Update your Wrangler config"
 # 경고가 뜬다 — Git 연동 배포(Workers Builds)는 이 파일 기준으로 재배포되므로,
 # 대시보드에서 켠 설정이 다음 배포 때 사라지지 않도록 여기에도 명시해둔다.
+# (redact_query_string은 대시보드가 보여준 값 그대로였지만, 실제 빌드에서 쓰는
+# wrangler 버전이 "Unexpected fields found in observability field"로 거부해서 뺐다.)
 [observability]
 enabled = false
 head_sampling_rate = 1
-redact_query_string = false
 
 [observability.logs]
 enabled = true

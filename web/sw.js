@@ -1,4 +1,4 @@
-const CACHE = 'egene-v1';
+const CACHE = 'egene-v2';
 // sw.js 자신의 위치 기준 상대경로 — 루트('/')가 아니라 하위 경로(예: GitHub Pages
 // 프로젝트 사이트의 /repo이름/)에 배포돼도 정확한 경로로 캐싱되도록 함.
 const ASSETS = [
