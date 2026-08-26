@@ -103,8 +103,10 @@ GitHub Pages 데모(아래)는 브라우저에서 직접 호출 가능한 것만
 
 **Cloudflare 대시보드에서 해야 하는 것** (Worker 생성 + GitHub 레포 연동은 이미 완료했다는 전제):
 
-1. Worker → **Settings → Variables and Secrets**에 아래 5개 등록 (Production/Preview 모두):
-   `OPENAI_API_KEY`, `KAKAO_REST_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `GOOGLE_CLIENT_SECRET`
+1. Worker → **Settings → Variables and Secrets**에 아래 6개 등록 (Production/Preview 모두):
+   `OPENAI_API_KEY`, `KAKAO_REST_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `GOOGLE_CLIENT_SECRET`,
+   그리고 **`LLM_PROVIDER=openai`** (이게 없으면 `callLLMTool`이 기본값인 `gemini`로 시도하다가
+   `GEMINI_API_KEY`가 없어서 실패합니다 — `OPENAI_API_KEY`만 등록했다면 반드시 같이 넣어야 함)
 2. 레포에 push하면(Workers Builds가 Git 연동돼 있으므로) 자동으로 `wrangler deploy`가 돌아 배포됩니다.
 3. Worker의 배포 도메인(`https://<이름>.<계정>.workers.dev` 또는 커스텀 도메인)으로 접속해서 확인.
 
