@@ -70,20 +70,7 @@ export default {
     // (정적 자산 우선 라우팅 — wrangler.toml의 [assets] 참고). 그래서 여기 도달하는
     // 경로는 사실상 전부 /api/*.
     if (url.pathname === '/api/health') {
-      // 임시 진단 필드 — 값 자체는 절대 안 내보내고, "이 키가 실제로 읽히는지"만 boolean으로
-      // 노출한다. process.env 브리지가 실제 workerd 런타임에서 진짜 작동하는지 확인되면 제거함.
-      return json({
-        ok: true,
-        mode: 'cloudflare-worker',
-        googleAuthAvailable: true,
-        debug: {
-          envDirectHasKakao: !!env.KAKAO_REST_API_KEY,
-          processEnvHasKakao: !!process.env.KAKAO_REST_API_KEY,
-          processEnvHasOpenai: !!process.env.OPENAI_API_KEY,
-          processEnvHasNaverId: !!process.env.NAVER_CLIENT_ID,
-          processEnvHasLlmProvider: !!process.env.LLM_PROVIDER,
-        },
-      });
+      return json({ ok: true, mode: 'cloudflare-worker', googleAuthAvailable: true });
     }
 
     if (url.pathname === '/api/search' && request.method === 'POST') {
