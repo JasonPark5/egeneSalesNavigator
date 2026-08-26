@@ -27,6 +27,18 @@ function buildAuthorizeUrl({ clientId, redirectUri, state }) {
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
+// Google 토큰 엔드포인트는 실패 시 본문에 {"error":"invalid_grant","error_description":"..."}
+// 같은 구체적인 이유를 담아 응답한다. HTTP 상태코드만 남기면 원인(잘못된 client_secret인지,
+// redirect_uri 불일치인지, 이미 쓴 code인지 등)을 알 수가 없어서 본문을 그대로 에러 메시지에 싣는다.
+async function readTokenErrorDetail(res) {
+  try {
+    const text = await res.text();
+    return text.slice(0, 500);
+  } catch (e) {
+    return '(응답 본문을 읽을 수 없음)';
+  }
+}
+
 async function exchangeCodeForTokens({ clientId, clientSecret, code, redirectUri }) {
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
@@ -39,7 +51,10 @@ async function exchangeCodeForTokens({ clientId, clientSecret, code, redirectUri
       redirect_uri: redirectUri,
     }),
   });
-  if (!res.ok) throw new Error(`Google 토큰 교환 실패: HTTP ${res.status}`);
+  if (!res.ok) {
+    const detail = await readTokenErrorDetail(res);
+    throw new Error(`Google 토큰 교환 실패: HTTP ${res.status} — ${detail}`);
+  }
   return res.json(); // { access_token, refresh_token, expires_in, ... }
 }
 
@@ -54,7 +69,10 @@ async function refreshAccessToken({ clientId, clientSecret, refreshToken }) {
       grant_type: 'refresh_token',
     }),
   });
-  if (!res.ok) throw new Error(`Google 액세스 토큰 갱신 실패: HTTP ${res.status}`);
+  if (!res.ok) {
+    const detail = await readTokenErrorDetail(res);
+    throw new Error(`Google 액세스 토큰 갱신 실패: HTTP ${res.status} — ${detail}`);
+  }
   return res.json(); // { access_token, expires_in, ... } — refresh_token은 보통 재발급되지 않음
 }
 
@@ -63,7 +81,7 @@ async function revokeToken(token) {
   try {
     await fetch(`${GOOGLE_REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: 'POST' });
   } catch (err) {
-    console.error('[googleAuth] revoke 실패:', err);
+    console.error('[googleAuth] revoke 실패: ' + ((err && err.message) || String(err)));
   }
 }
 

@@ -32,8 +32,10 @@ export default {
     // pipeline.js는 process.env.OPENAI_API_KEY 등을 그대로 참조하는 코드다.
     // nodejs_compat 플래그가 process 전역 자체는 만들어주지만 Worker 시크릿/환경변수를
     // process.env에 자동으로 채워주지는 않으므로, 요청마다 이 Worker의 env(=대시보드에
-    // 등록한 시크릿/변수)를 process.env에 직접 연결해준다.
-    process.env = env;
+    // 등록한 시크릿/변수)를 process.env에 직접 연결해준다. process.env 자체를 통째로
+    // 재할당하면 실제 workerd 런타임에서 재할당이 막혀 있을 가능성이 있어, 기존 객체를
+    // 그대로 두고 속성만 덮어쓰는 Object.assign을 쓴다(더 안전한 방식).
+    Object.assign(process.env, env);
 
     const url = new URL(request.url);
     const isHttps = url.protocol === 'https:';
@@ -51,7 +53,7 @@ export default {
         const result = await runMockPipeline(body);
         return json(result);
       } catch (err) {
-        console.error('[search] failed:', err);
+        console.error('[search] failed: ' + ((err && err.message) || String(err)));
         return json({ error: (err && err.message) || 'search failed' }, 500);
       }
     }
@@ -117,7 +119,7 @@ export default {
         });
         return finish('connected', rtCookie);
       } catch (err) {
-        console.error('[auth] Google 토큰 교환 실패:', err);
+        console.error('[auth] Google 토큰 교환 실패: ' + ((err && err.message) || String(err)));
         return finish('error');
       }
     }
@@ -134,7 +136,7 @@ export default {
         });
         return json({ connected: true, accessToken: tokens.access_token, expiresIn: tokens.expires_in });
       } catch (err) {
-        console.error('[auth] Google 액세스 토큰 갱신 실패:', err);
+        console.error('[auth] Google 액세스 토큰 갱신 실패: ' + ((err && err.message) || String(err)));
         return json({ connected: false });
       }
     }
