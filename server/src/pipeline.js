@@ -263,7 +263,15 @@ const CURATE_TOOL_SCHEMA = {
     properties: {
       rankedIndices: { type: 'array', items: { type: 'integer' } },
       topPickIndex: { type: 'integer' },
-      topPickReason: { type: 'string' },
+      topPickReason: {
+        type: 'string',
+        description:
+          '반드시 후보 데이터에 실제로 있는 정보(이름, 카테고리, 주소, 거리)와 사용자 발화/필터만 근거로 삼으세요. ' +
+          "카카오 장소 데이터에는 평점·가격대·시설·서비스 품질 정보가 전혀 없습니다. " +
+          "'고급스러운 시설', '평점이 높은', '가성비 좋은', '분위기 좋은' 처럼 확인할 수 없는 사실을 지어내지 마세요 — " +
+          "실제로는 이름만 보고 추측한 걸 단정적으로 말하는 것이라 사용자를 오도합니다. " +
+          "대신 카테고리/거리/이름이 발화·필터와 얼마나 맞는지에 근거해 말하세요 (예: '요청하신 카페 카테고리와 가장 가까운 곳입니다').",
+      },
       spoken: { type: 'string' },
     },
     required: ['rankedIndices', 'topPickIndex', 'topPickReason', 'spoken'],
@@ -285,6 +293,9 @@ async function curateResults({ candidates, originalText, filters, lang, spokenFa
   const systemPrompt =
     langDirective +
     '당신은 검색 결과 큐레이터입니다. 사용자의 필터/분위기/의도와 후보들의 카테고리/거리를 종합해 가장 맞는 곳을 추천하세요. ' +
+    '후보 데이터에는 이름/카테고리/주소/거리만 있고 평점·가격대·시설·서비스 품질 정보는 없습니다. ' +
+    "topPickReason/spoken에서 '고급스러운', '평점 높은', '분위기 좋은'처럼 확인 불가능한 사실을 지어내지 말고, " +
+    '실제로 아는 정보(카테고리 일치, 거리, 이름)에만 근거해 이유를 말하세요. ' +
     langDirective;
   const userMessage = [
     `# 원본 발화\n"${originalText}"`,
