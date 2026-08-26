@@ -53,7 +53,7 @@ export default {
         const result = await runMockPipeline(body);
         return json(result);
       } catch (err) {
-        console.error('[search] failed:', err);
+        console.error('[search] failed: ' + ((err && err.message) || String(err)));
         return json({ error: (err && err.message) || 'search failed' }, 500);
       }
     }
@@ -119,7 +119,7 @@ export default {
         });
         return finish('connected', rtCookie);
       } catch (err) {
-        console.error('[auth] Google 토큰 교환 실패:', err);
+        console.error('[auth] Google 토큰 교환 실패: ' + ((err && err.message) || String(err)));
         return finish('error');
       }
     }
@@ -136,7 +136,7 @@ export default {
         });
         return json({ connected: true, accessToken: tokens.access_token, expiresIn: tokens.expires_in });
       } catch (err) {
-        console.error('[auth] Google 액세스 토큰 갱신 실패:', err);
+        console.error('[auth] Google 액세스 토큰 갱신 실패: ' + ((err && err.message) || String(err)));
         return json({ connected: false });
       }
     }
