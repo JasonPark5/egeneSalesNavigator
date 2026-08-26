@@ -82,8 +82,34 @@ npm start                 # http://localhost:4000
 ```
 web/       프론트엔드 (단일 파일 SPA, n8nMapService/index.html 기반)
 server/    로컬 브릿지 서버 (Express) — ActionFlow 연동 + mock 모드
+worker/    Cloudflare Worker 진입점 (server/src/pipeline.js를 그대로 재사용)
 nginx/     선택 사항: 리버스 프록시 예시 설정
 ```
+
+## Cloudflare Worker 배포 (실제 API 그대로 쓰는 배포본)
+
+GitHub Pages 데모(아래)는 브라우저에서 직접 호출 가능한 것만 쓰다 보니 Naver Directions(이동시간)를
+못 쓰는 제약이 있었습니다. Cloudflare Worker는 **정적 파일(`web/`)과 API(`/api/*`)를 같은
+오리진에서 함께 서빙**하기 때문에 `server/`와 동일하게 모든 API를 서버사이드로 그대로 씁니다
+(CORS 문제 없음, 키도 브라우저에 노출 안 됨).
+
+- `wrangler.toml`의 `[assets]`가 `web/`을 정적으로 서빙하고, 그 경로에 없는 요청(`/api/*`)만
+  `worker/src/index.js`의 Worker 코드가 처리합니다.
+- `worker/src/index.js`는 `server/src/pipeline.js`(mock 모드 로직)를 그대로 import해서 씁니다 —
+  로컬 서버와 배포본이 다른 로직을 갖지 않도록, 로직을 복제하지 않고 재사용합니다.
+- 프론트엔드(`web/index.html`)의 `CONFIG.webhookUrl` 기본값이 상대경로(`/api/search`)라
+  로컬(`server/`)과 Cloudflare Worker 양쪽에서 그대로 동작합니다. `shouldUseClientPipeline()`은
+  `*.github.io`일 때만 브라우저-전용 파이프라인(`pipeline-client.js`)을 강제로 씁니다.
+
+**Cloudflare 대시보드에서 해야 하는 것** (Worker 생성 + GitHub 레포 연동은 이미 완료했다는 전제):
+
+1. Worker → **Settings → Variables and Secrets**에 아래 4개 등록 (Production/Preview 모두):
+   `OPENAI_API_KEY`, `KAKAO_REST_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`
+2. 레포에 push하면(Workers Builds가 Git 연동돼 있으므로) 자동으로 `wrangler deploy`가 돌아 배포됩니다.
+3. Worker의 배포 도메인(`https://<이름>.<계정>.workers.dev` 또는 커스텀 도메인)으로 접속해서 확인.
+
+로컬 개발(`server/`)에는 영향 없습니다 — 두 배포본이 같은 `server/src/pipeline.js`를 공유할 뿐,
+서로 독립적으로 동작합니다.
 
 ## GitHub Pages 데모 배포 (임시)
 

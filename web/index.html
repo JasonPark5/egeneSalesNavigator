@@ -1196,6 +1196,9 @@
     .today-date-row { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
     .today-date-row .date-title { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
     .today-date-row .cal-status { font-size: 12px; color: var(--text-muted); }
+    .today-date-row-right { display: flex; align-items: center; gap: 8px; }
+    .traffic-refresh-btn { padding: 5px 10px; font-size: 11px; }
+    .traffic-refresh-btn:disabled { opacity: 0.5; cursor: default; }
     .today-empty {
       display: flex; flex-direction: column; align-items: center; text-align: center;
       gap: 10px; padding: 48px 16px; color: var(--text-secondary);
@@ -1585,8 +1588,10 @@ window.__DEFAULT_KAKAO_JS_KEY__ = "__BUILD_KAKAO_JS_KEY__";
 // CONFIG & STATE
 // ========================
 const CONFIG = {
-  // 로컬 ActionFlow 브릿지 서버(server/) 주소. server/.env의 PORT와 맞춰주세요.
-  webhookUrl: localStorage.getItem('webhookUrl') || 'http://localhost:4000/api/search',
+  // 상대경로로 둬서 로컬(server/, localhost:4000)과 Cloudflare Worker 배포본
+  // (web/과 /api/*를 같은 오리진에서 서빙) 양쪽에서 그대로 동작하게 한다.
+  // ActionFlow 등 다른 오리진 서버를 쓰려면 설정에서 절대 URL로 바꾸면 됨.
+  webhookUrl: localStorage.getItem('webhookUrl') || '/api/search',
   // 개인 LLM 구독 키 (설정 > 내 연동 설정). 비워두면 서버 기본 키(server/.env) 사용.
   llmProvider: localStorage.getItem('llmProvider') || '',
   llmApiKey: localStorage.getItem('llmApiKey') || '',
@@ -1651,6 +1656,10 @@ const I18N = {
     'today.briefingLabel': '오늘의 브리핑',
     'today.calStatus': 'Google Calendar 연동됨',
     'today.calStatusMock': '예시 일정',
+    'today.refreshTraffic': '실시간 교통 반영',
+    'today.refreshingTraffic': '반영 중…',
+    'today.trafficRefreshed': '실시간 교통 정보를 반영했어요.',
+    'today.trafficRefreshFailed': '교통 정보를 갱신하지 못했어요.',
     'today.mockGuideTitle': '예시 일정을 보고 계세요',
     'today.mockGuideDesc': 'Google Calendar를 연동하면 실제 일정이 이렇게 표시돼요.',
     'today.mockGuideConnectBtn': '지금 연동하기',
@@ -1805,6 +1814,10 @@ const I18N = {
     'today.briefingLabel': "Today's briefing",
     'today.calStatus': 'Google Calendar connected',
     'today.calStatusMock': 'Sample events',
+    'today.refreshTraffic': 'Refresh traffic',
+    'today.refreshingTraffic': 'Refreshing…',
+    'today.trafficRefreshed': 'Traffic info updated.',
+    'today.trafficRefreshFailed': 'Could not refresh traffic info.',
     'today.mockGuideTitle': "You're viewing sample events",
     'today.mockGuideDesc': 'Connect Google Calendar to see your real schedule shown like this.',
     'today.mockGuideConnectBtn': 'Connect now',
@@ -2324,6 +2337,9 @@ let TODAY_EVENTS = [
 const MOCK_TODAY_EVENTS = TODAY_EVENTS;
 let calendarConnected = false;
 const MEETING_DURATION_MIN = 60;
+// 출발 권장 시각 = 미팅 시각 - (이동시간 + 이 버퍼). 나가는 준비 시간 10분 +
+// 미팅 시작 전 여유 도착 10분 = 20분.
+const DEPARTURE_BUFFER_MIN = 20;
 
 function timeToMinutes(hhmm) {
   var p = hhmm.split(':');
@@ -2333,6 +2349,9 @@ function minutesToTime(mins) {
   mins = ((mins % 1440) + 1440) % 1440;
   var h = Math.floor(mins / 60), m = mins % 60;
   return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+function recommendedDepartureTime(eventTime, travelMinutes) {
+  return minutesToTime(timeToMinutes(eventTime) - travelMinutes - DEPARTURE_BUFFER_MIN);
 }
 function minLabel(n) { return currentLang === 'en' ? n + ' min' : n + '분'; }
 
@@ -2411,6 +2430,37 @@ async function resolveEventTravelTimes(events) {
   return true;
 }
 
+// "실시간 교통 반영" 버튼 — 페이지를 새로고침하거나 캘린더를 재연결하지 않아도, 이미
+// 위치가 확인된 일정들의 이동시간을 지금 시점의 실시간 교통정보로 다시 계산한다.
+// resolveEventTravelTimes()는 travelKnown:false(=이동시간을 아직 모르는) 일정만 대상으로
+// 하므로 이미 채워진 travelMinutes는 그대로 두는데, 이 함수는 위치가 확인된 일정이면
+// travelKnown 여부와 무관하게 전부 다시 계산한다.
+async function refreshTravelTimesNow() {
+  var targets = TODAY_EVENTS.filter(function(e) { return e.resolved && e.lat != null && e.lng != null; });
+  if (!targets.length) return;
+
+  var btn = document.getElementById('trafficRefreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = t('today.refreshingTraffic'); }
+
+  var origin = currentLocation || { lat: 37.5665, lng: 126.9780 };
+  var ok = true;
+  await Promise.all(targets.map(async function(ev) {
+    try {
+      var result = await resolveCarTravelMinutes(origin.lat, origin.lng, ev.lat, ev.lng);
+      ev.travelMinutes = result.minutes;
+      ev.travelEstimated = !result.real;
+      ev.travelKnown = true;
+    } catch (err) {
+      ok = false;
+      console.error('[Today] "' + ev.title + '" 이동시간 갱신 실패:', err);
+    }
+  }));
+
+  renderToday();
+  refreshBriefingWithLLM(TODAY_EVENTS);
+  showToast(ok ? t('today.trafficRefreshed') : t('today.trafficRefreshFailed'));
+}
+
 // 브리핑 LLM에 넘길 "사실"들을 여기서 미리 계산해둔다 (시간 계산은 LLM이 아니라 JS가 함 —
 // LLM은 이 사실을 자연스러운 문장으로 바꾸기만 하고 새로운 사실을 지어내지 않도록).
 // 타이트한 구간 경고는 타임라인에 이미 표시되는 것과 같은 로직(renderToday 안의 freeMin 계산)을 재사용.
@@ -2427,7 +2477,7 @@ function computeScheduleFacts(events) {
     if (known) {
       f.travelMinutes = e.travelMinutes;
       f.transportMode = e.transportMode === 'car' ? 'car' : 'transit';
-      f.departBy = minutesToTime(timeToMinutes(e.time) - e.travelMinutes);
+      f.departBy = recommendedDepartureTime(e.time, e.travelMinutes);
       // 카카오모빌리티 길찾기 API 없이 직선거리로 추정한 값이면 표시 — LLM이 "정확히
       // X분"이 아니라 "약 X분 정도"처럼 단정하지 않게 표현하도록 하기 위함.
       if (e.travelEstimated) f.estimated = true;
@@ -2441,8 +2491,9 @@ function computeScheduleFacts(events) {
     var ev = events[i], next = events[i + 1];
     if (ev.travelKnown === false || next.travelKnown === false) continue;
     var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
-    if (freeMin < next.travelMinutes) {
-      warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: next.travelMinutes });
+    var neededMin = next.travelMinutes + DEPARTURE_BUFFER_MIN;
+    if (freeMin < neededMin) {
+      warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: neededMin });
     }
   }
   return { eventCount: events.length, events: factEvents, tightGapWarnings: warnings };
@@ -2469,7 +2520,7 @@ function renderToday() {
   if (knownEvents.length) {
     var totalTravel = knownEvents.reduce(function(sum, e) { return sum + e.travelMinutes; }, 0);
     var first = knownEvents[0];
-    var firstDeparture = minutesToTime(timeToMinutes(first.time) - first.travelMinutes);
+    var firstDeparture = recommendedDepartureTime(first.time, first.travelMinutes);
     briefingText = t('today.briefing', events.length, totalTravel, eventLocationName(first), firstDeparture);
   } else {
     briefingText = t('today.briefingSimple', events.length);
@@ -2493,7 +2544,13 @@ function renderToday() {
     '<div class="briefing-text" id="briefingText">' + escHtml(briefingText) + '</div></div>' +
   '</div>';
 
-  html += '<div class="today-date-row"><div class="date-title">' + escHtml(dateLabel) + '</div><div class="cal-status">' + (calendarConnected ? t('today.calStatus') : t('today.calStatusMock')) + '</div></div>';
+  var hasResolvedEvent = events.some(function(e) { return e.resolved; });
+  html += '<div class="today-date-row"><div class="date-title">' + escHtml(dateLabel) + '</div>' +
+    '<div class="today-date-row-right">' +
+    (calendarConnected && hasResolvedEvent ?
+      '<button id="trafficRefreshBtn" class="btn-mini traffic-refresh-btn" onclick="refreshTravelTimesNow()">' + t('today.refreshTraffic') + '</button>' : '') +
+    '<div class="cal-status">' + (calendarConnected ? t('today.calStatus') : t('today.calStatusMock')) + '</div>' +
+    '</div></div>';
 
   html += '<div class="timeline"><div class="timeline-line"></div>';
   events.forEach(function(ev, i) {
@@ -2511,7 +2568,7 @@ function renderToday() {
       html +=
         '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
         '<div class="event-travel-row">' +
-          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + (ev.travelEstimated ? ' ' + t('today.estimated') : '') + ' · ' + minutesToTime(timeToMinutes(ev.time) - ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
+          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + (ev.travelEstimated ? ' ' + t('today.estimated') : '') + ' · ' + recommendedDepartureTime(ev.time, ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
           '<button class="event-go-btn" onclick="navigateTo(' + ev.lat + ',' + ev.lng + ',\'' + escAttr(ev.locationName) + '\',\'' + ev.transportMode + '\')">' + t('today.goBtn') + '</button>' +
         '</div>';
     } else if (ev.resolved && ev.travelKnown === false) {
@@ -2539,11 +2596,12 @@ function renderToday() {
     var next = events[i + 1];
     if (next && ev.travelKnown !== false && next.travelKnown !== false) {
       var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
-      if (freeMin < next.travelMinutes) {
+      var neededMin = next.travelMinutes + DEPARTURE_BUFFER_MIN;
+      if (freeMin < neededMin) {
         html += '<div class="warning-strip-row"><div style="width:30px;flex-shrink:0;"></div>' +
           '<div class="warning-strip">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 3l9.5 17H2.5L12 3z"/><line x1="12" y1="9" x2="12" y2="13.5"/><line x1="12" y1="16.5" x2="12" y2="16.6"/></svg>' +
-            '<span>' + escHtml(t('today.warning', next.travelMinutes, Math.max(freeMin, 0))) + '</span>' +
+            '<span>' + escHtml(t('today.warning', neededMin, Math.max(freeMin, 0))) + '</span>' +
           '</div></div>';
       }
     }
@@ -3109,15 +3167,16 @@ function sendText(text, categoryGroupCode, inputType) {
   wait.then(function() { return doSearch(text, loadingId, categoryGroupCode, inputType); });
 }
 
-// 서버(server/) 없이 GitHub Pages 같은 순수 정적 호스팅에 올렸을 때를 위한 클라이언트
+// 서버 없이 GitHub Pages 같은 순수 정적 호스팅에 올렸을 때를 위한 클라이언트
 // 사이드 파이프라인(pipeline-client.js, 로드되면 window.runClientPipeline로 노출됨).
-// 로컬 개발(localhost)에서는 지금까지처럼 항상 server/의 Node 브릿지를 그대로 쓰고,
-// 그 외 호스트(GitHub Pages 등)에서는 서버가 없으므로 자동으로 클라이언트 파이프라인을 씀.
-// 설정에서 webhookUrl을 직접 비우면 로컬에서도 클라이언트 파이프라인을 강제로 테스트해볼 수 있다.
+// 로컬(server/)과 Cloudflare Worker 배포본(worker/, web/과 /api/*를 같은 오리진에서
+// 서빙)은 둘 다 실제 서버 파이프라인을 쓸 수 있으므로 여기서 제외한다 — 서버가 아예
+// 없는 GitHub Pages(*.github.io)에서만 클라이언트 파이프라인을 강제로 쓴다.
+// 설정에서 webhookUrl을 직접 비우면 다른 호스트에서도 클라이언트 파이프라인을 강제로 테스트해볼 수 있다.
 function shouldUseClientPipeline() {
   if (typeof window.runClientPipeline !== 'function') return false;
-  var isLocalDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  return !CONFIG.webhookUrl || !isLocalDev;
+  var isStaticOnlyHost = /(^|\.)github\.io$/.test(location.hostname);
+  return !CONFIG.webhookUrl || isStaticOnlyHost;
 }
 
 function buildSearchPayload(text, categoryGroupCode, inputType) {

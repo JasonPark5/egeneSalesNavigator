@@ -433,24 +433,43 @@ async function generateBriefing(body) {
 // 서버-서버 호출로만 씀(서버는 CORS 제약이 없음). GitHub Pages처럼 server/ 없이
 // 브라우저에서만 도는 배포에서는 이 API를 쓸 방법이 없어서, 그쪽은 처음부터
 // 직선거리 기반 추정치로 감(web/index.html의 resolveCarTravelMinutes 참고).
+// NCP 문서/포럼에 도메인이 naveropenapi.apigw.ntruss.com(예전 "AI NAVER API")과
+// maps.apigw.ntruss.com(현재 "Maps" 상품) 둘 다로 나와서 어느 쪽이 실제 발급받은
+// 자격증명과 맞는지 확신이 안 서, 401(인증 실패)이면 다른 도메인으로 한 번 더
+// 시도한다 — 매번 두 번 부르는 게 아니라 실패했을 때만.
+const NAVER_DIRECTIONS_DOMAINS = ['maps.apigw.ntruss.com', 'naveropenapi.apigw.ntruss.com'];
+
 async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng }) {
   const clientId = process.env.NAVER_CLIENT_ID;
   const clientSecret = process.env.NAVER_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new Error('NAVER_CLIENT_ID/NAVER_CLIENT_SECRET이 설정되지 않았습니다.');
-  const url =
-    `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving` +
-    `?start=${originLng},${originLat}&goal=${destLng},${destLat}&option=trafast`;
-  const res = await fetch(url, {
-    headers: {
-      'x-ncp-apigw-api-key-id': clientId,
-      'x-ncp-apigw-api-key': clientSecret,
-    },
-  });
-  if (!res.ok) throw new Error(`Naver Directions API 오류: HTTP ${res.status}`);
-  const data = await res.json();
-  const route = data.route && data.route.trafast && data.route.trafast[0];
-  if (!route || !route.summary) throw new Error('Naver Directions 응답에 경로 정보가 없습니다.');
-  return Math.max(Math.round(route.summary.duration / 60000), 1);
+
+  const start = encodeURIComponent(`${originLng},${originLat}`);
+  const goal = encodeURIComponent(`${destLng},${destLat}`);
+  let lastErr;
+  for (const domain of NAVER_DIRECTIONS_DOMAINS) {
+    // trafast(실시간 빠른길)는 이론상 최단시간 경로라 실제 네이버지도 앱이 기본으로
+    // 추천하는 경로(실시간 최적, traoptimal)보다 낙관적으로 나올 수 있음 — 실측 대비
+    // 약 10분 짧게 나온 것도 이 옵션 차이 때문으로 확인되어 traoptimal로 변경.
+    const url = `https://${domain}/map-direction/v1/driving?start=${start}&goal=${goal}&option=traoptimal`;
+    const res = await fetch(url, {
+      headers: {
+        'x-ncp-apigw-api-key-id': clientId,
+        'x-ncp-apigw-api-key': clientSecret,
+      },
+    });
+    if (!res.ok) {
+      lastErr = new Error(`Naver Directions API 오류(${domain}): HTTP ${res.status}`);
+      if (res.status === 401) continue; // 인증 실패 -> 다른 도메인으로 재시도
+      throw lastErr; // 401 이외의 오류는 도메인 문제가 아니므로 바로 중단
+    }
+    const data = await res.json();
+    const route = data.route && data.route.traoptimal && data.route.traoptimal[0];
+    if (!route || !route.summary) throw new Error(`Naver Directions 응답에 경로 정보가 없습니다(${domain}).`);
+    console.log(`[travel-time] Naver Directions 성공 (도메인: ${domain})`);
+    return Math.max(Math.round(route.summary.duration / 60000), 1);
+  }
+  throw lastErr;
 }
 
 async function runMockPipeline(body) {

@@ -1,0 +1,15 @@
+name = "egenesalesnavigator"
+main = "worker/src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# web/ 정적 파일과 /api/* Worker 로직을 같은 오리진에서 함께 서빙한다.
+# 요청 경로가 web/ 안의 실제 파일과 일치하면 Worker를 거치지 않고 자산이 바로 응답하고,
+# 일치하는 파일이 없을 때만(=/api/* 전부) 아래 worker/src/index.js의 fetch가 호출된다.
+[assets]
+directory = "./web"
+binding = "ASSETS"
+
+# 시크릿(OPENAI_API_KEY, KAKAO_REST_API_KEY, NAVER_CLIENT_ID/SECRET 등)은
+# 이 파일이 아니라 Cloudflare 대시보드(Worker > Settings > Variables and Secrets)에서
+# 등록합니다 (레포에 커밋되면 안 되는 값이라 wrangler.toml에는 넣지 않습니다).
