@@ -448,7 +448,10 @@ async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng
   const goal = encodeURIComponent(`${destLng},${destLat}`);
   let lastErr;
   for (const domain of NAVER_DIRECTIONS_DOMAINS) {
-    const url = `https://${domain}/map-direction/v1/driving?start=${start}&goal=${goal}&option=trafast`;
+    // trafast(실시간 빠른길)는 이론상 최단시간 경로라 실제 네이버지도 앱이 기본으로
+    // 추천하는 경로(실시간 최적, traoptimal)보다 낙관적으로 나올 수 있음 — 실측 대비
+    // 약 10분 짧게 나온 것도 이 옵션 차이 때문으로 확인되어 traoptimal로 변경.
+    const url = `https://${domain}/map-direction/v1/driving?start=${start}&goal=${goal}&option=traoptimal`;
     const res = await fetch(url, {
       headers: {
         'x-ncp-apigw-api-key-id': clientId,
@@ -461,7 +464,7 @@ async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng
       throw lastErr; // 401 이외의 오류는 도메인 문제가 아니므로 바로 중단
     }
     const data = await res.json();
-    const route = data.route && data.route.trafast && data.route.trafast[0];
+    const route = data.route && data.route.traoptimal && data.route.traoptimal[0];
     if (!route || !route.summary) throw new Error(`Naver Directions 응답에 경로 정보가 없습니다(${domain}).`);
     console.log(`[travel-time] Naver Directions 성공 (도메인: ${domain})`);
     return Math.max(Math.round(route.summary.duration / 60000), 1);
