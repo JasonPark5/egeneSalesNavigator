@@ -1196,6 +1196,9 @@
     .today-date-row { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
     .today-date-row .date-title { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
     .today-date-row .cal-status { font-size: 12px; color: var(--text-muted); }
+    .today-date-row-right { display: flex; align-items: center; gap: 8px; }
+    .traffic-refresh-btn { padding: 5px 10px; font-size: 11px; }
+    .traffic-refresh-btn:disabled { opacity: 0.5; cursor: default; }
     .today-empty {
       display: flex; flex-direction: column; align-items: center; text-align: center;
       gap: 10px; padding: 48px 16px; color: var(--text-secondary);
@@ -1651,6 +1654,10 @@ const I18N = {
     'today.briefingLabel': '오늘의 브리핑',
     'today.calStatus': 'Google Calendar 연동됨',
     'today.calStatusMock': '예시 일정',
+    'today.refreshTraffic': '실시간 교통 반영',
+    'today.refreshingTraffic': '반영 중…',
+    'today.trafficRefreshed': '실시간 교통 정보를 반영했어요.',
+    'today.trafficRefreshFailed': '교통 정보를 갱신하지 못했어요.',
     'today.mockGuideTitle': '예시 일정을 보고 계세요',
     'today.mockGuideDesc': 'Google Calendar를 연동하면 실제 일정이 이렇게 표시돼요.',
     'today.mockGuideConnectBtn': '지금 연동하기',
@@ -1805,6 +1812,10 @@ const I18N = {
     'today.briefingLabel': "Today's briefing",
     'today.calStatus': 'Google Calendar connected',
     'today.calStatusMock': 'Sample events',
+    'today.refreshTraffic': 'Refresh traffic',
+    'today.refreshingTraffic': 'Refreshing…',
+    'today.trafficRefreshed': 'Traffic info updated.',
+    'today.trafficRefreshFailed': 'Could not refresh traffic info.',
     'today.mockGuideTitle': "You're viewing sample events",
     'today.mockGuideDesc': 'Connect Google Calendar to see your real schedule shown like this.',
     'today.mockGuideConnectBtn': 'Connect now',
@@ -2417,6 +2428,37 @@ async function resolveEventTravelTimes(events) {
   return true;
 }
 
+// "실시간 교통 반영" 버튼 — 페이지를 새로고침하거나 캘린더를 재연결하지 않아도, 이미
+// 위치가 확인된 일정들의 이동시간을 지금 시점의 실시간 교통정보로 다시 계산한다.
+// resolveEventTravelTimes()는 travelKnown:false(=이동시간을 아직 모르는) 일정만 대상으로
+// 하므로 이미 채워진 travelMinutes는 그대로 두는데, 이 함수는 위치가 확인된 일정이면
+// travelKnown 여부와 무관하게 전부 다시 계산한다.
+async function refreshTravelTimesNow() {
+  var targets = TODAY_EVENTS.filter(function(e) { return e.resolved && e.lat != null && e.lng != null; });
+  if (!targets.length) return;
+
+  var btn = document.getElementById('trafficRefreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = t('today.refreshingTraffic'); }
+
+  var origin = currentLocation || { lat: 37.5665, lng: 126.9780 };
+  var ok = true;
+  await Promise.all(targets.map(async function(ev) {
+    try {
+      var result = await resolveCarTravelMinutes(origin.lat, origin.lng, ev.lat, ev.lng);
+      ev.travelMinutes = result.minutes;
+      ev.travelEstimated = !result.real;
+      ev.travelKnown = true;
+    } catch (err) {
+      ok = false;
+      console.error('[Today] "' + ev.title + '" 이동시간 갱신 실패:', err);
+    }
+  }));
+
+  renderToday();
+  refreshBriefingWithLLM(TODAY_EVENTS);
+  showToast(ok ? t('today.trafficRefreshed') : t('today.trafficRefreshFailed'));
+}
+
 // 브리핑 LLM에 넘길 "사실"들을 여기서 미리 계산해둔다 (시간 계산은 LLM이 아니라 JS가 함 —
 // LLM은 이 사실을 자연스러운 문장으로 바꾸기만 하고 새로운 사실을 지어내지 않도록).
 // 타이트한 구간 경고는 타임라인에 이미 표시되는 것과 같은 로직(renderToday 안의 freeMin 계산)을 재사용.
@@ -2500,7 +2542,13 @@ function renderToday() {
     '<div class="briefing-text" id="briefingText">' + escHtml(briefingText) + '</div></div>' +
   '</div>';
 
-  html += '<div class="today-date-row"><div class="date-title">' + escHtml(dateLabel) + '</div><div class="cal-status">' + (calendarConnected ? t('today.calStatus') : t('today.calStatusMock')) + '</div></div>';
+  var hasResolvedEvent = events.some(function(e) { return e.resolved; });
+  html += '<div class="today-date-row"><div class="date-title">' + escHtml(dateLabel) + '</div>' +
+    '<div class="today-date-row-right">' +
+    (calendarConnected && hasResolvedEvent ?
+      '<button id="trafficRefreshBtn" class="btn-mini traffic-refresh-btn" onclick="refreshTravelTimesNow()">' + t('today.refreshTraffic') + '</button>' : '') +
+    '<div class="cal-status">' + (calendarConnected ? t('today.calStatus') : t('today.calStatusMock')) + '</div>' +
+    '</div></div>';
 
   html += '<div class="timeline"><div class="timeline-line"></div>';
   events.forEach(function(ev, i) {
