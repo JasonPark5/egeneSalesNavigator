@@ -1588,8 +1588,10 @@ window.__DEFAULT_KAKAO_JS_KEY__ = "__BUILD_KAKAO_JS_KEY__";
 // CONFIG & STATE
 // ========================
 const CONFIG = {
-  // 로컬 ActionFlow 브릿지 서버(server/) 주소. server/.env의 PORT와 맞춰주세요.
-  webhookUrl: localStorage.getItem('webhookUrl') || 'http://localhost:4000/api/search',
+  // 상대경로로 둬서 로컬(server/, localhost:4000)과 Cloudflare Worker 배포본
+  // (web/과 /api/*를 같은 오리진에서 서빙) 양쪽에서 그대로 동작하게 한다.
+  // ActionFlow 등 다른 오리진 서버를 쓰려면 설정에서 절대 URL로 바꾸면 됨.
+  webhookUrl: localStorage.getItem('webhookUrl') || '/api/search',
   // 개인 LLM 구독 키 (설정 > 내 연동 설정). 비워두면 서버 기본 키(server/.env) 사용.
   llmProvider: localStorage.getItem('llmProvider') || '',
   llmApiKey: localStorage.getItem('llmApiKey') || '',
@@ -3165,15 +3167,16 @@ function sendText(text, categoryGroupCode, inputType) {
   wait.then(function() { return doSearch(text, loadingId, categoryGroupCode, inputType); });
 }
 
-// 서버(server/) 없이 GitHub Pages 같은 순수 정적 호스팅에 올렸을 때를 위한 클라이언트
+// 서버 없이 GitHub Pages 같은 순수 정적 호스팅에 올렸을 때를 위한 클라이언트
 // 사이드 파이프라인(pipeline-client.js, 로드되면 window.runClientPipeline로 노출됨).
-// 로컬 개발(localhost)에서는 지금까지처럼 항상 server/의 Node 브릿지를 그대로 쓰고,
-// 그 외 호스트(GitHub Pages 등)에서는 서버가 없으므로 자동으로 클라이언트 파이프라인을 씀.
-// 설정에서 webhookUrl을 직접 비우면 로컬에서도 클라이언트 파이프라인을 강제로 테스트해볼 수 있다.
+// 로컬(server/)과 Cloudflare Worker 배포본(worker/, web/과 /api/*를 같은 오리진에서
+// 서빙)은 둘 다 실제 서버 파이프라인을 쓸 수 있으므로 여기서 제외한다 — 서버가 아예
+// 없는 GitHub Pages(*.github.io)에서만 클라이언트 파이프라인을 강제로 쓴다.
+// 설정에서 webhookUrl을 직접 비우면 다른 호스트에서도 클라이언트 파이프라인을 강제로 테스트해볼 수 있다.
 function shouldUseClientPipeline() {
   if (typeof window.runClientPipeline !== 'function') return false;
-  var isLocalDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  return !CONFIG.webhookUrl || !isLocalDev;
+  var isStaticOnlyHost = /(^|\.)github\.io$/.test(location.hostname);
+  return !CONFIG.webhookUrl || isStaticOnlyHost;
 }
 
 function buildSearchPayload(text, categoryGroupCode, inputType) {
