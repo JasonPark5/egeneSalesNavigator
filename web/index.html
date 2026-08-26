@@ -2448,9 +2448,12 @@ function renderToday() {
 // 더 자연스러운 버전으로 텍스트만 교체한다 — 실패해도 템플릿 문구가 이미 떠 있으니 조용히 무시.
 var briefingRequestId = 0;
 function refreshBriefingWithLLM(events) {
+  // 이 호출이 LLM을 아예 안 부르고 바로 return하더라도, 카운터는 먼저 올려서
+  // "더 이전 렌더에서 시작된, 아직 응답 안 온 요청"이 나중에 도착해 지금 화면(예: 실제
+  // 캘린더로 막 교체된 화면)을 엉뚱한(이전 mock 데이터 기반) 텍스트로 덮어쓰지 않게 한다.
+  var myRequestId = ++briefingRequestId;
   var known = events.filter(function(e) { return e.travelKnown !== false; });
   if (!known.length) return;
-  var myRequestId = ++briefingRequestId;
   var payload = {
     inputType: 'briefing',
     lang: currentLang,
