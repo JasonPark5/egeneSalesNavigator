@@ -444,11 +444,11 @@ async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng
   const clientSecret = process.env.NAVER_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new Error('NAVER_CLIENT_ID/NAVER_CLIENT_SECRET이 설정되지 않았습니다.');
 
+  const start = encodeURIComponent(`${originLng},${originLat}`);
+  const goal = encodeURIComponent(`${destLng},${destLat}`);
   let lastErr;
   for (const domain of NAVER_DIRECTIONS_DOMAINS) {
-    const url =
-      `https://${domain}/map-direction/v1/driving` +
-      `?start=${originLng},${originLat}&goal=${destLng},${destLat}&option=trafast`;
+    const url = `https://${domain}/map-direction/v1/driving?start=${start}&goal=${goal}&option=trafast`;
     const res = await fetch(url, {
       headers: {
         'x-ncp-apigw-api-key-id': clientId,
