@@ -1168,6 +1168,14 @@
       display: flex; flex-direction: column; gap: 14px;
     }
     .today-scroll::-webkit-scrollbar { width: 0; }
+    .calendar-guide {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 12px 14px; border-radius: var(--radius-md);
+      background: var(--primary-light); border: 1px solid #f6cfcb;
+    }
+    .calendar-guide-text strong { display: block; font-size: 13px; color: var(--primary); margin-bottom: 2px; }
+    .calendar-guide-text p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+    .calendar-guide .btn-mini { flex-shrink: 0; }
     .briefing-card {
       padding: 14px; border-radius: var(--radius-xl);
       background: linear-gradient(135deg, var(--primary-light) 0%, var(--bg) 75%);
@@ -1568,6 +1576,11 @@
 window.__DEFAULT_LLM_PROVIDER__ = "__BUILD_LLM_PROVIDER__";
 window.__DEFAULT_LLM_API_KEY__ = "__BUILD_LLM_API_KEY__";
 window.__DEFAULT_KAKAO_JS_KEY__ = "__BUILD_KAKAO_JS_KEY__";
+// Naver Directions 5(길찾기) API — 브라우저 직접 호출 전용 시크릿. 이 키는 도메인
+// 제한이 없는 순수 API 키/시크릿이라(Kakao JS 키와 달리) 노출 시 그대로 도용 가능한
+// 위험을 감수하고 넣은 것 — 사내 해커톤 임시 데모 목적으로만 사용.
+window.__DEFAULT_NAVER_CLIENT_ID__ = "__BUILD_NAVER_CLIENT_ID__";
+window.__DEFAULT_NAVER_CLIENT_SECRET__ = "__BUILD_NAVER_CLIENT_SECRET__";
 </script>
 <script src="pipeline-client.js"></script>
 <script>
@@ -1641,10 +1654,14 @@ const I18N = {
     'today.briefingLabel': '오늘의 브리핑',
     'today.calStatus': 'Google Calendar 연동됨',
     'today.calStatusMock': '예시 일정',
+    'today.mockGuideTitle': '예시 일정을 보고 계세요',
+    'today.mockGuideDesc': 'Google Calendar를 연동하면 실제 일정이 이렇게 표시돼요.',
+    'today.mockGuideConnectBtn': '지금 연동하기',
     'today.empty.title': '오늘은 일정이 없어요',
     'today.empty.desc': '즐겨찾기나 검색에서 목적지를 찾아보세요',
     'today.locConfirmed': '위치 확인됨',
     'today.recommendDeparture': '출발 권장',
+    'today.estimated': '(추정)',
     'today.goBtn': '길찾기',
     'today.warning': '다음 미팅까지 이동시간이 빠듯해요 (예상 {0}분 · 여유 {1}분)',
     'today.briefing': '오늘 외부 미팅 {0}건, 이동 총 {1}분 예상돼요. 첫 미팅은 {2}, {3} 출발을 권장해요.',
@@ -1791,10 +1808,14 @@ const I18N = {
     'today.briefingLabel': "Today's briefing",
     'today.calStatus': 'Google Calendar connected',
     'today.calStatusMock': 'Sample events',
+    'today.mockGuideTitle': "You're viewing sample events",
+    'today.mockGuideDesc': 'Connect Google Calendar to see your real schedule shown like this.',
+    'today.mockGuideConnectBtn': 'Connect now',
     'today.empty.title': 'No events today',
     'today.empty.desc': 'Try Favorites or Search to find a destination',
     'today.locConfirmed': 'Location confirmed',
     'today.recommendDeparture': 'recommended departure',
+    'today.estimated': '(estimated)',
     'today.goBtn': 'Go',
     'today.warning': 'Travel time to the next meeting looks tight (need {0} min, only {1} min free)',
     'today.briefing': 'You have {0} external meeting(s) today, about {1} min of travel. First up: {2} — leave by {3}.',
@@ -2320,6 +2341,125 @@ function minLabel(n) { return currentLang === 'en' ? n + ' min' : n + '분'; }
 
 function eventLocationName(ev) { return ev.resolved ? ev.locationName : ev.inferredName; }
 
+// ─── 자동차 이동시간 ─────────────────────────────────────────────
+// 1순위: Naver Directions 5(실시간 길찾기) API — 월 6만 건 무료, 실제 교통상황 반영.
+// 이 키는 Kakao JS 키와 달리 도메인 제한이 없는 순수 시크릿이라, 노출을 감수하고
+// 브라우저에서 직접 호출한다(임시 데모 목적, README에 위험 명시).
+// 2순위(키 없음/호출 실패/CORS 등): 직선거리 + 평균속도 추정으로 폴백 — 이 경우만
+// UI에 "(추정)" 표시, LLM 브리핑에도 estimated 플래그로 넘겨 단정적이지 않게 표현.
+// 대중교통은 정확한 추정이 어려워 생략 — 자동차 기준으로만 제공.
+function buildTimeSecret(name) {
+  var v = (typeof window !== 'undefined' && window[name]) || '';
+  return /^__BUILD_[A-Z_]+__$/.test(v) ? '' : v;
+}
+async function estimateCarTravelMinutesReal(originLat, originLng, destLat, destLng) {
+  var clientId = buildTimeSecret('__DEFAULT_NAVER_CLIENT_ID__');
+  var clientSecret = buildTimeSecret('__DEFAULT_NAVER_CLIENT_SECRET__');
+  if (!clientId || !clientSecret) throw new Error('Naver Directions 키 없음');
+  var url = 'https://maps.apigw.ntruss.com/map-direction/v1/driving' +
+    '?start=' + originLng + ',' + originLat +
+    '&goal=' + destLng + ',' + destLat +
+    '&option=trafast';
+  var res = await fetch(url, {
+    headers: {
+      'x-ncp-apigw-api-key-id': clientId,
+      'x-ncp-apigw-api-key': clientSecret,
+    },
+  });
+  if (!res.ok) throw new Error('Naver Directions API 오류: HTTP ' + res.status);
+  var data = await res.json();
+  var route = data.route && data.route.trafast && data.route.trafast[0];
+  if (!route || !route.summary) throw new Error('Naver Directions 응답에 경로 정보 없음');
+  return Math.max(Math.round(route.summary.duration / 60000), 1);
+}
+function haversineKm(lat1, lng1, lat2, lng2) {
+  var R = 6371;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function estimateCarTravelMinutes(originLat, originLng, destLat, destLng) {
+  var straightKm = haversineKm(originLat, originLng, destLat, destLng);
+  var roadKm = straightKm * 1.3; // 직선거리 -> 대략적인 도로거리 보정
+  var avgSpeedKmh = roadKm < 5 ? 20 : roadKm < 15 ? 30 : 45; // 시내/근교/장거리
+  return Math.max(Math.round((roadKm / avgSpeedKmh) * 60), 5);
+}
+
+// 실제 캘린더 일정 중 위치는 있지만 이동시간을 모르는(travelKnown:false) 일정들을
+// 백그라운드에서 카카오 검색으로 좌표를 찾고, 자동차 이동시간(실제 API 우선, 실패시
+// 추정)을 채워 넣는다. renderToday()가 먼저 "이동시간 모름" 상태로 즉시 렌더링한 뒤
+// 이 함수가 끝나면 다시 renderToday()를 호출하는 방식(브리핑 LLM 갱신과 동일한
+// 진행형 개선 패턴).
+async function resolveEventTravelTimes(events) {
+  var origin = currentLocation || { lat: 37.5665, lng: 126.9780 };
+  var targets = events.filter(function(e) { return e.travelKnown === false && eventLocationName(e); });
+  if (!targets.length) return false;
+
+  await Promise.all(targets.map(async function(ev) {
+    try {
+      var placeName = extractPlaceName(eventLocationName(ev));
+      var candidates = await kakaoLocateSearch(placeName, 'car');
+      if (!candidates.length) return;
+      var top = candidates[0];
+      ev.lat = top.lat;
+      ev.lng = top.lng;
+      ev.transportMode = 'car';
+      try {
+        ev.travelMinutes = await estimateCarTravelMinutesReal(origin.lat, origin.lng, top.lat, top.lng);
+        ev.travelEstimated = false; // 실제 API 값 — 정확
+      } catch (naverErr) {
+        console.warn('[Today] Naver Directions 실패, 추정치로 대체:', ev.title, naverErr);
+        ev.travelMinutes = estimateCarTravelMinutes(origin.lat, origin.lng, top.lat, top.lng);
+        ev.travelEstimated = true; // 직선거리 기반 추정치
+      }
+      ev.travelKnown = true;
+    } catch (err) {
+      console.error('[Today] "' + ev.title + '" 위치 확인 실패:', err);
+    }
+  }));
+  return true;
+}
+
+// 브리핑 LLM에 넘길 "사실"들을 여기서 미리 계산해둔다 (시간 계산은 LLM이 아니라 JS가 함 —
+// LLM은 이 사실을 자연스러운 문장으로 바꾸기만 하고 새로운 사실을 지어내지 않도록).
+// 타이트한 구간 경고는 타임라인에 이미 표시되는 것과 같은 로직(renderToday 안의 freeMin 계산)을 재사용.
+function computeScheduleFacts(events) {
+  // 실제 Google Calendar 일정은 위치를 사용자가 확인하기 전까진 이동시간을 모른다
+  // (travelKnown:false). 그렇다고 그 일정들을 브리핑에서 통째로 빼면(예전 방식) 정작
+  // 방금 연동한 실사용자한텐 브리핑이 "오늘 일정 4건이 있어요"로만 끝나버림 — 그래서
+  // 이동시간을 아는/모르는 일정 모두 하나의 목록에 넣되, 항목마다 travelTimeKnown으로
+  // 구분해서 LLM에 넘긴다. LLM은 모르는 일정엔 구체적인 이동시간/출발시각을 지어내지
+  // 않고 제목/시각만 언급하도록 프롬프트에서 지시함.
+  var factEvents = events.map(function(e) {
+    var known = e.travelKnown !== false;
+    var f = { title: e.title, time: e.time, location: eventLocationName(e) || '' };
+    if (known) {
+      f.travelMinutes = e.travelMinutes;
+      f.transportMode = e.transportMode === 'car' ? 'car' : 'transit';
+      f.departBy = minutesToTime(timeToMinutes(e.time) - e.travelMinutes);
+      // 카카오모빌리티 길찾기 API 없이 직선거리로 추정한 값이면 표시 — LLM이 "정확히
+      // X분"이 아니라 "약 X분 정도"처럼 단정하지 않게 표현하도록 하기 위함.
+      if (e.travelEstimated) f.estimated = true;
+    } else {
+      f.travelTimeKnown = false;
+    }
+    return f;
+  });
+  var warnings = [];
+  for (var i = 0; i < events.length - 1; i++) {
+    var ev = events[i], next = events[i + 1];
+    if (ev.travelKnown === false || next.travelKnown === false) continue;
+    var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
+    if (freeMin < next.travelMinutes) {
+      warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: next.travelMinutes });
+    }
+  }
+  return { eventCount: events.length, events: factEvents, tightGapWarnings: warnings };
+}
+
 function renderToday() {
   var panel = document.getElementById('todayPanel');
   var events = TODAY_EVENTS;
@@ -2348,6 +2488,15 @@ function renderToday() {
   }
 
   var html = '';
+  if (!calendarConnected) {
+    html += '<div class="calendar-guide">' +
+      '<div class="calendar-guide-text">' +
+        '<strong>' + t('today.mockGuideTitle') + '</strong>' +
+        '<p>' + t('today.mockGuideDesc') + '</p>' +
+      '</div>' +
+      '<button class="btn-mini" onclick="onCalendarConnectClick()">' + t('today.mockGuideConnectBtn') + '</button>' +
+    '</div>';
+  }
   html += '<div class="briefing-card">' +
     '<button class="briefing-play-btn" onclick="speak(document.getElementById(\'briefingText\').textContent)">' +
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>' +
@@ -2374,7 +2523,7 @@ function renderToday() {
       html +=
         '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
         '<div class="event-travel-row">' +
-          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + ' · ' + minutesToTime(timeToMinutes(ev.time) - ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
+          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + (ev.travelEstimated ? ' ' + t('today.estimated') : '') + ' · ' + minutesToTime(timeToMinutes(ev.time) - ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
           '<button class="event-go-btn" onclick="navigateTo(' + ev.lat + ',' + ev.lng + ',\'' + escAttr(ev.locationName) + '\',\'' + ev.transportMode + '\')">' + t('today.goBtn') + '</button>' +
         '</div>';
     } else if (ev.resolved && ev.travelKnown === false) {
@@ -2414,6 +2563,40 @@ function renderToday() {
   html += '</div>';
 
   panel.innerHTML = html;
+  refreshBriefingWithLLM(events);
+}
+
+// 브리핑을 즉시 템플릿 문구로 먼저 보여준 뒤(위 renderToday), 백그라운드에서 LLM이 만든
+// 더 자연스러운 버전으로 텍스트만 교체한다 — 실패해도 템플릿 문구가 이미 떠 있으니 조용히 무시.
+var briefingRequestId = 0;
+function refreshBriefingWithLLM(events) {
+  // 이 호출이 LLM을 아예 안 부르고 바로 return하더라도, 카운터는 먼저 올려서
+  // "더 이전 렌더에서 시작된, 아직 응답 안 온 요청"이 나중에 도착해 지금 화면(예: 실제
+  // 캘린더로 막 교체된 화면)을 엉뚱한(이전 mock 데이터 기반) 텍스트로 덮어쓰지 않게 한다.
+  var myRequestId = ++briefingRequestId;
+  if (!events.length) return;
+  var payload = {
+    inputType: 'briefing',
+    lang: currentLang,
+    scheduleFacts: computeScheduleFacts(events),
+    llmProvider: CONFIG.llmProvider || undefined,
+    llmApiKey: CONFIG.llmApiKey || undefined,
+  };
+  var call = shouldUseClientPipeline()
+    ? window.runClientPipeline(payload)
+    : fetch(CONFIG.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(function(r) { return r.ok ? r.json() : null; });
+
+  call.then(function(data) {
+    if (myRequestId !== briefingRequestId) return; // 그 사이 다른 요청이 새로 시작됨 — 이 결과는 버림
+    var root = Array.isArray(data) ? data[0] : data;
+    var text = root && root.briefingText;
+    var el = document.getElementById('briefingText');
+    if (text && el) el.textContent = text;
+  }).catch(function() { /* 조용히 실패 — 템플릿 문구 그대로 둠 */ });
 }
 
 function confirmEventLocation(index, isCorrect) {
@@ -2684,6 +2867,11 @@ async function refreshTodayFromCalendar() {
       };
     });
     renderToday();
+    // 위치가 있는 일정들의 자동차 이동시간을 백그라운드에서 추정 — 끝나면 다시 렌더링
+    // (브리핑 LLM도 renderToday()가 알아서 최신 정보로 다시 갱신함).
+    resolveEventTravelTimes(TODAY_EVENTS).then(function(changed) {
+      if (changed) renderToday();
+    });
   } catch (err) {
     calendarConnected = false;
     updateCalendarConnectUI();

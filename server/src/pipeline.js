@@ -263,7 +263,15 @@ const CURATE_TOOL_SCHEMA = {
     properties: {
       rankedIndices: { type: 'array', items: { type: 'integer' } },
       topPickIndex: { type: 'integer' },
-      topPickReason: { type: 'string' },
+      topPickReason: {
+        type: 'string',
+        description:
+          '반드시 후보 데이터에 실제로 있는 정보(이름, 카테고리, 주소, 거리)와 사용자 발화/필터만 근거로 삼으세요. ' +
+          "카카오 장소 데이터에는 평점·가격대·시설·서비스 품질 정보가 전혀 없습니다. " +
+          "'고급스러운 시설', '평점이 높은', '가성비 좋은', '분위기 좋은' 처럼 확인할 수 없는 사실을 지어내지 마세요 — " +
+          "실제로는 이름만 보고 추측한 걸 단정적으로 말하는 것이라 사용자를 오도합니다. " +
+          "대신 카테고리/거리/이름이 발화·필터와 얼마나 맞는지에 근거해 말하세요 (예: '요청하신 카페 카테고리와 가장 가까운 곳입니다').",
+      },
       spoken: { type: 'string' },
     },
     required: ['rankedIndices', 'topPickIndex', 'topPickReason', 'spoken'],
@@ -285,6 +293,9 @@ async function curateResults({ candidates, originalText, filters, lang, spokenFa
   const systemPrompt =
     langDirective +
     '당신은 검색 결과 큐레이터입니다. 사용자의 필터/분위기/의도와 후보들의 카테고리/거리를 종합해 가장 맞는 곳을 추천하세요. ' +
+    '후보 데이터에는 이름/카테고리/주소/거리만 있고 평점·가격대·시설·서비스 품질 정보는 없습니다. ' +
+    "topPickReason/spoken에서 '고급스러운', '평점 높은', '분위기 좋은'처럼 확인 불가능한 사실을 지어내지 말고, " +
+    '실제로 아는 정보(카테고리 일치, 거리, 이름)에만 근거해 이유를 말하세요. ' +
     langDirective;
   const userMessage = [
     `# 원본 발화\n"${originalText}"`,
@@ -354,7 +365,72 @@ function inferCategoryFromText(text) {
   return found ? found[0] : '';
 }
 
+// ─── 오늘의 브리핑 (캘린더 연동 + LLM) ───────────────────────────────
+// 시간 계산(이동시간/출발 권장 시각/빠듯한 구간 경고)은 프론트엔드(index.html의
+// computeScheduleFacts)가 이미 다 끝내서 scheduleFacts로 넘겨준다. LLM은 그 사실을
+// 자연스러운 1~2문장 음성 브리핑으로 "표현"만 하고, 새로운 사실을 계산하거나
+// 지어내지 않는다 (curateResults의 근거 제한과 같은 원칙).
+const BRIEFING_TOOL_SCHEMA = {
+  name: 'generate_briefing',
+  description: '오늘 일정 사실을 바탕으로 자연스러운 음성 브리핑 문장을 만듭니다.',
+  parameters: {
+    type: 'object',
+    properties: {
+      briefingText: {
+        type: 'string',
+        description:
+          '1~2문장의 자연스러운 음성 브리핑. scheduleFacts.events의 각 항목은 title/time/location은 항상 있고, ' +
+          'travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 경우에만 있습니다 ' +
+          '(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). ' +
+          'travelTimeKnown:false인 일정은 몇 시에 무슨 일정이 있다고만 언급하고, 이동시간·출발 권장 시각을 ' +
+          '지어내지 마세요. estimated:true인 일정은 실제 길찾기가 아니라 직선거리 기반 추정치이므로, ' +
+          "'정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 부드럽게 표현하세요. " +
+          '날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
+          'tightGapWarnings가 있으면 반드시 언급하세요.',
+      },
+    },
+    required: ['briefingText'],
+  },
+};
+
+async function generateBriefing(body) {
+  const lang = (body.lang || 'ko').trim();
+  const scheduleFacts = body.scheduleFacts || { events: [], tightGapWarnings: [] };
+  const llmOverride = body.llmProvider ? { provider: body.llmProvider, apiKey: body.llmApiKey } : null;
+
+  if (!scheduleFacts.events || !scheduleFacts.events.length) return { briefingText: '' };
+
+  const langDirective =
+    lang === 'en'
+      ? "IMPORTANT: The user's UI language is English. Write briefingText in English only. "
+      : '중요: 사용자 UI 언어는 한국어입니다. briefingText를 한국어로 작성하세요. ';
+  const systemPrompt =
+    langDirective +
+    '당신은 외근이 많은 영업직 사용자를 위한 아침 일정 브리핑 어시스턴트입니다. ' +
+    '제공된 오늘 일정 사실만 바탕으로 자연스럽게 소리내어 읽기 좋은 1~2문장 브리핑을 작성하세요. ' +
+    'travelMinutes가 없는(travelTimeKnown:false) 일정은 이동시간/출발 시각을 지어내지 말고 제목·시각만 언급하세요. ' +
+    '사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 지어내지 마세요. ' +
+    langDirective;
+  const userMessage = `# 오늘 일정 사실\n${JSON.stringify(scheduleFacts)}`;
+
+  try {
+    const args = await callLLMTool({
+      systemPrompt,
+      userMessage,
+      toolSchema: BRIEFING_TOOL_SCHEMA,
+      toolChoiceName: 'generate_briefing',
+      override: llmOverride,
+    });
+    return { briefingText: (args && args.briefingText) || '' };
+  } catch (err) {
+    return { briefingText: '', _llmError: String(err.message || err) };
+  }
+}
+
 async function runMockPipeline(body) {
+  if ((body.inputType || '') === 'briefing') {
+    return generateBriefing(body);
+  }
   const ctx = prepareContext(body);
 
   if (ctx.skipLLM) {
