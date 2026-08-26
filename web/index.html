@@ -15,7 +15,6 @@
   <meta name="apple-mobile-web-app-title" content="E-GENE™" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --primary: #C30813;
@@ -1597,11 +1596,6 @@ const CONFIG = {
   llmApiKey: localStorage.getItem('llmApiKey') || '',
 };
 
-// Google Cloud Console에서 발급받는 OAuth Client ID (앱 전체에서 하나, 사용자별 값 아님).
-// Client ID는 비밀값이 아니라 프론트 코드에 그대로 넣어도 안전합니다.
-// 발급 전까지는 비워두면 "Google 계정으로 연결" 버튼이 안내 메시지만 보여줍니다.
-const GOOGLE_CLIENT_ID = '713919915373-2qd7kduon7u1gestp2tfoqulfupqaiku.apps.googleusercontent.com';
-const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 
 // ========================
 // SETTINGS (multi-language / voice / chip radius)
@@ -2760,74 +2754,24 @@ async function resolveAndNavigateEvent(index) {
   }
 }
 
-// ─── Google Calendar (Google Identity Services — "Google 계정으로 연결" 버튼) ───
-// GOOGLE_CLIENT_ID는 Google Cloud Console에서 한 번만 발급받는 앱 전체 값 (CONFIG.js 상단 참고).
-// 사용자별 API 키를 입력받는 방식이 아니라, 각자 자기 구글 계정으로 로그인해서 자기 캘린더를 봅니다.
-let googleTokenClient = null;
+// ─── Google Calendar (서버사이드 Authorization Code + refresh token) ───
+// 예전엔 Google Identity Services 팝업(implicit flow)으로 액세스 토큰(수명 ~1시간)만 받아서
+// localStorage에 저장했다가 만료되면 매번 재연결해야 했다. Cloudflare Worker(worker/)가
+// /api/auth/google/* 라우트로 refresh_token을 HttpOnly 쿠키(브라우저 JS로는 못 읽음)에만
+// 들고 있고, 필요할 때마다 새 액세스 토큰을 대신 발급해준다 — 그래서 재연결이 필요 없다.
+// 이 라우트는 아직 로컬 server/에는 없어서(/api/health의 googleAuthAvailable로 확인),
+// 그 경우엔 기존처럼 "연동 불가" 안내만 뜨고 mock 일정을 보여준다(3-state UX 그대로 유지).
 let googleAccessToken = null;
+let googleAuthAvailable = false;
 
-function isGoogleAuthReady() {
-  return !!GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
-}
-
-// 액세스 토큰(수명 ~1시간)을 localStorage에 넣어서 새로고침은 물론 브라우저를
-// 껐다 켜도 유지되게 함. 토큰 자체는 만료되면(401) 자동으로 지워지고 재연결을
-// 요구하니, 계속 저장해둬도 실질적인 위험은 낮음(해커톤 로컬 앱 기준).
-const GOOGLE_TOKEN_STORAGE_KEY = 'googleCalendarToken';
-
-function saveGoogleToken(token, expiresInSeconds) {
-  var expiresAt = Date.now() + (expiresInSeconds || 3600) * 1000;
-  localStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY, JSON.stringify({ token: token, expiresAt: expiresAt }));
-}
-function loadGoogleToken() {
+async function checkGoogleAuthAvailable() {
   try {
-    var raw = localStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw);
-    if (!parsed.token || !parsed.expiresAt || Date.now() >= parsed.expiresAt) {
-      localStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
-      return null;
-    }
-    return parsed.token;
+    var res = await fetch('/api/health');
+    var data = res.ok ? await res.json() : null;
+    googleAuthAvailable = !!(data && data.googleAuthAvailable);
   } catch (e) {
-    return null;
+    googleAuthAvailable = false;
   }
-}
-function clearGoogleToken() {
-  localStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
-}
-
-// 페이지 로드 시 세션에 남은 토큰이 있으면 팝업 없이 바로 복원
-function restoreGoogleSession() {
-  var token = loadGoogleToken();
-  if (!token) return;
-  googleAccessToken = token;
-  calendarConnected = true;
-  updateCalendarConnectUI();
-  refreshTodayFromCalendar();
-}
-
-function initGoogleAuth() {
-  if (!isGoogleAuthReady() || googleTokenClient) return;
-  googleTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: GOOGLE_CALENDAR_SCOPE,
-    callback: function(response) {
-      if (response && response.access_token) {
-        googleAccessToken = response.access_token;
-        calendarConnected = true;
-        saveGoogleToken(response.access_token, response.expires_in);
-        updateCalendarConnectUI();
-        refreshTodayFromCalendar();
-        showToast(t('today.calendarConnectSuccess'));
-      } else {
-        showToast(t('today.calendarConnectFailed'));
-      }
-    },
-    error_callback: function() {
-      showToast(t('today.calendarConnectFailed'));
-    },
-  });
 }
 
 function onCalendarConnectClick() {
@@ -2835,21 +2779,21 @@ function onCalendarConnectClick() {
     disconnectGoogleCalendar();
     return;
   }
-  if (!isGoogleAuthReady()) {
+  if (!googleAuthAvailable) {
     showToast(t('settings.calendarUnavailable'));
     return;
   }
-  initGoogleAuth();
-  googleTokenClient.requestAccessToken({ prompt: 'consent' });
+  location.href = '/api/auth/google/start';
 }
 
-function disconnectGoogleCalendar() {
-  if (googleAccessToken && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
-    google.accounts.oauth2.revoke(googleAccessToken, function() {});
+async function disconnectGoogleCalendar() {
+  try {
+    await fetch('/api/auth/google/disconnect', { method: 'POST' });
+  } catch (e) {
+    console.error('[Calendar] 연결 해제 요청 실패:', e);
   }
   googleAccessToken = null;
   calendarConnected = false;
-  clearGoogleToken();
   TODAY_EVENTS = MOCK_TODAY_EVENTS;
   updateCalendarConnectUI();
   renderToday();
@@ -2863,7 +2807,38 @@ function updateCalendarConnectUI() {
   btnEl.textContent = calendarConnected ? t('settings.calendarDisconnect') : t('settings.calendarConnect');
 }
 
-async function refreshTodayFromCalendar() {
+// 페이지 로드 시 refresh_token 쿠키(HttpOnly라 여기서 직접은 못 읽음)가 서버에 있는지
+// 물어보고, 있으면 팝업/리디렉션 없이 바로 새 액세스 토큰을 받아 캘린더를 채운다.
+async function restoreGoogleSession() {
+  try {
+    var res = await fetch('/api/auth/google/access-token');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (!data.connected || !data.accessToken) return;
+    googleAccessToken = data.accessToken;
+    calendarConnected = true;
+    updateCalendarConnectUI();
+    refreshTodayFromCalendar();
+  } catch (e) {
+    // server/(로컬) 등 이 라우트 자체가 없는 환경 — 조용히 mock 상태로 둠
+  }
+}
+
+// OAuth 리디렉션이 /api/auth/google/callback -> "/?calendar=connected|error"로 돌아온 직후,
+// 결과 토스트만 보여주고 쿼리스트링은 지워서 새로고침해도 다시 안 뜨게 한다.
+function handleCalendarRedirectResult() {
+  var params = new URLSearchParams(location.search);
+  var result = params.get('calendar');
+  if (!result) return;
+  if (result === 'connected') showToast(t('today.calendarConnectSuccess'));
+  else if (result === 'error') showToast(t('today.calendarConnectFailed'));
+  params.delete('calendar');
+  var qs = params.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+
+async function refreshTodayFromCalendar(allowRetry) {
+  if (allowRetry === undefined) allowRetry = true;
   if (!googleAccessToken) {
     calendarConnected = false;
     TODAY_EVENTS = MOCK_TODAY_EVENTS;
@@ -2881,10 +2856,20 @@ async function refreshTodayFromCalendar() {
   try {
     var res = await fetch(url, { headers: { Authorization: 'Bearer ' + googleAccessToken } });
     if (res.status === 401) {
-      // 토큰 만료 — 다시 연결해야 함
+      // 액세스 토큰(수명 ~1시간)만 만료된 것일 수 있음 — refresh_token 쿠키는 서버에 아직
+      // 남아있을 수 있으니, 재연결을 요구하기 전에 조용히 한 번 재발급을 시도한다.
+      if (allowRetry) {
+        var refreshed = await fetch('/api/auth/google/access-token')
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .catch(function() { return null; });
+        if (refreshed && refreshed.connected && refreshed.accessToken) {
+          googleAccessToken = refreshed.accessToken;
+          return refreshTodayFromCalendar(false);
+        }
+      }
+      // refresh_token까지 만료/취소된 경우에만 진짜 재연결을 요구
       googleAccessToken = null;
       calendarConnected = false;
-      clearGoogleToken();
       updateCalendarConnectUI();
       showToast(t('today.calendarExpired'));
       TODAY_EVENTS = MOCK_TODAY_EVENTS;
@@ -3815,6 +3800,8 @@ initLocation();
 updateFavCount();
 renderRecentSearches();
 renderToday();
+handleCalendarRedirectResult();
+checkGoogleAuthAvailable();
 restoreGoogleSession();
 initTTSIcon();
 if (window.speechSynthesis) {

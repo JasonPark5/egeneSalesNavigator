@@ -26,7 +26,10 @@ app.post('/api/search', async (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, mode: BACKEND_MODE });
+  // Google Calendar OAuth(리디렉션 + refresh token)는 아직 이 로컬 서버가 아니라
+  // Cloudflare Worker(worker/)에만 구현되어 있음 — 프론트엔드가 이 값으로 "연동하기"
+  // 버튼 클릭 시 실제 라우트가 있는지 미리 판단한다.
+  res.json({ ok: true, mode: BACKEND_MODE, googleAuthAvailable: false });
 });
 
 app.listen(PORT, () => {
