@@ -30,16 +30,38 @@ export default {
     // process.env에 자동으로 채워주지는 않으므로, 요청마다 이 Worker의 env(=대시보드에
     // 등록한 시크릿/변수)를 process.env에 직접 연결해준다.
     //
-    // Object.assign(process.env, env)는 안 됨 — Cloudflare의 "Secret" 타입 바인딩은
-    // JSON.stringify/스프레드로 새어나가지 않도록 env 객체에 non-enumerable 속성으로
-    // 노출되는데, Object.assign은 enumerable 속성만 복사한다. 그래서 env.GOOGLE_CLIENT_SECRET처럼
-    // env에서 직접 읽는 값은 되지만, process.env.KAKAO_REST_API_KEY처럼 이 브리지를 거치는
-    // 값은 조용히 undefined가 되는 걸 실제로 겪었다("Runtime variables and secrets"애 정확히
-    // 등록해도 pipeline.js가 못 읽는 증상). Object.getOwnPropertyNames는 non-enumerable
-    // 속성도 포함하므로 이걸로 순회해야 시크릿까지 전부 복사된다.
-    for (const key of Object.getOwnPropertyNames(env)) {
-      process.env[key] = env[key];
+    // Object.assign(process.env, env)와 개별 속성 대입(process.env[key] = env[key]) 둘 다
+    // 실제 배포에서 안 먹히는 걸 겪었다(Google Calendar처럼 env에서 직접 읽는 값은 되는데,
+    // process.env를 거치는 값은 계속 "설정 안 됨"으로 나옴) — 정확한 원인이 non-enumerable
+    // 속성 복사 실패인지, process.env 자체가 쓰기를 막고 있는지 로컬 Node로는 검증이
+    // 안 돼서, "쓰기"에 아예 의존하지 않는 방식으로 바꾼다: process.env 자체를 한 번만
+    // Proxy로 감싸서, 매 요청 들어오는 env를 그대로 읽기만 하도록.
+    if (!globalThis.__envProxyInstalled) {
+      try {
+        Object.defineProperty(process, 'env', {
+          configurable: true,
+          get() {
+            return new Proxy(globalThis.__currentWorkerEnv || {}, {
+              get(target, prop) {
+                return typeof prop === 'string' ? target[prop] : undefined;
+              },
+              has(target, prop) {
+                return typeof prop === 'string' && prop in target;
+              },
+            });
+          },
+        });
+      } catch (err) {
+        // defineProperty 자체가 막혀 있는 런타임이면 예전 방식(속성 복사)으로라도 폴백 —
+        // 최소한 요청 자체가 통째로 죽는 것보다는 낫다.
+        console.error('[env-bridge] process.env를 Proxy로 못 바꿈, Object.assign으로 폴백: ' + ((err && err.message) || String(err)));
+        for (const key of Object.getOwnPropertyNames(env)) {
+          try { process.env[key] = env[key]; } catch (e) { /* 이것도 안 되면 포기 */ }
+        }
+      }
+      globalThis.__envProxyInstalled = true;
     }
+    globalThis.__currentWorkerEnv = env;
 
     const url = new URL(request.url);
     const isHttps = url.protocol === 'https:';
@@ -48,7 +70,20 @@ export default {
     // (정적 자산 우선 라우팅 — wrangler.toml의 [assets] 참고). 그래서 여기 도달하는
     // 경로는 사실상 전부 /api/*.
     if (url.pathname === '/api/health') {
-      return json({ ok: true, mode: 'cloudflare-worker', googleAuthAvailable: true });
+      // 임시 진단 필드 — 값 자체는 절대 안 내보내고, "이 키가 실제로 읽히는지"만 boolean으로
+      // 노출한다. process.env 브리지가 실제 workerd 런타임에서 진짜 작동하는지 확인되면 제거함.
+      return json({
+        ok: true,
+        mode: 'cloudflare-worker',
+        googleAuthAvailable: true,
+        debug: {
+          envDirectHasKakao: !!env.KAKAO_REST_API_KEY,
+          processEnvHasKakao: !!process.env.KAKAO_REST_API_KEY,
+          processEnvHasOpenai: !!process.env.OPENAI_API_KEY,
+          processEnvHasNaverId: !!process.env.NAVER_CLIENT_ID,
+          processEnvHasLlmProvider: !!process.env.LLM_PROVIDER,
+        },
+      });
     }
 
     if (url.pathname === '/api/search' && request.method === 'POST') {
