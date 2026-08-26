@@ -10,11 +10,16 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./web"
 binding = "ASSETS"
 
-# 시크릿(OPENAI_API_KEY, KAKAO_REST_API_KEY, NAVER_CLIENT_ID/SECRET 등)과
-# LLM_PROVIDER 같은 일반 변수는 이 파일이 아니라 Cloudflare 대시보드
-# (Worker > Settings > Variables and Secrets)에서 등록합니다
-# (시크릿은 레포에 커밋되면 안 되는 값이라 wrangler.toml에는 넣지 않고,
-# 일반 변수도 대시보드에서 배포 없이 바로 바꿀 수 있게 여기 넣지 않습니다).
+# 시크릿(OPENAI_API_KEY, KAKAO_REST_API_KEY, NAVER_CLIENT_ID/SECRET,
+# GOOGLE_CLIENT_SECRET)은 이 파일이 아니라 Cloudflare 대시보드(Worker > Settings >
+# Variables and Secrets, 반드시 "Runtime" 쪽에 Type: Secret으로 등록 — "Build"
+# 쪽은 빌드 스크립트 전용이라 Worker가 요청 처리할 때 못 읽고, "Text" 타입은
+# Git 연동 재배포 때 이 파일에 없는 값이라 초기화되는 걸로 보임)에서 등록합니다.
+#
+# LLM_PROVIDER처럼 민감하지 않은 값은 대시보드 등록에 기대지 않고 여기(코드,
+# 버전관리됨)에 명시해서 재배포로 사라지는 문제를 원천 차단한다.
+[vars]
+LLM_PROVIDER = "openai"
 
 # 대시보드에서 로그(Observability > Logs)를 켜면 "Update your Wrangler config"
 # 경고가 뜬다 — Git 연동 배포(Workers Builds)는 이 파일 기준으로 재배포되므로,
