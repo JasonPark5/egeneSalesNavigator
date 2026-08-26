@@ -10,6 +10,27 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./web"
 binding = "ASSETS"
 
-# 시크릿(OPENAI_API_KEY, KAKAO_REST_API_KEY, NAVER_CLIENT_ID/SECRET 등)은
-# 이 파일이 아니라 Cloudflare 대시보드(Worker > Settings > Variables and Secrets)에서
-# 등록합니다 (레포에 커밋되면 안 되는 값이라 wrangler.toml에는 넣지 않습니다).
+# 시크릿(OPENAI_API_KEY, KAKAO_REST_API_KEY, NAVER_CLIENT_ID/SECRET 등)과
+# LLM_PROVIDER 같은 일반 변수는 이 파일이 아니라 Cloudflare 대시보드
+# (Worker > Settings > Variables and Secrets)에서 등록합니다
+# (시크릿은 레포에 커밋되면 안 되는 값이라 wrangler.toml에는 넣지 않고,
+# 일반 변수도 대시보드에서 배포 없이 바로 바꿀 수 있게 여기 넣지 않습니다).
+
+# 대시보드에서 로그(Observability > Logs)를 켜면 "Update your Wrangler config"
+# 경고가 뜬다 — Git 연동 배포(Workers Builds)는 이 파일 기준으로 재배포되므로,
+# 대시보드에서 켠 설정이 다음 배포 때 사라지지 않도록 여기에도 명시해둔다.
+[observability]
+enabled = false
+head_sampling_rate = 1
+redact_query_string = false
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
