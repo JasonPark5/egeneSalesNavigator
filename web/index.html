@@ -2338,16 +2338,23 @@ function eventLocationName(ev) { return ev.resolved ? ev.locationName : ev.infer
 // LLM은 이 사실을 자연스러운 문장으로 바꾸기만 하고 새로운 사실을 지어내지 않도록).
 // 타이트한 구간 경고는 타임라인에 이미 표시되는 것과 같은 로직(renderToday 안의 freeMin 계산)을 재사용.
 function computeScheduleFacts(events) {
-  var known = events.filter(function(e) { return e.travelKnown !== false; });
-  var facts = known.map(function(e) {
-    return {
-      title: e.title,
-      time: e.time,
-      location: eventLocationName(e),
-      travelMinutes: e.travelMinutes,
-      transportMode: e.transportMode === 'car' ? 'car' : 'transit',
-      departBy: minutesToTime(timeToMinutes(e.time) - e.travelMinutes),
-    };
+  // 실제 Google Calendar 일정은 위치를 사용자가 확인하기 전까진 이동시간을 모른다
+  // (travelKnown:false). 그렇다고 그 일정들을 브리핑에서 통째로 빼면(예전 방식) 정작
+  // 방금 연동한 실사용자한텐 브리핑이 "오늘 일정 4건이 있어요"로만 끝나버림 — 그래서
+  // 이동시간을 아는/모르는 일정 모두 하나의 목록에 넣되, 항목마다 travelTimeKnown으로
+  // 구분해서 LLM에 넘긴다. LLM은 모르는 일정엔 구체적인 이동시간/출발시각을 지어내지
+  // 않고 제목/시각만 언급하도록 프롬프트에서 지시함.
+  var factEvents = events.map(function(e) {
+    var known = e.travelKnown !== false;
+    var f = { title: e.title, time: e.time, location: eventLocationName(e) || '' };
+    if (known) {
+      f.travelMinutes = e.travelMinutes;
+      f.transportMode = e.transportMode === 'car' ? 'car' : 'transit';
+      f.departBy = minutesToTime(timeToMinutes(e.time) - e.travelMinutes);
+    } else {
+      f.travelTimeKnown = false;
+    }
+    return f;
   });
   var warnings = [];
   for (var i = 0; i < events.length - 1; i++) {
@@ -2358,7 +2365,7 @@ function computeScheduleFacts(events) {
       warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: next.travelMinutes });
     }
   }
-  return { eventCount: events.length, knownEventCount: known.length, events: facts, tightGapWarnings: warnings };
+  return { eventCount: events.length, events: factEvents, tightGapWarnings: warnings };
 }
 
 function renderToday() {
@@ -2475,8 +2482,7 @@ function refreshBriefingWithLLM(events) {
   // "더 이전 렌더에서 시작된, 아직 응답 안 온 요청"이 나중에 도착해 지금 화면(예: 실제
   // 캘린더로 막 교체된 화면)을 엉뚱한(이전 mock 데이터 기반) 텍스트로 덮어쓰지 않게 한다.
   var myRequestId = ++briefingRequestId;
-  var known = events.filter(function(e) { return e.travelKnown !== false; });
-  if (!known.length) return;
+  if (!events.length) return;
   var payload = {
     inputType: 'briefing',
     lang: currentLang,

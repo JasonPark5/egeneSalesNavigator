@@ -427,8 +427,11 @@
         briefingText: {
           type: 'string',
           description:
-            '1~2문장의 자연스러운 음성 브리핑. scheduleFacts에 있는 사실(미팅 수, 이동시간, 출발 권장 시각, ' +
-            'tightGapWarnings)만 사용하세요. 날씨/교통상황/시설 등 제공되지 않은 정보는 지어내지 마세요. ' +
+            '1~2문장의 자연스러운 음성 브리핑. scheduleFacts.events의 각 항목은 title/time/location은 항상 있고, ' +
+            'travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 경우에만 있습니다 ' +
+            '(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). ' +
+            'travelTimeKnown:false인 일정은 몇 시에 무슨 일정이 있다고만 언급하고, 이동시간·출발 권장 시각을 ' +
+            '지어내지 마세요. 날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
             'tightGapWarnings가 있으면 반드시 언급하세요.',
         },
       },
@@ -451,6 +454,7 @@
       langDirective +
       '당신은 외근이 많은 영업직 사용자를 위한 아침 일정 브리핑 어시스턴트입니다. ' +
       '제공된 오늘 일정 사실만 바탕으로 자연스럽게 소리내어 읽기 좋은 1~2문장 브리핑을 작성하세요. ' +
+      'travelMinutes가 없는(travelTimeKnown:false) 일정은 이동시간/출발 시각을 지어내지 말고 제목·시각만 언급하세요. ' +
       '사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 지어내지 마세요. ' +
       langDirective;
     var userMessage = '# 오늘 일정 사실\n' + JSON.stringify(scheduleFacts);
