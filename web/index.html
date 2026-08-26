@@ -1168,6 +1168,14 @@
       display: flex; flex-direction: column; gap: 14px;
     }
     .today-scroll::-webkit-scrollbar { width: 0; }
+    .calendar-guide {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 12px 14px; border-radius: var(--radius-md);
+      background: var(--primary-light); border: 1px solid #f6cfcb;
+    }
+    .calendar-guide-text strong { display: block; font-size: 13px; color: var(--primary); margin-bottom: 2px; }
+    .calendar-guide-text p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+    .calendar-guide .btn-mini { flex-shrink: 0; }
     .briefing-card {
       padding: 14px; border-radius: var(--radius-xl);
       background: linear-gradient(135deg, var(--primary-light) 0%, var(--bg) 75%);
@@ -1641,6 +1649,9 @@ const I18N = {
     'today.briefingLabel': '오늘의 브리핑',
     'today.calStatus': 'Google Calendar 연동됨',
     'today.calStatusMock': '예시 일정',
+    'today.mockGuideTitle': '예시 일정을 보고 계세요',
+    'today.mockGuideDesc': 'Google Calendar를 연동하면 실제 일정이 이렇게 표시돼요.',
+    'today.mockGuideConnectBtn': '지금 연동하기',
     'today.empty.title': '오늘은 일정이 없어요',
     'today.empty.desc': '즐겨찾기나 검색에서 목적지를 찾아보세요',
     'today.locConfirmed': '위치 확인됨',
@@ -1791,6 +1802,9 @@ const I18N = {
     'today.briefingLabel': "Today's briefing",
     'today.calStatus': 'Google Calendar connected',
     'today.calStatusMock': 'Sample events',
+    'today.mockGuideTitle': "You're viewing sample events",
+    'today.mockGuideDesc': 'Connect Google Calendar to see your real schedule shown like this.',
+    'today.mockGuideConnectBtn': 'Connect now',
     'today.empty.title': 'No events today',
     'today.empty.desc': 'Try Favorites or Search to find a destination',
     'today.locConfirmed': 'Location confirmed',
@@ -2375,6 +2389,15 @@ function renderToday() {
   }
 
   var html = '';
+  if (!calendarConnected) {
+    html += '<div class="calendar-guide">' +
+      '<div class="calendar-guide-text">' +
+        '<strong>' + t('today.mockGuideTitle') + '</strong>' +
+        '<p>' + t('today.mockGuideDesc') + '</p>' +
+      '</div>' +
+      '<button class="btn-mini" onclick="onCalendarConnectClick()">' + t('today.mockGuideConnectBtn') + '</button>' +
+    '</div>';
+  }
   html += '<div class="briefing-card">' +
     '<button class="briefing-play-btn" onclick="speak(document.getElementById(\'briefingText\').textContent)">' +
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>' +
