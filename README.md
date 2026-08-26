@@ -103,13 +103,34 @@ GitHub Pages 데모(아래)는 브라우저에서 직접 호출 가능한 것만
 
 **Cloudflare 대시보드에서 해야 하는 것** (Worker 생성 + GitHub 레포 연동은 이미 완료했다는 전제):
 
-1. Worker → **Settings → Variables and Secrets**에 아래 4개 등록 (Production/Preview 모두):
-   `OPENAI_API_KEY`, `KAKAO_REST_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`
+1. Worker → **Settings → Variables and Secrets**에 아래 5개 등록 (Production/Preview 모두):
+   `OPENAI_API_KEY`, `KAKAO_REST_API_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `GOOGLE_CLIENT_SECRET`
 2. 레포에 push하면(Workers Builds가 Git 연동돼 있으므로) 자동으로 `wrangler deploy`가 돌아 배포됩니다.
 3. Worker의 배포 도메인(`https://<이름>.<계정>.workers.dev` 또는 커스텀 도메인)으로 접속해서 확인.
 
 로컬 개발(`server/`)에는 영향 없습니다 — 두 배포본이 같은 `server/src/pipeline.js`를 공유할 뿐,
 서로 독립적으로 동작합니다.
+
+### Google Calendar 연동 (서버사이드 refresh token)
+
+예전엔 Google Identity Services 팝업(implicit flow)으로 액세스 토큰(수명 ~1시간)만 받아서
+브라우저 localStorage에 저장했다가, 만료되면 매번 재연결해야 했습니다. Cloudflare Worker가
+생긴 뒤로는 Authorization Code 방식으로 바꿔서, Worker가 `refresh_token`을 HttpOnly 쿠키(브라우저
+JS로는 절대 못 읽음)로만 들고 있고 필요할 때마다 새 액세스 토큰을 대신 발급해줍니다 — 그래서
+재연결 없이 계속 유지됩니다 (`server/src/googleAuth.js` + `server/src/cookies.js`, `worker/src/index.js`의
+`/api/auth/google/*` 라우트).
+
+- **Google Cloud Console**에서 미리 해야 하는 것: OAuth 클라이언트의 "승인된 리디렉션 URI"에
+  `https://<Worker 도메인>/api/auth/google/callback` 추가, "클라이언트 보안 비밀"을 Cloudflare
+  Worker의 `GOOGLE_CLIENT_SECRET` 시크릿으로 등록.
+- **로컬(`server/`)에는 아직 이 라우트가 없습니다** — `/api/health`의 `googleAuthAvailable`이
+  `false`라 프론트엔드가 자동으로 "연동 불가" 안내만 보여주고 mock 일정으로 폴백합니다(3-state UX
+  그대로). 로컬에서도 쓰려면 같은 방식으로 `server/src/index.js`에 라우트를 추가하고
+  `http://localhost:4000/api/auth/google/callback`을 리디렉션 URI에 추가로 등록해야 합니다.
+- ⚠️ **OAuth 동의 화면이 "테스트" 상태면 refresh_token이 7일 후 만료됩니다** (Google 정책). 하커톤
+  기간을 넘겨 계속 쓰려면 Google Cloud Console → OAuth 동의 화면에서 "프로덕션으로 게시"가
+  필요합니다 (`calendar.readonly`는 민감 범위라 완전한 Google 검수 없이도 게시는 되지만, 사용자가
+  로그인할 때 "확인되지 않은 앱" 경고 화면이 한 번 뜹니다 — "고급 > 이동" 클릭하면 계속 진행 가능).
 
 ## GitHub Pages 데모 배포 (임시)
 
