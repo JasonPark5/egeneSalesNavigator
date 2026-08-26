@@ -96,6 +96,9 @@ LLM 큐레이션)을 **브라우저에서 직접** 수행합니다.
   Maps JS SDK(`services.Places`)를 대신 씁니다. Kakao Developers 콘솔의 "Web 플랫폼"에 배포될
   도메인(`https://<owner>.github.io`)을 허용 도메인으로 등록해야 합니다.
 - LLM: OpenAI API는 브라우저에서 직접 호출 가능해서 그대로 씁니다.
+- 오늘 일정 자동차 이동시간: **NAVER Cloud Platform Maps Directions 5**(길찾기) API를 브라우저에서
+  직접 호출 — 월 60,000건 무료, 실제 교통상황 반영. 키/시크릿이 없거나 호출이 실패하면(예:
+  CORS) 직선거리+평균속도 추정치로 자동 대체되고 타임라인에 "(추정)"으로 표시됩니다.
 
 **필요한 repo secret** (Settings → Secrets and variables → Actions):
 
@@ -103,9 +106,13 @@ LLM 큐레이션)을 **브라우저에서 직접** 수행합니다.
 |---|---|
 | `OPENAI_API_KEY` | 데모 방문자가 자기 키 없이도 AI 추천을 써볼 수 있게 하는 기본 OpenAI 키 |
 | `KAKAO_JS_KEY` | Kakao Developers에서 발급받은 **JavaScript** 키 (REST 키와 다름) |
+| `NAVER_CLIENT_ID` | NAVER Cloud Platform Maps → Directions 5 API의 Client ID |
+| `NAVER_CLIENT_SECRET` | 위 API의 Client Secret |
 
-⚠️ **주의**: 이 두 키는 배포된 정적 페이지의 소스에 그대로 노출됩니다(누구나 조회 가능). 사내
-해커톤 검증용 **임시 배포**로만 쓰고, 실제 서비스는 `server/` + ActionFlow 연동
+⚠️ **주의**: 이 키들은 배포된 정적 페이지의 소스에 그대로 노출됩니다(누구나 조회 가능). 특히
+`NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`은 Kakao JS 키와 달리 **도메인 제한이 없는 순수
+시크릿**이라 노출되면 그대로 도용 가능합니다 — 감수하고 쓰는 임시 조치입니다. 사내 해커톤
+검증용 **임시 배포**로만 쓰고, 실제 서비스는 `server/` + ActionFlow 연동
 (`BACKEND_MODE=actionflow`) 방식을 쓰세요.
 
 로컬 개발(`localhost`)에는 영향 없습니다 — `web/index.html`은 `localhost`에서 열리면 지금까지처럼
