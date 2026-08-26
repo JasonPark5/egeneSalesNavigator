@@ -2324,6 +2324,9 @@ let TODAY_EVENTS = [
 const MOCK_TODAY_EVENTS = TODAY_EVENTS;
 let calendarConnected = false;
 const MEETING_DURATION_MIN = 60;
+// 출발 권장 시각 = 미팅 시각 - (이동시간 + 이 버퍼). 나가는 준비 시간 10분 +
+// 미팅 시작 전 여유 도착 10분 = 20분.
+const DEPARTURE_BUFFER_MIN = 20;
 
 function timeToMinutes(hhmm) {
   var p = hhmm.split(':');
@@ -2333,6 +2336,9 @@ function minutesToTime(mins) {
   mins = ((mins % 1440) + 1440) % 1440;
   var h = Math.floor(mins / 60), m = mins % 60;
   return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+function recommendedDepartureTime(eventTime, travelMinutes) {
+  return minutesToTime(timeToMinutes(eventTime) - travelMinutes - DEPARTURE_BUFFER_MIN);
 }
 function minLabel(n) { return currentLang === 'en' ? n + ' min' : n + '분'; }
 
@@ -2427,7 +2433,7 @@ function computeScheduleFacts(events) {
     if (known) {
       f.travelMinutes = e.travelMinutes;
       f.transportMode = e.transportMode === 'car' ? 'car' : 'transit';
-      f.departBy = minutesToTime(timeToMinutes(e.time) - e.travelMinutes);
+      f.departBy = recommendedDepartureTime(e.time, e.travelMinutes);
       // 카카오모빌리티 길찾기 API 없이 직선거리로 추정한 값이면 표시 — LLM이 "정확히
       // X분"이 아니라 "약 X분 정도"처럼 단정하지 않게 표현하도록 하기 위함.
       if (e.travelEstimated) f.estimated = true;
@@ -2441,8 +2447,9 @@ function computeScheduleFacts(events) {
     var ev = events[i], next = events[i + 1];
     if (ev.travelKnown === false || next.travelKnown === false) continue;
     var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
-    if (freeMin < next.travelMinutes) {
-      warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: next.travelMinutes });
+    var neededMin = next.travelMinutes + DEPARTURE_BUFFER_MIN;
+    if (freeMin < neededMin) {
+      warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: neededMin });
     }
   }
   return { eventCount: events.length, events: factEvents, tightGapWarnings: warnings };
@@ -2469,7 +2476,7 @@ function renderToday() {
   if (knownEvents.length) {
     var totalTravel = knownEvents.reduce(function(sum, e) { return sum + e.travelMinutes; }, 0);
     var first = knownEvents[0];
-    var firstDeparture = minutesToTime(timeToMinutes(first.time) - first.travelMinutes);
+    var firstDeparture = recommendedDepartureTime(first.time, first.travelMinutes);
     briefingText = t('today.briefing', events.length, totalTravel, eventLocationName(first), firstDeparture);
   } else {
     briefingText = t('today.briefingSimple', events.length);
@@ -2511,7 +2518,7 @@ function renderToday() {
       html +=
         '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
         '<div class="event-travel-row">' +
-          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + (ev.travelEstimated ? ' ' + t('today.estimated') : '') + ' · ' + minutesToTime(timeToMinutes(ev.time) - ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
+          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + (ev.travelEstimated ? ' ' + t('today.estimated') : '') + ' · ' + recommendedDepartureTime(ev.time, ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
           '<button class="event-go-btn" onclick="navigateTo(' + ev.lat + ',' + ev.lng + ',\'' + escAttr(ev.locationName) + '\',\'' + ev.transportMode + '\')">' + t('today.goBtn') + '</button>' +
         '</div>';
     } else if (ev.resolved && ev.travelKnown === false) {
@@ -2539,11 +2546,12 @@ function renderToday() {
     var next = events[i + 1];
     if (next && ev.travelKnown !== false && next.travelKnown !== false) {
       var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
-      if (freeMin < next.travelMinutes) {
+      var neededMin = next.travelMinutes + DEPARTURE_BUFFER_MIN;
+      if (freeMin < neededMin) {
         html += '<div class="warning-strip-row"><div style="width:30px;flex-shrink:0;"></div>' +
           '<div class="warning-strip">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 3l9.5 17H2.5L12 3z"/><line x1="12" y1="9" x2="12" y2="13.5"/><line x1="12" y1="16.5" x2="12" y2="16.6"/></svg>' +
-            '<span>' + escHtml(t('today.warning', next.travelMinutes, Math.max(freeMin, 0))) + '</span>' +
+            '<span>' + escHtml(t('today.warning', neededMin, Math.max(freeMin, 0))) + '</span>' +
           '</div></div>';
       }
     }
