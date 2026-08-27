@@ -44,7 +44,16 @@
       font-family: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
+      /* min-height였을 때는 채팅/검색결과가 쌓일수록 body 자체가 뷰포트보다 커져서
+         페이지 전체(문서)가 스크롤됐다 — 그래서 하단 입력창까지 매번 스크롤해야 했음.
+         height로 뷰포트에 고정해야 .chat-area/.today-scroll의 flex:1+overflow-y:auto가
+         제대로 "그 영역만" 스크롤되고, 입력창은 항상 하단에 고정된다.
+         (100dvh: 모바일에서 주소창 표시/숨김에 따라 실제 보이는 높이가 바뀌는 걸 반영 —
+         100vh만 쓰면 iOS/Android에서 주소창에 하단이 가려질 수 있음. 미지원 브라우저는
+         바로 위 100vh 줄이 그대로 적용됨.) */
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       max-width: 480px;
