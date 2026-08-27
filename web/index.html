@@ -439,6 +439,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      row-gap: 8px;
       margin-top: 12px;
     }
     .card-tags {
@@ -490,6 +492,17 @@
       font-size: 14px; transition: all 0.15s;
     }
     .card-icon-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+    /* 카카오맵 링크 — 우리 앱엔 없는 평점/리뷰/사진을 실제로 볼 수 있는 진짜 경로라
+       일부러 카카오 브랜드 색(#FEE500)으로 눈에 띄게 만들어서, 존재를 놓치지 않게 함. */
+    .card-kakao-link {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: #FEE500; color: #191919;
+      border-radius: 100px; padding: 0 10px; height: 30px;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+      text-decoration: none; transition: filter 0.15s, transform 0.12s;
+    }
+    .card-kakao-link:hover { filter: brightness(0.94); transform: scale(1.02); }
+    .card-kakao-link:active { transform: scale(0.98); }
 
     /* ─── Recent searches ─────────────────────── */
     .recent-box { width: 100%; padding: 8px 4px; }
@@ -1742,6 +1755,7 @@ const I18N = {
     'search.respFormat': '응답 형식 오류: {0}',
     'search.summaryTts': '{0}곳을 찾았어요. 가장 가까운 곳은 {1} 거리의 {2}입니다.',
     'search.noname': '이름 없음',
+    'search.viewOnKakaoMap': '카카오맵 ↗',
     'nav.go': '길찾기 →',
     'nav.start': '"{0}" 길찾기를 시작합니다! ({1})',
     'nav.startTts': '{0} 길찾기를 시작합니다',
@@ -1900,6 +1914,7 @@ const I18N = {
     'search.respFormat': 'Response format error: {0}',
     'search.summaryTts': 'Found {0} places. The nearest is {2}, {1} away.',
     'search.noname': 'Unnamed',
+    'search.viewOnKakaoMap': 'Kakao Map ↗',
     'nav.go': 'Navigate →',
     'nav.start': 'Starting navigation to "{0}"! ({1})',
     'nav.startTts': 'Starting navigation to {0}',
@@ -3392,7 +3407,7 @@ function showCandidates(candidates, topPick) {
         '</div>' +
         '<div style="display:flex;gap:6px;align-items:center;">' +
           (place.phone ? '<a class="card-icon-btn" href="tel:' + escAttr(place.phone) + '" title="전화 ' + escAttr(place.phone) + '">📞</a>' : '') +
-          (place.placeUrl ? '<a class="card-icon-btn" href="' + escAttr(place.placeUrl) + '" target="_blank" rel="noopener" title="카카오맵에서 보기">ⓘ</a>' : '') +
+          (place.placeUrl ? '<a class="card-kakao-link" href="' + escAttr(place.placeUrl) + '" target="_blank" rel="noopener" title="카카오맵에서 평점·리뷰·사진 보기">' + t('search.viewOnKakaoMap') + '</a>' : '') +
           '<button class="card-select-btn" onclick="navigateTo(' + place.lat + ',' + place.lng + ',\'' + escAttr(place.name || '') + '\')">' + t('nav.go') + '</button>' +
         '</div>' +
       '</div>';
