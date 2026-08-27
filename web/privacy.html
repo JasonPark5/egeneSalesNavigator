@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>개인정보처리방침 - E-GENE™ Sales Navigator</title>
+<style>
+  :root {
+    --primary: #C30813;
+    --bg: #f8f8fa;
+    --card-bg: #ffffff;
+    --text: #111111;
+    --text-muted: #6b7280;
+  }
+  body {
+    margin: 0;
+    padding: 24px 16px 80px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Malgun Gothic", sans-serif;
+    line-height: 1.65;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .updated { color: var(--text-muted); font-size: 13px; margin-bottom: 28px; }
+  h2 { font-size: 16px; margin-top: 32px; margin-bottom: 8px; color: var(--primary); }
+  p, li { font-size: 14px; color: var(--text); }
+  ul { padding-left: 20px; }
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  a { color: var(--primary); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>개인정보처리방침</h1>
+    <div class="updated">최종 수정일: 2026-08-27</div>
+    <div class="card">
+      <p>
+        E-GENE™ Sales Navigator("이 앱")는 음성/텍스트로 목적지를 찾아 길찾기로 연결하고,
+        Google Calendar를 연동하면 오늘 일정 기반 이동시간 브리핑을 제공하는 개인/해커톤
+        검증용 프로젝트입니다. 이 페이지는 이 앱이 다루는 정보와 처리 방식을 설명합니다.
+      </p>
+
+      <h2>수집하는 정보</h2>
+      <ul>
+        <li><strong>Google Calendar(읽기 전용, calendar.readonly)</strong>: 연동을 직접 선택한
+          사용자에 한해, 오늘 날짜의 일정 제목·시간·장소만 조회합니다. 다른 날짜 일정이나
+          비공개 세부정보는 조회하지 않습니다.</li>
+        <li><strong>현재 위치(GPS)</strong>: 브라우저 권한을 허용한 경우, 주변 장소 검색과
+          이동시간 계산에만 사용합니다.</li>
+        <li><strong>검색 발화/텍스트</strong>: 목적지를 찾기 위해 입력한 내용입니다.</li>
+      </ul>
+
+      <h2>정보 사용 방식</h2>
+      <ul>
+        <li>Calendar에서 가져온 일정 정보(제목·시간·장소)는 이동시간 계산과 음성 브리핑
+          생성을 위해 <strong>AI(LLM) API에 전달</strong>될 수 있습니다 — 브리핑 문장을
+          자연스럽게 만드는 용도로만 쓰이고, 별도로 저장·재사용되지 않습니다.</li>
+        <li>장소 검색을 위해 Kakao, 이동시간 계산을 위해 Naver 지도 API를 호출합니다.</li>
+        <li>이 앱은 별도의 데이터베이스에 사용자의 일정 내용이나 검색 기록을 저장하지
+          않습니다. Google 계정 연동을 유지하기 위한 최소한의 인증 토큰만 브라우저의
+          HttpOnly 쿠키(서버가 관리, 자바스크립트로 읽을 수 없음)에 보관됩니다.</li>
+        <li>수집한 정보를 광고, 프로파일링, 제3자 판매 목적으로 사용하지 않습니다.</li>
+      </ul>
+
+      <h2>연동 해제</h2>
+      <p>
+        앱 내 "연결 해제" 버튼을 누르면 저장된 인증 토큰이 즉시 폐기됩니다. 언제든
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google 계정 → 보안 → 타사 앱 및 서비스</a>에서도
+        직접 연동을 해제할 수 있습니다.
+      </p>
+
+      <h2>문의</h2>
+      <p>
+        이 프로젝트에 대한 문의나 삭제 요청은
+        <a href="https://github.com/JasonPark5/egeneSalesNavigator/issues" target="_blank" rel="noopener">GitHub 저장소 이슈</a>로 남겨주세요.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
