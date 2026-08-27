@@ -45,16 +45,20 @@ const INTENT_TOOL_SCHEMA = {
           "카카오 키워드 검색(장소명/업종명 매칭)에 쓸 짧고 구체적인 검색어. 실제 상호명/업종에 들어갈 법한 단어만 넣으세요 (예: '강남 카페', '이자카야', '고기집'). " +
           "'아이랑 갈만한', '분위기 좋은', '데이트하기 좋은' 같은 동반자/분위기/목적 수식어는 query에 넣지 말고 filters에만 넣으세요 — " +
           "그런 수식어를 query에 그대로 넣으면 카카오 검색에서 매칭되는 장소가 없어 결과가 0건이 됩니다. " +
+          "locationHint에 넣은 지역/랜드마크명(예: '미사역', '홍대')도 query에서 반드시 빼세요 — " +
+          "'미사역 주변 맛집'이면 query='맛집'(또는 구체 상호가 없으면 비워두고 categoryGroupCode만), locationHint='미사역'로 나눠 담으세요. " +
           "구체적인 상호/메뉴가 없으면 categoryGroupCode만으로 찾도록 query는 해당 업종의 일반명사(예: '음식점', '카페')로 짧게 두세요.",
       },
       categoryGroupCode: {
         type: 'string',
-        enum: ['', 'FD6', 'CE7', 'CS2', 'PM9', 'SW8', 'PK6', 'BK9', 'OL7', 'HP8', 'MT1'],
+        enum: ['', 'FD6', 'CE7', 'CS2', 'PM9', 'SW8', 'PK6', 'BK9', 'OL7', 'HP8', 'MT1', 'AD5', 'AT4', 'CT1', 'PO3', 'AC5', 'SC4', 'PS3', 'AG2'],
         description:
           '요청이 아래 업종 중 하나에 해당하면 query에 구체적인 상호/메뉴가 있어도 항상 같이 채우세요 ' +
           '(카카오 키워드 검색이 0건일 때 이 값으로 업종 기준 재검색하는 안전망으로도 쓰입니다): ' +
           "FD6=음식점/맛집/밥집/식당, CE7=카페, CS2=편의점, PM9=약국, SW8=지하철역, PK6=주차장, " +
-          'BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트. 해당 없으면 빈 문자열.',
+          'BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트, AD5=숙박(호텔/모텔/펜션/게스트하우스), ' +
+          'AT4=관광명소, CT1=문화시설(영화관/미술관/박물관/공연장), PO3=공공기관(주민센터/구청/우체국/경찰서), ' +
+          'AC5=학원, SC4=학교, PS3=어린이집/유치원, AG2=부동산/중개업소. 해당 없으면 빈 문자열.',
       },
       transportMode: {
         type: 'string',
@@ -63,7 +67,15 @@ const INTENT_TOOL_SCHEMA = {
           "발화에 이동수단이 명시되면(예: '대중교통으로', '차 타고', '걸어서') 그 값을 반영. " +
           "명시되지 않았으면 컨텍스트의 '이동수단 기본' 값을 그대로 사용 (임의로 바꾸지 말 것).",
       },
-      originHint: { type: 'string', description: "'현재위치' 또는 즐겨찾기 별칭" },
+      originHint: { type: 'string', description: "'현재위치' 또는 즐겨찾기 별칭 (locationHint와 동시에 채우지 말 것)" },
+      locationHint: {
+        type: 'string',
+        description:
+          "발화에 특정 지역/역/동네/랜드마크명이 검색 기준 위치로 언급되면(예: '미사역', '홍대', '강남역', '판교') 그 이름만 넣으세요 — " +
+          "'~주변', '~근처', '~에서'처럼 다른 걸 찾기 위한 기준 위치로 쓰인 경우입니다. " +
+          "즐겨찾기 별칭(집/회사 등)은 여기 넣지 말고 originHint에 넣으세요 — locationHint는 즐겨찾기에 없는 임의의 지명 전용입니다. " +
+          "명시적인 지역 언급이 없으면(예: '카페 찾아줘') 빈 문자열로 두세요.",
+      },
       destinationFavoriteName: {
         type: 'string',
         description: 'intent가 navigate_favorite일 때만 채움. search일 때는 항상 빈 문자열.',
@@ -72,7 +84,7 @@ const INTENT_TOOL_SCHEMA = {
       spoken: { type: 'string' },
       clarification: { type: 'string' },
     },
-    required: ['intent', 'query', 'transportMode', 'originHint', 'filters', 'spoken', 'clarification'],
+    required: ['intent', 'query', 'transportMode', 'originHint', 'locationHint', 'filters', 'spoken', 'clarification'],
   },
 };
 
@@ -83,6 +95,7 @@ function defaultIntent(ctx) {
     categoryGroupCode: ctx.categoryGroupCode || '',
     transportMode: ctx.userTransportMode,
     originHint: '현재위치',
+    locationHint: '',
     destinationFavoriteName: '',
     filters: [],
     spoken: '',
@@ -185,6 +198,10 @@ async function resolveIntent(ctx) {
     "즐겨찾기 별칭(집, 회사 등)이 발화에서 목적지 자체로 쓰이면(예: '집으로 가자', '회사 가는 길') intent='navigate_favorite'이고 destinationFavoriteName에 그 별칭을 넣으세요. " +
     "즐겨찾기 별칭이 검색 기준 위치로만 쓰이면(예: '집 근처 편의점', '회사 주변 카페') intent='search'이고 originHint에만 넣으세요 (destinationFavoriteName은 비움). " +
     "originHint/destinationFavoriteName에 즐겨찾기를 넣을 때는 '# 즐겨찾기' 목록에 있는 alias 값을 토씨 하나 안 틀리고 그대로 복사해서 넣으세요 (예: 목록에 alias:'집'이면 '집근처'/'우리집'이 아니라 정확히 '집'만). " +
+    "즐겨찾기가 아닌 임의의 지역/역/동네/랜드마크명이 검색 기준 위치로 쓰이면(예: '미사역 주변 맛집', '홍대에서 혼술', '판교역 근처 카페') " +
+    "locationHint에 그 지명만 넣으세요(originHint는 '현재위치'로 둠). 이때 query에는 그 지명을 절대 포함하지 마세요 — " +
+    "예: '미사역 주변 맛집'은 locationHint='미사역', query='맛집'(또는 categoryGroupCode=FD6만 채우고 query는 비움)으로 분리하세요. " +
+    "지명 없이 그냥 '카페 찾아줘'처럼 현재 위치 기준이면 locationHint는 비워두세요. " +
     "이동수단(transportMode)은 발화에 명시적으로 언급된 경우에만(예: '대중교통으로', '차 타고') 그 값으로 바꾸고, 언급이 없으면 컨텍스트의 '이동수단 기본' 값을 절대 임의로 바꾸지 말고 그대로 유지하세요. " +
     "query는 실제 상호명/업종에 매칭될 짧은 검색어만 넣고, '아이랑 갈만한' 같은 동반자/분위기/목적 수식어는 query에서 빼서 filters에 넣으세요 (query에 그대로 넣으면 검색결과 0건이 됩니다). " +
     "모호하면 clarification에 짧은 질문을 넣고 intent='ambiguous'. " +
@@ -359,7 +376,37 @@ const CATEGORY_KEYWORDS = [
   ['OL7', ['주유소', '충전소']],
   ['HP8', ['병원', '의원', '치과', '한의원']],
   ['MT1', ['대형마트', '이마트', '홈플러스', '롯데마트']],
+  ['AD5', ['호텔', '모텔', '펜션', '게스트하우스', '리조트', '숙소']],
+  ['AT4', ['관광지', '관광명소', '전망대', '유적지']],
+  ['CT1', ['영화관', '극장', '미술관', '박물관', '공연장', '전시관']],
+  ['PO3', ['주민센터', '구청', '시청', '동사무소', '우체국', '경찰서', '소방서']],
+  ['AC5', ['학원']],
+  ['SC4', ['학교', '초등학교', '중학교', '고등학교', '대학교']],
+  ['PS3', ['어린이집', '유치원']],
+  ['AG2', ['부동산', '공인중개사']],
 ];
+
+// 발화에 나온 지역/역/동네/랜드마크명(예: '미사역', '홍대')을 좌표로 변환한다. 캘린더 일정
+// 위치 확인(inputType==='locate')과 똑같은 방식 — 반경 제한 없이 정확도순 — 인데, 그 흐름을
+// 재사용하지 않고 별도 함수로 둔 건 여기는 항상 카카오 REST만 쓰고(로컬 검색 결과일 필요
+// 없음) 실패해도 조용히 null을 반환해 현재 GPS로 자연스럽게 폴백해야 하기 때문.
+// TODO(2단계): 후보가 여러 곳으로 갈릴 만큼 모호하면(같은 이름의 다른 지역 등) 1순위를
+// 바로 쓰지 말고 clarification으로 사용자에게 후보를 되물어야 하는데, 지금은 카카오
+// 정확도순 1위를 그대로 신뢰하는 단순한 버전이다.
+async function resolveNamedLocation(hint) {
+  const clean = String(hint || '').trim();
+  if (!clean) return null;
+  try {
+    const kakaoUrl = buildKakaoUrl({ query: clean, size: '5', sort: 'accuracy' });
+    const raw = await kakaoSearch(kakaoUrl);
+    const candidates = normalizeKakaoResults(raw);
+    if (!candidates.length) return null;
+    return { lat: candidates[0].lat, lng: candidates[0].lng, name: candidates[0].name };
+  } catch (err) {
+    console.error(`[search] locationHint "${clean}" 확인 실패:`, err);
+    return null;
+  }
+}
 function inferCategoryFromText(text) {
   const found = CATEGORY_KEYWORDS.find(([, keywords]) => keywords.some((kw) => text.includes(kw)));
   return found ? found[0] : '';
@@ -517,7 +564,8 @@ async function runMockPipeline(body) {
   }
   console.log(
     `[search] "${ctx.text}" -> intent=${intent.intent} query="${intent.query}" category=${intent.categoryGroupCode || '(none)'} ` +
-      `transportMode=${intent.transportMode} originHint=${intent.originHint} dest=${intent.destinationFavoriteName || '(none)'}` +
+      `transportMode=${intent.transportMode} originHint=${intent.originHint} locationHint=${intent.locationHint || '(none)'} ` +
+      `dest=${intent.destinationFavoriteName || '(none)'}` +
       (intent._llmError ? ` llmError=${intent._llmError}` : '')
   );
 
@@ -575,24 +623,49 @@ async function runMockPipeline(body) {
     }
   }
 
-  const query = intent.query || ctx.text;
+  // 즐겨찾기가 아닌 임의 지역/랜드마크명("미사역 주변 맛집"의 "미사역")이 검색 기준 위치로
+  // 쓰인 경우 — 예전엔 이런 지명이 검색 기준으로 반영될 방법이 없어서 항상 현재 GPS
+  // 근처만 뒤졌다(예: "미사역 주변 맛집"이 현재 위치 근처 맛집 검색이 되어버림).
+  if (intent.locationHint) {
+    const resolved = await resolveNamedLocation(intent.locationHint);
+    if (resolved) {
+      searchLat = resolved.lat;
+      searchLng = resolved.lng;
+      console.log(`[search] 기준 위치 = "${intent.locationHint}" -> (${resolved.lat}, ${resolved.lng}) [${resolved.name}]`);
+    } else {
+      console.log(`[search] 기준 위치 "${intent.locationHint}" 확인 실패 -> 현재 GPS로 대체`);
+    }
+  }
+
+  // query가 비어서 ctx.text(원문 발화 전체)로 대체될 때, locationHint가 있으면 그 지명이
+  // 다시 검색어에 섞여 들어간다(애초에 이 문제를 풀려고 만든 기능인데 폴백에서 되풀이됨).
+  // 그래서 locationHint가 있을 땐 원문 대신 빈 문자열로 둬서 categoryGroupCode 기반
+  // 카테고리 검색 폴백(아래)에 맡긴다.
+  const query = intent.query || (intent.locationHint ? '' : ctx.text);
   // 정확도순 검색이라도 반경은 걸어둠 — 안 그러면 이름만 비슷한 수백km 밖 결과가 섞여 들어옴.
   // 자동차는 카카오 로컬 API의 radius 파라미터 최대값(20km)까지 허용, 그 외(대중교통/도보)는
   // 사용자가 설정한 칩 검색 반경을 그대로 씀.
   const CAR_SEARCH_RADIUS_M = 20000;
   const searchRadius = intent.transportMode === 'car' ? CAR_SEARCH_RADIUS_M : ctx.userChipRadius;
-  const kakaoUrl = buildKakaoUrl({
-    query,
-    x: searchLng,
-    y: searchLat,
-    size: '10',
-    radius: String(searchRadius),
-    sort: 'accuracy',
-    category_group_code: intent.categoryGroupCode,
-  });
-  const raw = await kakaoSearch(kakaoUrl);
-  let candidates = normalizeKakaoResults(raw);
-  console.log(`[search] 카카오 검색 "${query}" (반경 ${searchRadius}m) -> ${candidates.length}건`);
+
+  // 카카오 키워드검색(keyword.json)은 query가 필수 파라미터라 빈 문자열로는 호출 못 함
+  // (locationHint만 있고 구체적인 검색어가 없는 경우 — 예: "미사역 주변 맛집"에서 categoryGroupCode
+  // =FD6만으로 충분한 케이스). 그럴 땐 키워드 검색을 건너뛰고 바로 카테고리 검색으로 간다.
+  let candidates = [];
+  if (query) {
+    const kakaoUrl = buildKakaoUrl({
+      query,
+      x: searchLng,
+      y: searchLat,
+      size: '10',
+      radius: String(searchRadius),
+      sort: 'accuracy',
+      category_group_code: intent.categoryGroupCode,
+    });
+    const raw = await kakaoSearch(kakaoUrl);
+    candidates = normalizeKakaoResults(raw);
+    console.log(`[search] 카카오 검색 "${query}" (반경 ${searchRadius}m) -> ${candidates.length}건`);
+  }
 
   if (candidates.length === 0 && intent.categoryGroupCode) {
     const categoryUrl = buildKakaoCategoryUrl({
@@ -605,7 +678,20 @@ async function runMockPipeline(body) {
     });
     const rawByCategory = await kakaoSearch(categoryUrl);
     candidates = normalizeKakaoResults(rawByCategory);
-    console.log(`[search] 키워드 0건 -> 카테고리(${intent.categoryGroupCode}) 검색 폴백 -> ${candidates.length}건`);
+    console.log(
+      `[search] ${query ? '키워드 0건 -> ' : '검색어 없음 -> '}카테고리(${intent.categoryGroupCode}) 검색 -> ${candidates.length}건`
+    );
+  }
+
+  // 반경 검색(+카테고리 폴백)까지 다 0건이면, 발화 자체가 "미사역"처럼 지역/역/랜드마크명
+  // 그 자체(business 이름이 아니라)일 가능성이 있다 — 그런 경우 반경 제한이 오히려 방해가
+  // 된다(현재 위치에서 멀리 떨어진 곳을 찾는 거니까). 마지막 안전망으로 반경 없이
+  // 전국 정확도순으로 한 번 더 시도한다.
+  if (candidates.length === 0 && query) {
+    const nationalUrl = buildKakaoUrl({ query, size: '10', sort: 'accuracy' });
+    const rawNational = await kakaoSearch(nationalUrl);
+    candidates = normalizeKakaoResults(rawNational);
+    console.log(`[search] 반경 검색 0건 -> 전국 무제한 검색 "${query}" -> ${candidates.length}건`);
   }
 
   const curated = await curateResults({
@@ -619,7 +705,7 @@ async function runMockPipeline(body) {
 
   return {
     candidates: curated.candidates,
-    destination: query,
+    destination: query || intent.locationHint || ctx.text,
     transportMode: intent.transportMode,
     spoken: curated.spoken,
     topPick: curated.topPick,
