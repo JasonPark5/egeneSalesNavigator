@@ -709,7 +709,10 @@ async function runMockPipeline(body) {
 
   return {
     candidates: curated.candidates,
-    destination: query || intent.locationHint || ctx.text,
+    // "OO 검색 결과예요" 메시지에 쓰이는 값이라, LLM이 정제한 query(예: "양꼬치")가 아니라
+    // 사용자가 실제로 말한 문장(예: "가디역 양꼬치") 그대로 보여준다 — locationHint로
+    // 지명이 query에서 빠진 경우에도 자기가 뭘 물어봤는지 그대로 보이는 게 자연스럽다.
+    destination: ctx.text || query || intent.locationHint,
     transportMode: intent.transportMode,
     spoken: curated.spoken,
     topPick: curated.topPick,

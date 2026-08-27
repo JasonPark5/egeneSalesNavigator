@@ -658,7 +658,9 @@
 
     return {
       candidates: curated.candidates,
-      destination: query || intent.locationHint || ctx.text,
+      // "OO 검색 결과예요" 메시지용 — LLM이 정제한 query가 아니라 사용자가 실제로 말한
+      // 문장을 그대로 보여준다(locationHint로 지명이 query에서 빠진 경우에도).
+      destination: ctx.text || query || intent.locationHint,
       transportMode: intent.transportMode,
       spoken: curated.spoken,
       topPick: curated.topPick,
