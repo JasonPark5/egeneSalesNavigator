@@ -591,11 +591,16 @@
 
     var searchLat = ctx.userLat;
     var searchLng = ctx.userLng;
+    // 검색 기준점이 현재 GPS가 아닌 다른 곳(즐겨찾기/지명)으로 바뀌면 distanceLabel도 그
+    // 기준점부터의 거리가 된다 — anchorLabel로 그 이름을 같이 넘겨 프론트가 "OO 기준"으로
+    // 표시하게 한다.
+    var anchorLabel = '';
     if (intent.originHint && intent.originHint !== '현재위치') {
       var origin = findFavorite(ctx.favorites, intent.originHint);
       if (origin) {
         searchLat = origin.lat;
         searchLng = origin.lng;
+        anchorLabel = origin.alias || origin.name;
         console.log('[search] 기준 위치 = 즐겨찾기 "' + intent.originHint + '" -> (' + origin.lat + ', ' + origin.lng + ')');
       } else {
         console.log('[search] 기준 위치 = 즐겨찾기 "' + intent.originHint + '" (매칭 실패, 현재 GPS로 대체)');
@@ -609,6 +614,7 @@
       if (resolved) {
         searchLat = resolved.lat;
         searchLng = resolved.lng;
+        anchorLabel = resolved.name;
         console.log('[search] 기준 위치 = "' + intent.locationHint + '" -> (' + resolved.lat + ', ' + resolved.lng + ') [' + resolved.name + ']');
       } else {
         console.log('[search] 기준 위치 "' + intent.locationHint + '" 확인 실패 -> 현재 GPS로 대체');
@@ -661,6 +667,7 @@
       // "OO 검색 결과예요" 메시지용 — LLM이 정제한 query가 아니라 사용자가 실제로 말한
       // 문장을 그대로 보여준다(locationHint로 지명이 query에서 빠진 경우에도).
       destination: ctx.text || query || intent.locationHint,
+      locationLabel: anchorLabel,
       transportMode: intent.transportMode,
       spoken: curated.spoken,
       topPick: curated.topPick,

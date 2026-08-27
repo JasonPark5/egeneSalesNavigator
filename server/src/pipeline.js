@@ -613,11 +613,18 @@ async function runMockPipeline(body) {
 
   let searchLat = ctx.userLat;
   let searchLng = ctx.userLng;
+  // 검색 기준점이 현재 GPS가 아닌 다른 곳(즐겨찾기/지명)으로 바뀌면, 카카오가 돌려주는
+  // distanceLabel도 그 기준점부터의 거리로 바뀐다 — "1.4km"만 보면 내 위치 기준처럼
+  // 보이기 쉬워서, 그 기준점 이름을 anchorLabel로 같이 넘겨 프론트에서 "OO 기준"으로
+  // 표시하게 한다(카드 문구 자체를 현재위치 기준으로 바꾸는 대신, 기준점을 명시하는 방식 — 그래야
+  // "여의도 안에서 어디가 더 중심인지" 비교하는 용도도 그대로 유지됨).
+  let anchorLabel = '';
   if (intent.originHint && intent.originHint !== '현재위치') {
     const origin = findFavorite(ctx.favorites, intent.originHint);
     if (origin) {
       searchLat = origin.lat;
       searchLng = origin.lng;
+      anchorLabel = origin.alias || origin.name;
       console.log(`[search] 기준 위치 = 즐겨찾기 "${intent.originHint}" -> (${origin.lat}, ${origin.lng})`);
     } else {
       console.log(
@@ -635,6 +642,7 @@ async function runMockPipeline(body) {
     if (resolved) {
       searchLat = resolved.lat;
       searchLng = resolved.lng;
+      anchorLabel = resolved.name;
       console.log(`[search] 기준 위치 = "${intent.locationHint}" -> (${resolved.lat}, ${resolved.lng}) [${resolved.name}]`);
     } else {
       console.log(`[search] 기준 위치 "${intent.locationHint}" 확인 실패 -> 현재 GPS로 대체`);
@@ -713,6 +721,9 @@ async function runMockPipeline(body) {
     // 사용자가 실제로 말한 문장(예: "가디역 양꼬치") 그대로 보여준다 — locationHint로
     // 지명이 query에서 빠진 경우에도 자기가 뭘 물어봤는지 그대로 보이는 게 자연스럽다.
     destination: ctx.text || query || intent.locationHint,
+    // 검색 기준점이 현재 GPS가 아니면(즐겨찾기/지명) 그 이름 — 카드의 거리(distanceLabel)가
+    // 이 기준점부터의 거리라는 걸 프론트에서 "OO 기준"으로 표시하는 데 씀.
+    locationLabel: anchorLabel,
     transportMode: intent.transportMode,
     spoken: curated.spoken,
     topPick: curated.topPick,

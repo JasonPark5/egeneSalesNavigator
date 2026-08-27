@@ -338,6 +338,11 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+    .candidates-anchor {
+      font-weight: 500;
+      text-transform: none;
+      letter-spacing: normal;
+    }
     .candidate-card {
       background: var(--card-bg);
       border: 1.5px solid var(--border);
@@ -1750,6 +1755,7 @@ const I18N = {
     'search.noResultsTts': '검색 결과가 없습니다',
     'search.summary': '"{0}" 검색 결과예요. ({1})',
     'search.foundCount': '{0}곳을 찾았어요',
+    'search.anchorLabel': '{0} 기준 거리',
     'search.error': '오류가 발생했습니다: {0}',
     'search.networkErr': '네트워크 오류가 발생했습니다.',
     'search.respFormat': '응답 형식 오류: {0}',
@@ -1909,6 +1915,7 @@ const I18N = {
     'search.noResultsTts': 'No results found',
     'search.summary': 'Results for "{0}". ({1})',
     'search.foundCount': 'Found {0} places',
+    'search.anchorLabel': 'distance from {0}',
     'search.error': 'Error: {0}',
     'search.networkErr': 'Network error.',
     'search.respFormat': 'Response format error: {0}',
@@ -3214,6 +3221,7 @@ function handleSearchResult(data) {
   var candidates = root.candidates || (Array.isArray(root) ? root : []);
   var mode = root.transportMode || transportMode;
   var dest = root.destination || '';
+  var locationLabel = root.locationLabel || '';
   var spoken = root.spoken || '';
   var topPick = root.topPick || null;
   var clarification = root.clarification || '';
@@ -3232,7 +3240,7 @@ function handleSearchResult(data) {
     speak(t('search.noResultsTts'));
   } else {
     if (dest) addBotMessage(t('search.summary', dest, mode === 'transit' ? t('transport.transit_short') : t('transport.car_short')));
-    showCandidates(candidates, topPick);
+    showCandidates(candidates, topPick, locationLabel);
     // LLM이 추천 멘트를 만들었으면 그걸로, 아니면 fallback
     if (spoken) speak(spoken);
     else speak(t('search.summaryTts', candidates.length, candidates[0].distanceLabel || '', candidates[0].name));
@@ -3326,7 +3334,7 @@ function removeMessage(id) {
   if (el) el.remove();
 }
 
-function showCandidates(candidates, topPick) {
+function showCandidates(candidates, topPick, locationLabel) {
   lastCandidates = candidates;
 
   var wrapper = document.createElement('div');
@@ -3335,7 +3343,11 @@ function showCandidates(candidates, topPick) {
 
   var inner = document.createElement('div');
   inner.className = 'candidates-wrapper';
-  inner.innerHTML = '<div class="candidates-title">' + t('search.foundCount', candidates.length) + '</div>';
+  // locationLabel: 검색 기준점이 현재 GPS가 아니면(즐겨찾기/지명 검색) 카드의 거리가
+  // 그 기준점부터의 거리라는 걸 밝혀준다 — 안 그러면 "1.4km"가 내 위치 기준처럼 보임.
+  inner.innerHTML = '<div class="candidates-title">' + t('search.foundCount', candidates.length) +
+    (locationLabel ? ' <span class="candidates-anchor">· ' + escHtml(t('search.anchorLabel', locationLabel)) + '</span>' : '') +
+    '</div>';
 
   // Mini map preview
   var mapDiv = null;
