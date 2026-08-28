@@ -22,6 +22,22 @@ function buildAuthHeaders() {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
+// 임시 디버깅용: 앞단 게이트웨이가 브라우저 세션(쿠키/CSRF 토큰 등)이 없는 요청을 막는
+// 정황이 있어서, 정확한 헤더 이름을 모르는 채로도 빠르게 실험해볼 수 있게 임의의 헤더를
+// JSON으로 넣을 수 있게 했다. 예: ACTIONFLOW_EXTRA_HEADERS={"X-CSRF-Token":"...","Cookie":"..."}
+// 주의: CSRF 토큰은 보통 세션에 묶여 있어서 곧 만료되고, 이 값을 .env에 박아두는 건
+// 임시 확인용일 뿐 — 진짜 해결책은 ActionFlow/IT 쪽에 서버 대 서버 인증 방법을 물어보는 것.
+function buildExtraHeaders() {
+  const raw = process.env.ACTIONFLOW_EXTRA_HEADERS || '';
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('[actionflowClient] ACTIONFLOW_EXTRA_HEADERS가 올바른 JSON이 아닙니다: ' + ((err && err.message) || String(err)));
+    return {};
+  }
+}
+
 class ActionFlowError extends Error {
   constructor(message, cause) {
     super(message);
@@ -45,7 +61,7 @@ async function runActionFlow(flowKey, payload) {
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...buildAuthHeaders() },
+    headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(), ...buildExtraHeaders() },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
