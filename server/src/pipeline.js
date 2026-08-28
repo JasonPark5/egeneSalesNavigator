@@ -478,6 +478,103 @@ async function generateBriefing(body) {
   }
 }
 
+// ─── 음성으로 일정 추가 (자연어 → Google Calendar 일정 필드) ──────────────
+// 실제 Google Calendar 생성 API 호출은 여기서 안 한다 — 이미 브라우저가 갖고 있는
+// 액세스 토큰으로 프론트가 직접 호출한다(오늘 일정 조회와 동일한 방식, CORS 문제 없음).
+// 여기는 발화를 제목/날짜/시간으로 "해석"만 한다. 상대 날짜("내일", "다음주 화요일")를
+// 서버가 잘못된 타임존으로 계산하는 걸 막기 위해, 오늘 날짜/요일/현재시각은 서버 시계가
+// 아니라 프론트(사용자의 실제 로컬 시간)가 계산해서 todayDate/todayWeekday/nowTime으로
+// 넘겨준 값을 기준점으로 쓴다.
+const CREATE_EVENT_TOOL_SCHEMA = {
+  name: 'create_event',
+  description: '사용자 발화에서 캘린더 일정 생성에 필요한 정보(제목/날짜/시간/장소)를 추출합니다.',
+  parameters: {
+    type: 'object',
+    properties: {
+      understood: {
+        type: 'boolean',
+        description:
+          '제목과 날짜, 시작 시각을 발화에서 확신 있게 알아냈으면 true. ' +
+          '날짜나 시간이 아예 없거나("일정 잡아줘"처럼) 너무 모호하면 false — ' +
+          '이 경우 사실이 아닌 값을 지어내서 채우지 말고 false로 두세요.',
+      },
+      title: {
+        type: 'string',
+        description: '일정 제목(예: "김이사님 미팅", "OO팀 회식"). 명시적인 제목이 없으면 "일정".',
+      },
+      date: {
+        type: 'string',
+        description:
+          'YYYY-MM-DD. 상대 날짜 표현("내일", "모레", "다음주 화요일", "이번주 금요일")은 ' +
+          '컨텍스트의 오늘 날짜/요일을 기준으로 계산하세요. 날짜 언급이 전혀 없으면 오늘 날짜를 쓰세요.',
+      },
+      startTime: {
+        type: 'string',
+        description:
+          'HH:MM 24시간제. "오후 3시"→15:00, "3시 반"→15:30, "아침 9시"→09:00. ' +
+          '오전/오후 명시가 없는 애매한 시각(예: 그냥 "7시")은 업무 맥락상 자연스러운 쪽으로 판단하되, ' +
+          '너무 불확실하면 understood=false로 두세요.',
+      },
+      durationMinutes: {
+        type: 'integer',
+        description: '일정 길이(분). "1시간", "30분" 등 언급되면 반영, 없으면 60.',
+      },
+      location: { type: 'string', description: '장소 언급이 있으면 그대로, 없으면 빈 문자열.' },
+      clarification: {
+        type: 'string',
+        description: 'understood가 false일 때, 무엇이 불명확한지 짧게 되물을 질문 (예: "언제로 잡아드릴까요?").',
+      },
+    },
+    required: ['understood', 'title', 'date', 'startTime', 'durationMinutes', 'location', 'clarification'],
+  },
+};
+
+async function parseEventFromText(body) {
+  const text = (body.text || '').trim();
+  const lang = (body.lang || 'ko').trim();
+  const llmOverride = body.llmProvider ? { provider: body.llmProvider, apiKey: body.llmApiKey } : null;
+  const fallback = { understood: false, clarification: lang === 'en' ? 'Sorry, I could not understand that.' : '무슨 일정인지 잘 못 알아들었어요.' };
+
+  if (!text) return fallback;
+
+  const langDirective =
+    lang === 'en'
+      ? "IMPORTANT: The user's UI language is English. Write title/clarification in English only, even though instructions below are in Korean. "
+      : '중요: 사용자 UI 언어는 한국어입니다. title, clarification을 한국어로 작성하세요. ';
+  const systemPrompt =
+    langDirective +
+    '당신은 음성으로 캘린더 일정을 추가하는 어시스턴트입니다. 발화에서 일정 제목/날짜/시작시각/길이/장소를 추출하세요. ' +
+    '날짜·시간 계산의 기준점은 아래 "# 현재 시각" 컨텍스트입니다(서버 시각이 아니라 사용자의 실제 로컬 시각). ' +
+    '확실하지 않은 값을 지어내지 말고, 제목/날짜/시각 중 하나라도 불확실하면 understood=false로 정직하게 표시하세요. ' +
+    langDirective;
+  const userMessage = [
+    `# 사용자 발화\n"${text}"`,
+    `# 현재 시각\n- 오늘 날짜: ${body.todayDate || ''}\n- 오늘 요일: ${body.todayWeekday || ''}\n- 지금 시각: ${body.nowTime || ''}`,
+  ].join('\n\n');
+
+  try {
+    const args = await callLLMTool({
+      systemPrompt,
+      userMessage,
+      toolSchema: CREATE_EVENT_TOOL_SCHEMA,
+      toolChoiceName: 'create_event',
+      override: llmOverride,
+    });
+    if (!args) return fallback;
+    return {
+      understood: !!args.understood,
+      title: args.title || '일정',
+      date: args.date || body.todayDate || '',
+      startTime: args.startTime || '',
+      durationMinutes: parseInt(args.durationMinutes, 10) || 60,
+      location: args.location || '',
+      clarification: args.clarification || '',
+    };
+  } catch (err) {
+    return { understood: false, clarification: String(err.message || err), _llmError: String(err.message || err) };
+  }
+}
+
 // ─── 자동차 이동시간 (NAVER Directions 5) ────────────────────────────
 // 이 API는 브라우저에서 직접 fetch/XHR로 호출하면 CORS로 막힌다 — NCP 포럼에도
 // 동일 증상 리포트가 있고, 실제로 확인함(TypeError: Failed to fetch). 그래서
@@ -526,6 +623,9 @@ async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng
 async function runMockPipeline(body) {
   if ((body.inputType || '') === 'briefing') {
     return generateBriefing(body);
+  }
+  if ((body.inputType || '') === 'create-event') {
+    return parseEventFromText(body);
   }
   if ((body.inputType || '') === 'travel-time') {
     try {

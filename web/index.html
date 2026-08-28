@@ -1727,7 +1727,10 @@ const I18N = {
     'assistant.listening': '듣고 있어요…',
     'assistant.unsupported': '이 브라우저는 음성 인식을 지원하지 않아요',
     'assistant.fallback': '아직 학습 중인 명령이에요. 검색으로 연결할게요.',
-    'assistant.calendarSoon': '자연어 일정 등록은 Google Calendar 연동 후 지원 예정이에요.',
+    'assistant.calendarNotConnected': 'Google Calendar를 먼저 연동해주세요.',
+    'assistant.eventUnclear': '날짜나 시간을 좀 더 명확히 말씀해주세요. 예: "내일 오후 3시 강남에서 미팅"',
+    'assistant.eventCreated': '"{0}" 일정을 {1}에 등록했어요.',
+    'assistant.eventCreateFailed': '일정을 등록하지 못했어요. 다시 시도해주세요.',
     'assistant.favRouted': '즐겨찾기 탭으로 이동했어요',
     'assistant.nextEventNone': '오늘 남은 일정이 없어요',
     'assistant.nextEventEta': '다음 일정까지 이동시간은 약',
@@ -1889,7 +1892,10 @@ const I18N = {
     'assistant.listening': 'Listening…',
     'assistant.unsupported': "This browser doesn't support voice recognition",
     'assistant.fallback': "Still learning that one. Let's search instead.",
-    'assistant.calendarSoon': 'Natural-language scheduling ships with Google Calendar integration.',
+    'assistant.calendarNotConnected': 'Please connect Google Calendar first.',
+    'assistant.eventUnclear': 'Could you say the date and time more clearly? e.g. "meeting tomorrow at 3pm in Gangnam"',
+    'assistant.eventCreated': 'Added "{0}" for {1}.',
+    'assistant.eventCreateFailed': 'Could not create the event. Please try again.',
     'assistant.favRouted': 'Switched to Favorites',
     'assistant.nextEventNone': 'No events left today',
     'assistant.nextEventEta': 'About',
@@ -3103,7 +3109,7 @@ function handleAssistantCommand(text) {
   if ((q.includes('일정') || q.includes('미팅') || q.includes('약속') || q.includes('meeting') || q.includes('schedule')) &&
       (q.includes('잡아') || q.includes('등록') || q.includes('예약') || q.includes('book'))) {
     closeAssistant();
-    showToast(t('assistant.calendarSoon'));
+    createEventFromVoice(text);
     return;
   }
 
@@ -3121,6 +3127,107 @@ function handleAssistantCommand(text) {
   closeAssistant();
   switchTab('search');
   sendText(text, '', 'voice');
+}
+
+var WEEKDAY_NAMES = {
+  ko: ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'],
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+};
+function pad2(n) { return ('0' + n).slice(-2); }
+
+// 음성 발화("내일 오후 3시 강남에서 김이사님 미팅")를 제목/날짜/시간으로 해석해서
+// Google Calendar에 실제로 등록한다. 상대 날짜("내일", "다음주 화요일") 계산이
+// 서버 시간대로 틀어지지 않도록, 오늘 날짜/요일/현재시각은 서버가 아니라 이 브라우저의
+// 실제 로컬 시각으로 계산해서 넘긴다.
+async function createEventFromVoice(text) {
+  if (!calendarConnected || !googleAccessToken) {
+    showToast(t('assistant.calendarNotConnected'));
+    speak(t('assistant.calendarNotConnected'));
+    return;
+  }
+
+  var now = new Date();
+  var weekdayNames = WEEKDAY_NAMES[currentLang] || WEEKDAY_NAMES.ko;
+  var payload = {
+    inputType: 'create-event',
+    text: text,
+    lang: currentLang,
+    todayDate: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()),
+    todayWeekday: weekdayNames[now.getDay()],
+    nowTime: pad2(now.getHours()) + ':' + pad2(now.getMinutes()),
+    llmProvider: CONFIG.llmProvider || undefined,
+    llmApiKey: CONFIG.llmApiKey || undefined,
+  };
+
+  var data;
+  try {
+    if (shouldUseClientPipeline()) {
+      data = await window.runClientPipeline(payload);
+    } else {
+      var res = await fetch(CONFIG.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      data = await res.json();
+    }
+  } catch (err) {
+    console.error('[assistant] 일정 해석 실패:', err);
+    showToast(t('assistant.eventCreateFailed'));
+    return;
+  }
+
+  if (!data || !data.understood) {
+    var clarify = (data && data.clarification) || t('assistant.eventUnclear');
+    showToast(clarify);
+    speak(clarify);
+    return;
+  }
+
+  try {
+    var startDate = new Date(data.date + 'T' + data.startTime + ':00');
+    if (isNaN(startDate.getTime())) throw new Error('잘못된 날짜/시간: ' + data.date + ' ' + data.startTime);
+    var endDate = new Date(startDate.getTime() + (data.durationMinutes || 60) * 60000);
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var eventBody = {
+      summary: data.title,
+      location: data.location || undefined,
+      start: { dateTime: startDate.toISOString(), timeZone: tz },
+      end: { dateTime: endDate.toISOString(), timeZone: tz },
+    };
+
+    var createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventBody),
+    });
+
+    if (createRes.status === 401) {
+      // 액세스 토큰이 그 사이 만료됐을 수 있음 — refresh token으로 조용히 한 번 재시도
+      var refreshed = await fetch('/api/auth/google/access-token')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; });
+      if (refreshed && refreshed.connected && refreshed.accessToken) {
+        googleAccessToken = refreshed.accessToken;
+        createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventBody),
+        });
+      }
+    }
+
+    if (!createRes.ok) throw new Error('HTTP ' + createRes.status);
+
+    var dateLabel = data.date + ' ' + data.startTime;
+    var confirmMsg = t('assistant.eventCreated', data.title, dateLabel);
+    showToast(confirmMsg);
+    speak(confirmMsg);
+    refreshTodayFromCalendar(); // 방금 만든 일정이 오늘 것이면 오늘 탭에 바로 반영
+  } catch (err) {
+    console.error('[assistant] 일정 생성 실패:', err);
+    showToast(t('assistant.eventCreateFailed'));
+  }
 }
 
 // ========================
