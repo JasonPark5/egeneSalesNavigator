@@ -332,6 +332,63 @@
     });
   }
 
+  // 키워드검색(상호명 검색에 최적화)은 "OO로60길 17 6층" 같은 도로명주소를 잘 못 찾는다 —
+  // 이럴 때를 위한 카카오 주소검색(Geocoder). 위치 확인(inputType==='locate')에서
+  // 키워드검색이 0건일 때만 폴백으로 쓴다.
+  async function kakaoAddressDocs(query) {
+    await ensureKakaoSdk();
+    return new Promise(function (resolve, reject) {
+      var geocoder = new window.kakao.maps.services.Geocoder();
+      geocoder.addressSearch(query, function (data, status) {
+        if (status === window.kakao.maps.services.Status.OK) resolve(data);
+        else if (status === window.kakao.maps.services.Status.ZERO_RESULT) resolve([]);
+        else reject(new Error('Kakao 주소 검색 실패: ' + status));
+      });
+    });
+  }
+
+  function normalizeKakaoAddressResults(docs) {
+    return (docs || []).map(function (d, i) {
+      var road = d.road_address;
+      var addressName = (road && road.address_name) || d.address_name || '';
+      return {
+        index: i + 1,
+        name: (road && road.building_name) || addressName,
+        address: addressName,
+        category: '',
+        lat: parseFloat(d.y),
+        lng: parseFloat(d.x),
+        distanceM: 0,
+        distanceLabel: '',
+        phone: '',
+        placeUrl: '',
+      };
+    });
+  }
+
+  // 도로명주소 뒤에 붙는 "6층", "502호", "B1", "101동" 같은 건물 내부 상세정보는
+  // 주소검색과 잘 안 맞아서(주소 자체가 아니므로) 떼어내고 도로명+번지까지만 남긴다.
+  function stripBuildingDetail(address) {
+    var s = String(address || '').trim();
+    var suffixPatterns = [
+      /\s*(지하)?\d+\s*층$/,
+      /\s*\d+\s*호$/,
+      /\s*B\d+$/i,
+      /\s*\d+\s*동$/,
+    ];
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var i = 0; i < suffixPatterns.length; i++) {
+        if (suffixPatterns[i].test(s)) {
+          s = s.replace(suffixPatterns[i], '').trim();
+          changed = true;
+        }
+      }
+    }
+    return s;
+  }
+
   var CURATE_TOOL_SCHEMA = {
     name: 'curate_results',
     description: '검색 결과 후보 중 사용자 의도에 가장 잘 맞는 곳을 추천합니다.',
@@ -635,8 +692,19 @@
         sort: isLocate ? 'accuracy' : 'distance',
         category_group_code: ctx.categoryGroupCode,
       });
+      var candidates = normalizeKakaoResults(docs);
+
+      // 캘린더 일정 위치 확인은 도로명주소로 들어올 때가 많은데, 키워드검색은 이런
+      // 형태를 잘 못 찾는다. 0건이면 주소검색으로 한 번 더 시도한다.
+      if (isLocate && candidates.length === 0) {
+        var stripped = stripBuildingDetail(q);
+        var addrDocs = await kakaoAddressDocs(stripped);
+        candidates = normalizeKakaoAddressResults(addrDocs);
+        console.log('[locate] 키워드검색 0건 -> 주소검색 "' + stripped + '" -> ' + candidates.length + '건');
+      }
+
       return {
-        candidates: normalizeKakaoResults(docs),
+        candidates: candidates,
         destination: q,
         transportMode: ctx.userTransportMode,
         spoken: '',

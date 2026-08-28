@@ -249,6 +249,60 @@ function buildKakaoCategoryUrl(params) {
   return `https://dapi.kakao.com/v2/local/search/category.json?${qs}`;
 }
 
+// 키워드검색(상호명 검색에 최적화)은 "OO로60길 17 6층" 같은 도로명주소를 잘 못 찾는다 —
+// 이럴 때를 위한 카카오 주소검색 API. 위치 확인(inputType==='locate')에서 키워드검색이
+// 0건일 때만 폴백으로 쓴다.
+function buildKakaoAddressUrl(params) {
+  const qs = Object.entries(params)
+    .filter(([, v]) => v !== '' && v != null)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&');
+  return `https://dapi.kakao.com/v2/local/search/address.json?${qs}`;
+}
+
+function normalizeKakaoAddressResults(data) {
+  const docs = data?.documents || [];
+  return docs.map((d, i) => {
+    const road = d.road_address;
+    const addressName = (road && road.address_name) || d.address_name || '';
+    return {
+      index: i + 1,
+      name: (road && road.building_name) || addressName,
+      address: addressName,
+      category: '',
+      lat: parseFloat(d.y),
+      lng: parseFloat(d.x),
+      distanceM: 0,
+      distanceLabel: '',
+      phone: '',
+      placeUrl: '',
+    };
+  });
+}
+
+// 도로명주소 뒤에 붙는 "6층", "502호", "B1", "101동" 같은 건물 내부 상세정보는
+// 주소검색 API와 잘 안 맞아서(주소 자체가 아니므로) 떼어내고 도로명+번지까지만 남긴다.
+function stripBuildingDetail(address) {
+  let s = String(address || '').trim();
+  const suffixPatterns = [
+    /\s*(지하)?\d+\s*층$/,
+    /\s*\d+\s*호$/,
+    /\s*B\d+$/i,
+    /\s*\d+\s*동$/,
+  ];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const re of suffixPatterns) {
+      if (re.test(s)) {
+        s = s.replace(re, '').trim();
+        changed = true;
+      }
+    }
+  }
+  return s;
+}
+
 async function kakaoSearch(url) {
   const apiKey = process.env.KAKAO_REST_API_KEY;
   if (!apiKey) throw new Error('KAKAO_REST_API_KEY가 설정되지 않았습니다.');
@@ -650,7 +704,19 @@ async function runMockPipeline(body) {
       category_group_code: ctx.categoryGroupCode,
     });
     const raw = await kakaoSearch(kakaoUrl);
-    const candidates = normalizeKakaoResults(raw);
+    let candidates = normalizeKakaoResults(raw);
+
+    // 캘린더 일정 위치 확인은 "OO로60길 17 6층" 같은 도로명주소로 들어올 때가 많은데,
+    // 키워드검색(상호명 검색에 최적화)은 이런 형태를 잘 못 찾는다. 0건이면 주소검색으로
+    // 한 번 더 시도한다(건물 내부 상세정보는 떼어내고).
+    if (isLocate && candidates.length === 0) {
+      const stripped = stripBuildingDetail(q);
+      const addrUrl = buildKakaoAddressUrl({ query: stripped, size: '5' });
+      const rawAddr = await kakaoSearch(addrUrl);
+      candidates = normalizeKakaoAddressResults(rawAddr);
+      console.log(`[locate] 키워드검색 0건 -> 주소검색 "${stripped}" -> ${candidates.length}건`);
+    }
+
     return {
       candidates,
       destination: q,
