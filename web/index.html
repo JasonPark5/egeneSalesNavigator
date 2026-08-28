@@ -2452,9 +2452,14 @@ function estimateCarTravelMinutes(originLat, originLng, destLat, destLng) {
 // 이 함수가 끝나면 다시 renderToday()를 호출하는 방식(브리핑 LLM 갱신과 동일한
 // 진행형 개선 패턴).
 async function resolveEventTravelTimes(events) {
-  var origin = currentLocation || { lat: 37.5665, lng: 126.9780 };
   var targets = events.filter(function(e) { return e.travelKnown === false && eventLocationName(e); });
   if (!targets.length) return false;
+
+  // GPS가 아직 안 끝난 상태(currentLocation===null)에서 여기 먼저 도달하면 서울시청
+  // 폴백 좌표로 최초 이동시간이 계산돼버려서, 나중에 "실시간 교통 반영"으로 진짜 위치를
+  // 쓸 때와 항상 값이 달라지는 문제가 있었다 — GPS 확정을 기다린 뒤 계산한다.
+  await (locationReady || Promise.resolve());
+  var origin = currentLocation || { lat: 37.5665, lng: 126.9780 };
 
   await Promise.all(targets.map(async function(ev) {
     try {
