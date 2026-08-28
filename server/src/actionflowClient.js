@@ -49,7 +49,12 @@ async function runActionFlow(flowKey, payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    throw new ActionFlowError(`ActionFlow 호출 실패(${flowKey}): HTTP ${res.status}`);
+    // 상태코드만으로는 원인을 알 수 없다(플로우 비활성화, 인증 게이트웨이 차단, ActionFlow
+    // 자체 에러 등이 전부 4xx/5xx로 나올 수 있음) — 응답 본문을 최대한 실어서 던진다.
+    const detail = await res.text().catch(() => '(응답 본문을 읽을 수 없음)');
+    throw new ActionFlowError(
+      `ActionFlow 호출 실패(${flowKey}): HTTP ${res.status} — ${detail.slice(0, 500)}`
+    );
   }
   return res.json();
 }
