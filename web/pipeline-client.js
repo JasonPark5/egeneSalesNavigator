@@ -817,6 +817,17 @@
       console.log('[search] 반경 검색 0건 -> 전국 무제한 검색 "' + query + '" -> ' + candidates.length + '건');
     }
 
+    // 여기까지 다 0건이면, 발화가 "월드컵북로60길 17 6층"처럼 상호명이 아니라
+    // 도로명주소 그 자체일 가능성이 있다 — 마지막 안전망으로 주소검색을 한 번 더 시도.
+    if (candidates.length === 0) {
+      var strippedAddr = stripBuildingDetail(ctx.text);
+      if (strippedAddr) {
+        var addrDocs = await kakaoAddressDocs(strippedAddr);
+        candidates = normalizeKakaoAddressResults(addrDocs);
+        console.log('[search] 전국 검색도 0건 -> 주소검색 "' + strippedAddr + '" -> ' + candidates.length + '건');
+      }
+    }
+
     var curated = await curateResults({
       candidates: candidates,
       originalText: ctx.text,
