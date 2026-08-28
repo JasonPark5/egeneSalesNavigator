@@ -872,6 +872,20 @@ async function runMockPipeline(body) {
     console.log(`[search] 반경 검색 0건 -> 전국 무제한 검색 "${query}" -> ${candidates.length}건`);
   }
 
+  // 여기까지 다 0건이면, 발화가 "월드컵북로60길 17 6층"처럼 상호명이 아니라 도로명주소
+  // 그 자체일 가능성이 있다 — 키워드검색(상호명 검색에 최적화)은 이런 형태를 잘 못
+  // 찾는다. 마지막 안전망으로 카카오 주소검색 API를 한 번 더 시도한다(위치 확인
+  // (inputType==='locate')에서 쓰는 것과 동일한 폴백).
+  if (candidates.length === 0) {
+    const strippedAddr = stripBuildingDetail(ctx.text);
+    if (strippedAddr) {
+      const addrUrl = buildKakaoAddressUrl({ query: strippedAddr, size: '5' });
+      const rawAddr = await kakaoSearch(addrUrl);
+      candidates = normalizeKakaoAddressResults(rawAddr);
+      console.log(`[search] 전국 검색도 0건 -> 주소검색 "${strippedAddr}" -> ${candidates.length}건`);
+    }
+  }
+
   const curated = await curateResults({
     candidates,
     originalText: ctx.text,
