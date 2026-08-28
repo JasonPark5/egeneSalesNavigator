@@ -44,7 +44,16 @@
       font-family: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
+      /* min-height였을 때는 채팅/검색결과가 쌓일수록 body 자체가 뷰포트보다 커져서
+         페이지 전체(문서)가 스크롤됐다 — 그래서 하단 입력창까지 매번 스크롤해야 했음.
+         height로 뷰포트에 고정해야 .chat-area/.today-scroll의 flex:1+overflow-y:auto가
+         제대로 "그 영역만" 스크롤되고, 입력창은 항상 하단에 고정된다.
+         (100dvh: 모바일에서 주소창 표시/숨김에 따라 실제 보이는 높이가 바뀌는 걸 반영 —
+         100vh만 쓰면 iOS/Android에서 주소창에 하단이 가려질 수 있음. 미지원 브라우저는
+         바로 위 100vh 줄이 그대로 적용됨.) */
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       max-width: 480px;
@@ -338,6 +347,20 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+    .candidates-anchor {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: none;
+      letter-spacing: normal;
+      border-radius: 100px;
+      padding: 4px 10px;
+      margin-bottom: 10px;
+    }
     .candidate-card {
       background: var(--card-bg);
       border: 1.5px solid var(--border);
@@ -439,6 +462,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      row-gap: 8px;
       margin-top: 12px;
     }
     .card-tags {
@@ -490,6 +515,17 @@
       font-size: 14px; transition: all 0.15s;
     }
     .card-icon-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+    /* 카카오맵 링크 — 우리 앱엔 없는 평점/리뷰/사진을 실제로 볼 수 있는 진짜 경로라
+       일부러 카카오 브랜드 색(#FEE500)으로 눈에 띄게 만들어서, 존재를 놓치지 않게 함. */
+    .card-kakao-link {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: #FEE500; color: #191919;
+      border-radius: 100px; padding: 0 10px; height: 30px;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+      text-decoration: none; transition: filter 0.15s, transform 0.12s;
+    }
+    .card-kakao-link:hover { filter: brightness(0.94); transform: scale(1.02); }
+    .card-kakao-link:active { transform: scale(0.98); }
 
     /* ─── Recent searches ─────────────────────── */
     .recent-box { width: 100%; padding: 8px 4px; }
@@ -773,13 +809,13 @@
       border-bottom: 1px solid var(--border);
       padding: 10px 14px;
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 6px;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
       flex-shrink: 0;
     }
     .persistent-chips .chip {
-      font-size: 11px;
-      padding: 7px 2px;
+      font-size: 10px;
+      padding: 7px 1px;
       border-radius: 10px;
     }
     .persistent-chips .chip .chip-icon { font-size: 16px; }
@@ -1388,6 +1424,8 @@
     <div class="chip" onclick="sendChip('OL7')"><span class="chip-icon">⛽</span><span data-i18n="chip.OL7">주유소</span></div>
     <div class="chip" onclick="sendChip('HP8')"><span class="chip-icon">🏥</span><span data-i18n="chip.HP8">병원</span></div>
     <div class="chip" onclick="sendChip('MT1')"><span class="chip-icon">🛒</span><span data-i18n="chip.MT1">마트</span></div>
+    <div class="chip" onclick="sendChip('PO3')"><span class="chip-icon">🏛️</span><span data-i18n="chip.PO3">공공기관</span></div>
+    <div class="chip" onclick="sendChip('AD5')"><span class="chip-icon">🏨</span><span data-i18n="chip.AD5">숙박</span></div>
   </div>
 
   <!-- Chat / results area (scrollable) -->
@@ -1689,7 +1727,10 @@ const I18N = {
     'assistant.listening': '듣고 있어요…',
     'assistant.unsupported': '이 브라우저는 음성 인식을 지원하지 않아요',
     'assistant.fallback': '아직 학습 중인 명령이에요. 검색으로 연결할게요.',
-    'assistant.calendarSoon': '자연어 일정 등록은 Google Calendar 연동 후 지원 예정이에요.',
+    'assistant.calendarNotConnected': 'Google Calendar를 먼저 연동해주세요.',
+    'assistant.eventUnclear': '날짜나 시간을 좀 더 명확히 말씀해주세요. 예: "내일 오후 3시 강남에서 미팅"',
+    'assistant.eventCreated': '"{0}" 일정을 {1}에 등록했어요.',
+    'assistant.eventCreateFailed': '일정을 등록하지 못했어요. 다시 시도해주세요.',
     'assistant.favRouted': '즐겨찾기 탭으로 이동했어요',
     'assistant.nextEventNone': '오늘 남은 일정이 없어요',
     'assistant.nextEventEta': '다음 일정까지 이동시간은 약',
@@ -1728,6 +1769,8 @@ const I18N = {
     'chip.OL7': '주유소',
     'chip.HP8': '병원',
     'chip.MT1': '마트',
+    'chip.PO3': '공공기관',
+    'chip.AD5': '숙박',
     'tip.chips': '위 <strong>칩</strong>은 <strong>현재 위치 {0}km 이내</strong> 추천이에요',
     'tip.elsewhere': '멀리 있는 곳은 <em>마이크</em>나 <em>아래 입력창</em>으로 검색해주세요',
     'recent.title': '🕒 최근 검색',
@@ -1737,11 +1780,13 @@ const I18N = {
     'search.noResultsTts': '검색 결과가 없습니다',
     'search.summary': '"{0}" 검색 결과예요. ({1})',
     'search.foundCount': '{0}곳을 찾았어요',
+    'search.anchorLabel': '{0} 기준 거리',
     'search.error': '오류가 발생했습니다: {0}',
     'search.networkErr': '네트워크 오류가 발생했습니다.',
     'search.respFormat': '응답 형식 오류: {0}',
     'search.summaryTts': '{0}곳을 찾았어요. 가장 가까운 곳은 {1} 거리의 {2}입니다.',
     'search.noname': '이름 없음',
+    'search.viewOnKakaoMap': '카카오맵 ↗',
     'nav.go': '길찾기 →',
     'nav.start': '"{0}" 길찾기를 시작합니다! ({1})',
     'nav.startTts': '{0} 길찾기를 시작합니다',
@@ -1847,7 +1892,10 @@ const I18N = {
     'assistant.listening': 'Listening…',
     'assistant.unsupported': "This browser doesn't support voice recognition",
     'assistant.fallback': "Still learning that one. Let's search instead.",
-    'assistant.calendarSoon': 'Natural-language scheduling ships with Google Calendar integration.',
+    'assistant.calendarNotConnected': 'Please connect Google Calendar first.',
+    'assistant.eventUnclear': 'Could you say the date and time more clearly? e.g. "meeting tomorrow at 3pm in Gangnam"',
+    'assistant.eventCreated': 'Added "{0}" for {1}.',
+    'assistant.eventCreateFailed': 'Could not create the event. Please try again.',
     'assistant.favRouted': 'Switched to Favorites',
     'assistant.nextEventNone': 'No events left today',
     'assistant.nextEventEta': 'About',
@@ -1886,6 +1934,8 @@ const I18N = {
     'chip.OL7': 'Gas',
     'chip.HP8': 'Hospital',
     'chip.MT1': 'Mart',
+    'chip.PO3': 'Public office',
+    'chip.AD5': 'Lodging',
     'tip.chips': 'The <strong>chips</strong> above show places within <strong>{0} km</strong> of you',
     'tip.elsewhere': 'For distant places, use the <em>mic</em> or <em>text input</em> below',
     'recent.title': '🕒 Recent',
@@ -1895,11 +1945,13 @@ const I18N = {
     'search.noResultsTts': 'No results found',
     'search.summary': 'Results for "{0}". ({1})',
     'search.foundCount': 'Found {0} places',
+    'search.anchorLabel': 'distance from {0}',
     'search.error': 'Error: {0}',
     'search.networkErr': 'Network error.',
     'search.respFormat': 'Response format error: {0}',
     'search.summaryTts': 'Found {0} places. The nearest is {2}, {1} away.',
     'search.noname': 'Unnamed',
+    'search.viewOnKakaoMap': 'Kakao Map ↗',
     'nav.go': 'Navigate →',
     'nav.start': 'Starting navigation to "{0}"! ({1})',
     'nav.startTts': 'Starting navigation to {0}',
@@ -2400,9 +2452,14 @@ function estimateCarTravelMinutes(originLat, originLng, destLat, destLng) {
 // 이 함수가 끝나면 다시 renderToday()를 호출하는 방식(브리핑 LLM 갱신과 동일한
 // 진행형 개선 패턴).
 async function resolveEventTravelTimes(events) {
-  var origin = currentLocation || { lat: 37.5665, lng: 126.9780 };
   var targets = events.filter(function(e) { return e.travelKnown === false && eventLocationName(e); });
   if (!targets.length) return false;
+
+  // GPS가 아직 안 끝난 상태(currentLocation===null)에서 여기 먼저 도달하면 서울시청
+  // 폴백 좌표로 최초 이동시간이 계산돼버려서, 나중에 "실시간 교통 반영"으로 진짜 위치를
+  // 쓸 때와 항상 값이 달라지는 문제가 있었다 — GPS 확정을 기다린 뒤 계산한다.
+  await (locationReady || Promise.resolve());
+  var origin = currentLocation || { lat: 37.5665, lng: 126.9780 };
 
   await Promise.all(targets.map(async function(ev) {
     try {
@@ -3054,10 +3111,11 @@ function handleAssistantCommand(text) {
     return;
   }
 
-  if ((q.includes('일정') || q.includes('미팅') || q.includes('약속') || q.includes('meeting') || q.includes('schedule')) &&
+  if ((q.includes('일정') || q.includes('미팅') || q.includes('약속') || q.includes('회식') || q.includes('행사') ||
+       q.includes('meeting') || q.includes('schedule') || q.includes('event')) &&
       (q.includes('잡아') || q.includes('등록') || q.includes('예약') || q.includes('book'))) {
     closeAssistant();
-    showToast(t('assistant.calendarSoon'));
+    createEventFromVoice(text);
     return;
   }
 
@@ -3075,6 +3133,107 @@ function handleAssistantCommand(text) {
   closeAssistant();
   switchTab('search');
   sendText(text, '', 'voice');
+}
+
+var WEEKDAY_NAMES = {
+  ko: ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'],
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+};
+function pad2(n) { return ('0' + n).slice(-2); }
+
+// 음성 발화("내일 오후 3시 강남에서 김이사님 미팅")를 제목/날짜/시간으로 해석해서
+// Google Calendar에 실제로 등록한다. 상대 날짜("내일", "다음주 화요일") 계산이
+// 서버 시간대로 틀어지지 않도록, 오늘 날짜/요일/현재시각은 서버가 아니라 이 브라우저의
+// 실제 로컬 시각으로 계산해서 넘긴다.
+async function createEventFromVoice(text) {
+  if (!calendarConnected || !googleAccessToken) {
+    showToast(t('assistant.calendarNotConnected'));
+    speak(t('assistant.calendarNotConnected'));
+    return;
+  }
+
+  var now = new Date();
+  var weekdayNames = WEEKDAY_NAMES[currentLang] || WEEKDAY_NAMES.ko;
+  var payload = {
+    inputType: 'create-event',
+    text: text,
+    lang: currentLang,
+    todayDate: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()),
+    todayWeekday: weekdayNames[now.getDay()],
+    nowTime: pad2(now.getHours()) + ':' + pad2(now.getMinutes()),
+    llmProvider: CONFIG.llmProvider || undefined,
+    llmApiKey: CONFIG.llmApiKey || undefined,
+  };
+
+  var data;
+  try {
+    if (shouldUseClientPipeline()) {
+      data = await window.runClientPipeline(payload);
+    } else {
+      var res = await fetch(CONFIG.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      data = await res.json();
+    }
+  } catch (err) {
+    console.error('[assistant] 일정 해석 실패:', err);
+    showToast(t('assistant.eventCreateFailed'));
+    return;
+  }
+
+  if (!data || !data.understood) {
+    var clarify = (data && data.clarification) || t('assistant.eventUnclear');
+    showToast(clarify);
+    speak(clarify);
+    return;
+  }
+
+  try {
+    var startDate = new Date(data.date + 'T' + data.startTime + ':00');
+    if (isNaN(startDate.getTime())) throw new Error('잘못된 날짜/시간: ' + data.date + ' ' + data.startTime);
+    var endDate = new Date(startDate.getTime() + (data.durationMinutes || 60) * 60000);
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var eventBody = {
+      summary: data.title,
+      location: data.location || undefined,
+      start: { dateTime: startDate.toISOString(), timeZone: tz },
+      end: { dateTime: endDate.toISOString(), timeZone: tz },
+    };
+
+    var createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventBody),
+    });
+
+    if (createRes.status === 401) {
+      // 액세스 토큰이 그 사이 만료됐을 수 있음 — refresh token으로 조용히 한 번 재시도
+      var refreshed = await fetch('/api/auth/google/access-token')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; });
+      if (refreshed && refreshed.connected && refreshed.accessToken) {
+        googleAccessToken = refreshed.accessToken;
+        createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + googleAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventBody),
+        });
+      }
+    }
+
+    if (!createRes.ok) throw new Error('HTTP ' + createRes.status);
+
+    var dateLabel = data.date + ' ' + data.startTime;
+    var confirmMsg = t('assistant.eventCreated', data.title, dateLabel);
+    showToast(confirmMsg);
+    speak(confirmMsg);
+    refreshTodayFromCalendar(); // 방금 만든 일정이 오늘 것이면 오늘 탭에 바로 반영
+  } catch (err) {
+    console.error('[assistant] 일정 생성 실패:', err);
+    showToast(t('assistant.eventCreateFailed'));
+  }
 }
 
 // ========================
@@ -3199,6 +3358,7 @@ function handleSearchResult(data) {
   var candidates = root.candidates || (Array.isArray(root) ? root : []);
   var mode = root.transportMode || transportMode;
   var dest = root.destination || '';
+  var locationLabel = root.locationLabel || '';
   var spoken = root.spoken || '';
   var topPick = root.topPick || null;
   var clarification = root.clarification || '';
@@ -3217,7 +3377,7 @@ function handleSearchResult(data) {
     speak(t('search.noResultsTts'));
   } else {
     if (dest) addBotMessage(t('search.summary', dest, mode === 'transit' ? t('transport.transit_short') : t('transport.car_short')));
-    showCandidates(candidates, topPick);
+    showCandidates(candidates, topPick, locationLabel);
     // LLM이 추천 멘트를 만들었으면 그걸로, 아니면 fallback
     if (spoken) speak(spoken);
     else speak(t('search.summaryTts', candidates.length, candidates[0].distanceLabel || '', candidates[0].name));
@@ -3311,7 +3471,7 @@ function removeMessage(id) {
   if (el) el.remove();
 }
 
-function showCandidates(candidates, topPick) {
+function showCandidates(candidates, topPick, locationLabel) {
   lastCandidates = candidates;
 
   var wrapper = document.createElement('div');
@@ -3320,7 +3480,11 @@ function showCandidates(candidates, topPick) {
 
   var inner = document.createElement('div');
   inner.className = 'candidates-wrapper';
-  inner.innerHTML = '<div class="candidates-title">' + t('search.foundCount', candidates.length) + '</div>';
+  // locationLabel: 검색 기준점이 현재 GPS가 아니면(즐겨찾기/지명 검색) 카드의 거리가
+  // 그 기준점부터의 거리라는 걸 밝혀준다 — 안 그러면 "1.4km"가 내 위치 기준처럼 보임.
+  // 눈에 잘 띄도록 제목 옆 흐린 텍스트가 아니라 별도 줄의 색상 배지로 표시.
+  inner.innerHTML = '<div class="candidates-title">' + t('search.foundCount', candidates.length) + '</div>' +
+    (locationLabel ? '<div class="candidates-anchor">📍 ' + escHtml(t('search.anchorLabel', locationLabel)) + '</div>' : '');
 
   // Mini map preview
   var mapDiv = null;
@@ -3392,7 +3556,7 @@ function showCandidates(candidates, topPick) {
         '</div>' +
         '<div style="display:flex;gap:6px;align-items:center;">' +
           (place.phone ? '<a class="card-icon-btn" href="tel:' + escAttr(place.phone) + '" title="전화 ' + escAttr(place.phone) + '">📞</a>' : '') +
-          (place.placeUrl ? '<a class="card-icon-btn" href="' + escAttr(place.placeUrl) + '" target="_blank" rel="noopener" title="카카오맵에서 보기">ⓘ</a>' : '') +
+          (place.placeUrl ? '<a class="card-kakao-link" href="' + escAttr(place.placeUrl) + '" target="_blank" rel="noopener" title="카카오맵에서 평점·리뷰·사진 보기">' + t('search.viewOnKakaoMap') + '</a>' : '') +
           '<button class="card-select-btn" onclick="navigateTo(' + place.lat + ',' + place.lng + ',\'' + escAttr(place.name || '') + '\')">' + t('nav.go') + '</button>' +
         '</div>' +
       '</div>';

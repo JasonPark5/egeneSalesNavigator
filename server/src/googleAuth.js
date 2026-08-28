@@ -9,7 +9,12 @@
 // prompt=consent로 refresh_token까지 받아서 서버(HttpOnly 쿠키)에만 보관하고, 필요할 때마다
 // 새 액세스 토큰을 조용히 재발급한다.
 
-const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+// calendar.events는 읽기(모든 캘린더의 일정 보기)와 쓰기(일정 생성/수정)를 함께 준다 —
+// 음성으로 일정을 추가하려면 calendar.readonly로는 안 되고 이 스코프가 필요하다.
+// calendar.app.created처럼 "이 앱이 만든 보조 캘린더"에만 국한된 스코프는 쓰지 않는다 —
+// 그러면 사용자의 실제 기본 캘린더(오늘 브리핑이 읽어오는 바로 그 캘린더)에 일정이
+// 안 들어가고, 우리 앱 자신도 그렇게 만든 일정을 다시 읽어올 방법이 없다.
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';

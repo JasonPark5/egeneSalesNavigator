@@ -45,16 +45,20 @@ const INTENT_TOOL_SCHEMA = {
           "카카오 키워드 검색(장소명/업종명 매칭)에 쓸 짧고 구체적인 검색어. 실제 상호명/업종에 들어갈 법한 단어만 넣으세요 (예: '강남 카페', '이자카야', '고기집'). " +
           "'아이랑 갈만한', '분위기 좋은', '데이트하기 좋은' 같은 동반자/분위기/목적 수식어는 query에 넣지 말고 filters에만 넣으세요 — " +
           "그런 수식어를 query에 그대로 넣으면 카카오 검색에서 매칭되는 장소가 없어 결과가 0건이 됩니다. " +
+          "locationHint에 넣은 지역/랜드마크명(예: '미사역', '홍대')도 query에서 반드시 빼세요 — " +
+          "'미사역 주변 맛집'이면 query='맛집'(또는 구체 상호가 없으면 비워두고 categoryGroupCode만), locationHint='미사역'로 나눠 담으세요. " +
           "구체적인 상호/메뉴가 없으면 categoryGroupCode만으로 찾도록 query는 해당 업종의 일반명사(예: '음식점', '카페')로 짧게 두세요.",
       },
       categoryGroupCode: {
         type: 'string',
-        enum: ['', 'FD6', 'CE7', 'CS2', 'PM9', 'SW8', 'PK6', 'BK9', 'OL7', 'HP8', 'MT1'],
+        enum: ['', 'FD6', 'CE7', 'CS2', 'PM9', 'SW8', 'PK6', 'BK9', 'OL7', 'HP8', 'MT1', 'AD5', 'AT4', 'CT1', 'PO3', 'AC5', 'SC4', 'PS3', 'AG2'],
         description:
           '요청이 아래 업종 중 하나에 해당하면 query에 구체적인 상호/메뉴가 있어도 항상 같이 채우세요 ' +
           '(카카오 키워드 검색이 0건일 때 이 값으로 업종 기준 재검색하는 안전망으로도 쓰입니다): ' +
           "FD6=음식점/맛집/밥집/식당, CE7=카페, CS2=편의점, PM9=약국, SW8=지하철역, PK6=주차장, " +
-          'BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트. 해당 없으면 빈 문자열.',
+          'BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트, AD5=숙박(호텔/모텔/펜션/게스트하우스), ' +
+          'AT4=관광명소, CT1=문화시설(영화관/미술관/박물관/공연장), PO3=공공기관(주민센터/구청/우체국/경찰서), ' +
+          'AC5=학원, SC4=학교, PS3=어린이집/유치원, AG2=부동산/중개업소. 해당 없으면 빈 문자열.',
       },
       transportMode: {
         type: 'string',
@@ -63,7 +67,15 @@ const INTENT_TOOL_SCHEMA = {
           "발화에 이동수단이 명시되면(예: '대중교통으로', '차 타고', '걸어서') 그 값을 반영. " +
           "명시되지 않았으면 컨텍스트의 '이동수단 기본' 값을 그대로 사용 (임의로 바꾸지 말 것).",
       },
-      originHint: { type: 'string', description: "'현재위치' 또는 즐겨찾기 별칭" },
+      originHint: { type: 'string', description: "'현재위치' 또는 즐겨찾기 별칭 (locationHint와 동시에 채우지 말 것)" },
+      locationHint: {
+        type: 'string',
+        description:
+          "발화에 특정 지역/역/동네/랜드마크명이 검색 기준 위치로 언급되면(예: '미사역', '홍대', '강남역', '판교') 그 이름만 넣으세요 — " +
+          "'~주변', '~근처', '~에서'처럼 다른 걸 찾기 위한 기준 위치로 쓰인 경우입니다. " +
+          "즐겨찾기 별칭(집/회사 등)은 여기 넣지 말고 originHint에 넣으세요 — locationHint는 즐겨찾기에 없는 임의의 지명 전용입니다. " +
+          "명시적인 지역 언급이 없으면(예: '카페 찾아줘') 빈 문자열로 두세요.",
+      },
       destinationFavoriteName: {
         type: 'string',
         description: 'intent가 navigate_favorite일 때만 채움. search일 때는 항상 빈 문자열.',
@@ -72,7 +84,7 @@ const INTENT_TOOL_SCHEMA = {
       spoken: { type: 'string' },
       clarification: { type: 'string' },
     },
-    required: ['intent', 'query', 'transportMode', 'originHint', 'filters', 'spoken', 'clarification'],
+    required: ['intent', 'query', 'transportMode', 'originHint', 'locationHint', 'filters', 'spoken', 'clarification'],
   },
 };
 
@@ -83,6 +95,7 @@ function defaultIntent(ctx) {
     categoryGroupCode: ctx.categoryGroupCode || '',
     transportMode: ctx.userTransportMode,
     originHint: '현재위치',
+    locationHint: '',
     destinationFavoriteName: '',
     filters: [],
     spoken: '',
@@ -185,6 +198,14 @@ async function resolveIntent(ctx) {
     "즐겨찾기 별칭(집, 회사 등)이 발화에서 목적지 자체로 쓰이면(예: '집으로 가자', '회사 가는 길') intent='navigate_favorite'이고 destinationFavoriteName에 그 별칭을 넣으세요. " +
     "즐겨찾기 별칭이 검색 기준 위치로만 쓰이면(예: '집 근처 편의점', '회사 주변 카페') intent='search'이고 originHint에만 넣으세요 (destinationFavoriteName은 비움). " +
     "originHint/destinationFavoriteName에 즐겨찾기를 넣을 때는 '# 즐겨찾기' 목록에 있는 alias 값을 토씨 하나 안 틀리고 그대로 복사해서 넣으세요 (예: 목록에 alias:'집'이면 '집근처'/'우리집'이 아니라 정확히 '집'만). " +
+    "즐겨찾기가 아닌 임의의 지역/역/동네/랜드마크명이 검색 기준 위치로 쓰이면(예: '미사역 주변 맛집', '홍대에서 혼술', '판교역 근처 카페') " +
+    "locationHint에 그 지명만 넣으세요(originHint는 '현재위치'로 둠). 이때 query에는 그 지명을 절대 포함하지 마세요 — " +
+    "예: '미사역 주변 맛집'은 locationHint='미사역', query='맛집'(또는 categoryGroupCode=FD6만 채우고 query는 비움)으로 분리하세요. " +
+    "지명 없이 그냥 '카페 찾아줘'처럼 현재 위치 기준이면 locationHint는 비워두세요. " +
+    "발화가 지역/역/동네/랜드마크명 단독으로만 이루어져 있으면(예: '미사역', '강남역', '홍대') 그 이름 자체가 검색 대상입니다 — " +
+    "query에 그 이름을 그대로 넣고 categoryGroupCode와 locationHint는 반드시 빈 문자열로 두세요(다른 걸 찾는 기준 위치가 아니라 그 자체가 목적지이므로). " +
+    "'# 최근 검색'은 '거기', '그 근처', '아까 거기서' 처럼 지금 발화만으로는 뜻이 불완전할 때만 참고하고, " +
+    "지금 발화가 그 자체로 완결된 지명/요청이면 최근 검색이 다른 업종이었더라도 그 이력으로 categoryGroupCode를 끌어오지 마세요. " +
     "이동수단(transportMode)은 발화에 명시적으로 언급된 경우에만(예: '대중교통으로', '차 타고') 그 값으로 바꾸고, 언급이 없으면 컨텍스트의 '이동수단 기본' 값을 절대 임의로 바꾸지 말고 그대로 유지하세요. " +
     "query는 실제 상호명/업종에 매칭될 짧은 검색어만 넣고, '아이랑 갈만한' 같은 동반자/분위기/목적 수식어는 query에서 빼서 filters에 넣으세요 (query에 그대로 넣으면 검색결과 0건이 됩니다). " +
     "모호하면 clarification에 짧은 질문을 넣고 intent='ambiguous'. " +
@@ -359,7 +380,37 @@ const CATEGORY_KEYWORDS = [
   ['OL7', ['주유소', '충전소']],
   ['HP8', ['병원', '의원', '치과', '한의원']],
   ['MT1', ['대형마트', '이마트', '홈플러스', '롯데마트']],
+  ['AD5', ['호텔', '모텔', '펜션', '게스트하우스', '리조트', '숙소']],
+  ['AT4', ['관광지', '관광명소', '전망대', '유적지']],
+  ['CT1', ['영화관', '극장', '미술관', '박물관', '공연장', '전시관']],
+  ['PO3', ['주민센터', '구청', '시청', '동사무소', '우체국', '경찰서', '소방서']],
+  ['AC5', ['학원']],
+  ['SC4', ['학교', '초등학교', '중학교', '고등학교', '대학교']],
+  ['PS3', ['어린이집', '유치원']],
+  ['AG2', ['부동산', '공인중개사']],
 ];
+
+// 발화에 나온 지역/역/동네/랜드마크명(예: '미사역', '홍대')을 좌표로 변환한다. 캘린더 일정
+// 위치 확인(inputType==='locate')과 똑같은 방식 — 반경 제한 없이 정확도순 — 인데, 그 흐름을
+// 재사용하지 않고 별도 함수로 둔 건 여기는 항상 카카오 REST만 쓰고(로컬 검색 결과일 필요
+// 없음) 실패해도 조용히 null을 반환해 현재 GPS로 자연스럽게 폴백해야 하기 때문.
+// TODO(2단계): 후보가 여러 곳으로 갈릴 만큼 모호하면(같은 이름의 다른 지역 등) 1순위를
+// 바로 쓰지 말고 clarification으로 사용자에게 후보를 되물어야 하는데, 지금은 카카오
+// 정확도순 1위를 그대로 신뢰하는 단순한 버전이다.
+async function resolveNamedLocation(hint) {
+  const clean = String(hint || '').trim();
+  if (!clean) return null;
+  try {
+    const kakaoUrl = buildKakaoUrl({ query: clean, size: '5', sort: 'accuracy' });
+    const raw = await kakaoSearch(kakaoUrl);
+    const candidates = normalizeKakaoResults(raw);
+    if (!candidates.length) return null;
+    return { lat: candidates[0].lat, lng: candidates[0].lng, name: candidates[0].name };
+  } catch (err) {
+    console.error(`[search] locationHint "${clean}" 확인 실패:`, err);
+    return null;
+  }
+}
 function inferCategoryFromText(text) {
   const found = CATEGORY_KEYWORDS.find(([, keywords]) => keywords.some((kw) => text.includes(kw)));
   return found ? found[0] : '';
@@ -427,6 +478,103 @@ async function generateBriefing(body) {
   }
 }
 
+// ─── 음성으로 일정 추가 (자연어 → Google Calendar 일정 필드) ──────────────
+// 실제 Google Calendar 생성 API 호출은 여기서 안 한다 — 이미 브라우저가 갖고 있는
+// 액세스 토큰으로 프론트가 직접 호출한다(오늘 일정 조회와 동일한 방식, CORS 문제 없음).
+// 여기는 발화를 제목/날짜/시간으로 "해석"만 한다. 상대 날짜("내일", "다음주 화요일")를
+// 서버가 잘못된 타임존으로 계산하는 걸 막기 위해, 오늘 날짜/요일/현재시각은 서버 시계가
+// 아니라 프론트(사용자의 실제 로컬 시간)가 계산해서 todayDate/todayWeekday/nowTime으로
+// 넘겨준 값을 기준점으로 쓴다.
+const CREATE_EVENT_TOOL_SCHEMA = {
+  name: 'create_event',
+  description: '사용자 발화에서 캘린더 일정 생성에 필요한 정보(제목/날짜/시간/장소)를 추출합니다.',
+  parameters: {
+    type: 'object',
+    properties: {
+      understood: {
+        type: 'boolean',
+        description:
+          '제목과 날짜, 시작 시각을 발화에서 확신 있게 알아냈으면 true. ' +
+          '날짜나 시간이 아예 없거나("일정 잡아줘"처럼) 너무 모호하면 false — ' +
+          '이 경우 사실이 아닌 값을 지어내서 채우지 말고 false로 두세요.',
+      },
+      title: {
+        type: 'string',
+        description: '일정 제목(예: "김이사님 미팅", "OO팀 회식"). 명시적인 제목이 없으면 "일정".',
+      },
+      date: {
+        type: 'string',
+        description:
+          'YYYY-MM-DD. 상대 날짜 표현("내일", "모레", "다음주 화요일", "이번주 금요일")은 ' +
+          '컨텍스트의 오늘 날짜/요일을 기준으로 계산하세요. 날짜 언급이 전혀 없으면 오늘 날짜를 쓰세요.',
+      },
+      startTime: {
+        type: 'string',
+        description:
+          'HH:MM 24시간제. "오후 3시"→15:00, "3시 반"→15:30, "아침 9시"→09:00. ' +
+          '오전/오후 명시가 없는 애매한 시각(예: 그냥 "7시")은 업무 맥락상 자연스러운 쪽으로 판단하되, ' +
+          '너무 불확실하면 understood=false로 두세요.',
+      },
+      durationMinutes: {
+        type: 'integer',
+        description: '일정 길이(분). "1시간", "30분" 등 언급되면 반영, 없으면 60.',
+      },
+      location: { type: 'string', description: '장소 언급이 있으면 그대로, 없으면 빈 문자열.' },
+      clarification: {
+        type: 'string',
+        description: 'understood가 false일 때, 무엇이 불명확한지 짧게 되물을 질문 (예: "언제로 잡아드릴까요?").',
+      },
+    },
+    required: ['understood', 'title', 'date', 'startTime', 'durationMinutes', 'location', 'clarification'],
+  },
+};
+
+async function parseEventFromText(body) {
+  const text = (body.text || '').trim();
+  const lang = (body.lang || 'ko').trim();
+  const llmOverride = body.llmProvider ? { provider: body.llmProvider, apiKey: body.llmApiKey } : null;
+  const fallback = { understood: false, clarification: lang === 'en' ? 'Sorry, I could not understand that.' : '무슨 일정인지 잘 못 알아들었어요.' };
+
+  if (!text) return fallback;
+
+  const langDirective =
+    lang === 'en'
+      ? "IMPORTANT: The user's UI language is English. Write title/clarification in English only, even though instructions below are in Korean. "
+      : '중요: 사용자 UI 언어는 한국어입니다. title, clarification을 한국어로 작성하세요. ';
+  const systemPrompt =
+    langDirective +
+    '당신은 음성으로 캘린더 일정을 추가하는 어시스턴트입니다. 발화에서 일정 제목/날짜/시작시각/길이/장소를 추출하세요. ' +
+    '날짜·시간 계산의 기준점은 아래 "# 현재 시각" 컨텍스트입니다(서버 시각이 아니라 사용자의 실제 로컬 시각). ' +
+    '확실하지 않은 값을 지어내지 말고, 제목/날짜/시각 중 하나라도 불확실하면 understood=false로 정직하게 표시하세요. ' +
+    langDirective;
+  const userMessage = [
+    `# 사용자 발화\n"${text}"`,
+    `# 현재 시각\n- 오늘 날짜: ${body.todayDate || ''}\n- 오늘 요일: ${body.todayWeekday || ''}\n- 지금 시각: ${body.nowTime || ''}`,
+  ].join('\n\n');
+
+  try {
+    const args = await callLLMTool({
+      systemPrompt,
+      userMessage,
+      toolSchema: CREATE_EVENT_TOOL_SCHEMA,
+      toolChoiceName: 'create_event',
+      override: llmOverride,
+    });
+    if (!args) return fallback;
+    return {
+      understood: !!args.understood,
+      title: args.title || '일정',
+      date: args.date || body.todayDate || '',
+      startTime: args.startTime || '',
+      durationMinutes: parseInt(args.durationMinutes, 10) || 60,
+      location: args.location || '',
+      clarification: args.clarification || '',
+    };
+  } catch (err) {
+    return { understood: false, clarification: String(err.message || err), _llmError: String(err.message || err) };
+  }
+}
+
 // ─── 자동차 이동시간 (NAVER Directions 5) ────────────────────────────
 // 이 API는 브라우저에서 직접 fetch/XHR로 호출하면 CORS로 막힌다 — NCP 포럼에도
 // 동일 증상 리포트가 있고, 실제로 확인함(TypeError: Failed to fetch). 그래서
@@ -476,6 +624,9 @@ async function runMockPipeline(body) {
   if ((body.inputType || '') === 'briefing') {
     return generateBriefing(body);
   }
+  if ((body.inputType || '') === 'create-event') {
+    return parseEventFromText(body);
+  }
   if ((body.inputType || '') === 'travel-time') {
     try {
       const travelMinutes = await fetchNaverDrivingMinutes(body);
@@ -517,7 +668,8 @@ async function runMockPipeline(body) {
   }
   console.log(
     `[search] "${ctx.text}" -> intent=${intent.intent} query="${intent.query}" category=${intent.categoryGroupCode || '(none)'} ` +
-      `transportMode=${intent.transportMode} originHint=${intent.originHint} dest=${intent.destinationFavoriteName || '(none)'}` +
+      `transportMode=${intent.transportMode} originHint=${intent.originHint} locationHint=${intent.locationHint || '(none)'} ` +
+      `dest=${intent.destinationFavoriteName || '(none)'}` +
       (intent._llmError ? ` llmError=${intent._llmError}` : '')
   );
 
@@ -561,11 +713,18 @@ async function runMockPipeline(body) {
 
   let searchLat = ctx.userLat;
   let searchLng = ctx.userLng;
+  // 검색 기준점이 현재 GPS가 아닌 다른 곳(즐겨찾기/지명)으로 바뀌면, 카카오가 돌려주는
+  // distanceLabel도 그 기준점부터의 거리로 바뀐다 — "1.4km"만 보면 내 위치 기준처럼
+  // 보이기 쉬워서, 그 기준점 이름을 anchorLabel로 같이 넘겨 프론트에서 "OO 기준"으로
+  // 표시하게 한다(카드 문구 자체를 현재위치 기준으로 바꾸는 대신, 기준점을 명시하는 방식 — 그래야
+  // "여의도 안에서 어디가 더 중심인지" 비교하는 용도도 그대로 유지됨).
+  let anchorLabel = '';
   if (intent.originHint && intent.originHint !== '현재위치') {
     const origin = findFavorite(ctx.favorites, intent.originHint);
     if (origin) {
       searchLat = origin.lat;
       searchLng = origin.lng;
+      anchorLabel = origin.alias || origin.name;
       console.log(`[search] 기준 위치 = 즐겨찾기 "${intent.originHint}" -> (${origin.lat}, ${origin.lng})`);
     } else {
       console.log(
@@ -575,24 +734,50 @@ async function runMockPipeline(body) {
     }
   }
 
-  const query = intent.query || ctx.text;
+  // 즐겨찾기가 아닌 임의 지역/랜드마크명("미사역 주변 맛집"의 "미사역")이 검색 기준 위치로
+  // 쓰인 경우 — 예전엔 이런 지명이 검색 기준으로 반영될 방법이 없어서 항상 현재 GPS
+  // 근처만 뒤졌다(예: "미사역 주변 맛집"이 현재 위치 근처 맛집 검색이 되어버림).
+  if (intent.locationHint) {
+    const resolved = await resolveNamedLocation(intent.locationHint);
+    if (resolved) {
+      searchLat = resolved.lat;
+      searchLng = resolved.lng;
+      anchorLabel = resolved.name;
+      console.log(`[search] 기준 위치 = "${intent.locationHint}" -> (${resolved.lat}, ${resolved.lng}) [${resolved.name}]`);
+    } else {
+      console.log(`[search] 기준 위치 "${intent.locationHint}" 확인 실패 -> 현재 GPS로 대체`);
+    }
+  }
+
+  // query가 비어서 ctx.text(원문 발화 전체)로 대체될 때, locationHint가 있으면 그 지명이
+  // 다시 검색어에 섞여 들어간다(애초에 이 문제를 풀려고 만든 기능인데 폴백에서 되풀이됨).
+  // 그래서 locationHint가 있을 땐 원문 대신 빈 문자열로 둬서 categoryGroupCode 기반
+  // 카테고리 검색 폴백(아래)에 맡긴다.
+  const query = intent.query || (intent.locationHint ? '' : ctx.text);
   // 정확도순 검색이라도 반경은 걸어둠 — 안 그러면 이름만 비슷한 수백km 밖 결과가 섞여 들어옴.
   // 자동차는 카카오 로컬 API의 radius 파라미터 최대값(20km)까지 허용, 그 외(대중교통/도보)는
   // 사용자가 설정한 칩 검색 반경을 그대로 씀.
   const CAR_SEARCH_RADIUS_M = 20000;
   const searchRadius = intent.transportMode === 'car' ? CAR_SEARCH_RADIUS_M : ctx.userChipRadius;
-  const kakaoUrl = buildKakaoUrl({
-    query,
-    x: searchLng,
-    y: searchLat,
-    size: '10',
-    radius: String(searchRadius),
-    sort: 'accuracy',
-    category_group_code: intent.categoryGroupCode,
-  });
-  const raw = await kakaoSearch(kakaoUrl);
-  let candidates = normalizeKakaoResults(raw);
-  console.log(`[search] 카카오 검색 "${query}" (반경 ${searchRadius}m) -> ${candidates.length}건`);
+
+  // 카카오 키워드검색(keyword.json)은 query가 필수 파라미터라 빈 문자열로는 호출 못 함
+  // (locationHint만 있고 구체적인 검색어가 없는 경우 — 예: "미사역 주변 맛집"에서 categoryGroupCode
+  // =FD6만으로 충분한 케이스). 그럴 땐 키워드 검색을 건너뛰고 바로 카테고리 검색으로 간다.
+  let candidates = [];
+  if (query) {
+    const kakaoUrl = buildKakaoUrl({
+      query,
+      x: searchLng,
+      y: searchLat,
+      size: '10',
+      radius: String(searchRadius),
+      sort: 'accuracy',
+      category_group_code: intent.categoryGroupCode,
+    });
+    const raw = await kakaoSearch(kakaoUrl);
+    candidates = normalizeKakaoResults(raw);
+    console.log(`[search] 카카오 검색 "${query}" (반경 ${searchRadius}m) -> ${candidates.length}건`);
+  }
 
   if (candidates.length === 0 && intent.categoryGroupCode) {
     const categoryUrl = buildKakaoCategoryUrl({
@@ -605,7 +790,20 @@ async function runMockPipeline(body) {
     });
     const rawByCategory = await kakaoSearch(categoryUrl);
     candidates = normalizeKakaoResults(rawByCategory);
-    console.log(`[search] 키워드 0건 -> 카테고리(${intent.categoryGroupCode}) 검색 폴백 -> ${candidates.length}건`);
+    console.log(
+      `[search] ${query ? '키워드 0건 -> ' : '검색어 없음 -> '}카테고리(${intent.categoryGroupCode}) 검색 -> ${candidates.length}건`
+    );
+  }
+
+  // 반경 검색(+카테고리 폴백)까지 다 0건이면, 발화 자체가 "미사역"처럼 지역/역/랜드마크명
+  // 그 자체(business 이름이 아니라)일 가능성이 있다 — 그런 경우 반경 제한이 오히려 방해가
+  // 된다(현재 위치에서 멀리 떨어진 곳을 찾는 거니까). 마지막 안전망으로 반경 없이
+  // 전국 정확도순으로 한 번 더 시도한다.
+  if (candidates.length === 0 && query) {
+    const nationalUrl = buildKakaoUrl({ query, size: '10', sort: 'accuracy' });
+    const rawNational = await kakaoSearch(nationalUrl);
+    candidates = normalizeKakaoResults(rawNational);
+    console.log(`[search] 반경 검색 0건 -> 전국 무제한 검색 "${query}" -> ${candidates.length}건`);
   }
 
   const curated = await curateResults({
@@ -619,7 +817,13 @@ async function runMockPipeline(body) {
 
   return {
     candidates: curated.candidates,
-    destination: query,
+    // "OO 검색 결과예요" 메시지에 쓰이는 값이라, LLM이 정제한 query(예: "양꼬치")가 아니라
+    // 사용자가 실제로 말한 문장(예: "가디역 양꼬치") 그대로 보여준다 — locationHint로
+    // 지명이 query에서 빠진 경우에도 자기가 뭘 물어봤는지 그대로 보이는 게 자연스럽다.
+    destination: ctx.text || query || intent.locationHint,
+    // 검색 기준점이 현재 GPS가 아니면(즐겨찾기/지명) 그 이름 — 카드의 거리(distanceLabel)가
+    // 이 기준점부터의 거리라는 걸 프론트에서 "OO 기준"으로 표시하는 데 씀.
+    locationLabel: anchorLabel,
     transportMode: intent.transportMode,
     spoken: curated.spoken,
     topPick: curated.topPick,

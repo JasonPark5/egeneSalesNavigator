@@ -28,10 +28,40 @@ export default {
     // pipeline.js는 process.env.OPENAI_API_KEY 등을 그대로 참조하는 코드다.
     // nodejs_compat 플래그가 process 전역 자체는 만들어주지만 Worker 시크릿/환경변수를
     // process.env에 자동으로 채워주지는 않으므로, 요청마다 이 Worker의 env(=대시보드에
-    // 등록한 시크릿/변수)를 process.env에 직접 연결해준다. process.env 자체를 통째로
-    // 재할당하면 실제 workerd 런타임에서 재할당이 막혀 있을 가능성이 있어, 기존 객체를
-    // 그대로 두고 속성만 덮어쓰는 Object.assign을 쓴다(더 안전한 방식).
-    Object.assign(process.env, env);
+    // 등록한 시크릿/변수)를 process.env에 직접 연결해준다.
+    //
+    // Object.assign(process.env, env)와 개별 속성 대입(process.env[key] = env[key]) 둘 다
+    // 실제 배포에서 안 먹히는 걸 겪었다(Google Calendar처럼 env에서 직접 읽는 값은 되는데,
+    // process.env를 거치는 값은 계속 "설정 안 됨"으로 나옴) — 정확한 원인이 non-enumerable
+    // 속성 복사 실패인지, process.env 자체가 쓰기를 막고 있는지 로컬 Node로는 검증이
+    // 안 돼서, "쓰기"에 아예 의존하지 않는 방식으로 바꾼다: process.env 자체를 한 번만
+    // Proxy로 감싸서, 매 요청 들어오는 env를 그대로 읽기만 하도록.
+    if (!globalThis.__envProxyInstalled) {
+      try {
+        Object.defineProperty(process, 'env', {
+          configurable: true,
+          get() {
+            return new Proxy(globalThis.__currentWorkerEnv || {}, {
+              get(target, prop) {
+                return typeof prop === 'string' ? target[prop] : undefined;
+              },
+              has(target, prop) {
+                return typeof prop === 'string' && prop in target;
+              },
+            });
+          },
+        });
+      } catch (err) {
+        // defineProperty 자체가 막혀 있는 런타임이면 예전 방식(속성 복사)으로라도 폴백 —
+        // 최소한 요청 자체가 통째로 죽는 것보다는 낫다.
+        console.error('[env-bridge] process.env를 Proxy로 못 바꿈, Object.assign으로 폴백: ' + ((err && err.message) || String(err)));
+        for (const key of Object.getOwnPropertyNames(env)) {
+          try { process.env[key] = env[key]; } catch (e) { /* 이것도 안 되면 포기 */ }
+        }
+      }
+      globalThis.__envProxyInstalled = true;
+    }
+    globalThis.__currentWorkerEnv = env;
 
     const url = new URL(request.url);
     const isHttps = url.protocol === 'https:';
