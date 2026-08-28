@@ -3106,7 +3106,8 @@ function handleAssistantCommand(text) {
     return;
   }
 
-  if ((q.includes('일정') || q.includes('미팅') || q.includes('약속') || q.includes('meeting') || q.includes('schedule')) &&
+  if ((q.includes('일정') || q.includes('미팅') || q.includes('약속') || q.includes('회식') || q.includes('행사') ||
+       q.includes('meeting') || q.includes('schedule') || q.includes('event')) &&
       (q.includes('잡아') || q.includes('등록') || q.includes('예약') || q.includes('book'))) {
     closeAssistant();
     createEventFromVoice(text);
