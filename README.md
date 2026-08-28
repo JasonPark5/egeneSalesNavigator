@@ -25,27 +25,72 @@ ActionFlow의 API Trigger 노드는 POST + JSON body를 받고, 플로우 끝에
 
 ```
 브라우저 (web/index.html)
-   │ 음성/텍스트 입력, 현재 위치
-   │ POST http://localhost:4000/api/search
+   │ 음성/텍스트 입력, 현재 위치, 캘린더 연동
+   │ POST http://localhost:4000/api/search  (+ /api/auth/google/*)
    ▼
 로컬 브릿지 서버 (server/)
    │
-   ├─ BACKEND_MODE=actionflow  → 사내 ActionFlow API Trigger 호출 → 응답을 그대로 반환
-   │                              (server/src/actionflowClient.js)
+   ├─ /api/search: body.inputType으로 4개 플로우 중 하나를 고른다 (pickFlowKey)
+   │   ├─ BACKEND_MODE=actionflow → 해당 ActionFlow 플로우의 API Trigger 호출
+   │   │                             (server/src/actionflowClient.js)
+   │   └─ BACKEND_MODE=mock       → ActionFlow 없이 이 서버가 직접 처리
+   │                                 (server/src/pipeline.js, 기존 n8n-workflow.json과 동일 로직)
    │
-   └─ BACKEND_MODE=mock        → ActionFlow 없이 이 서버가 직접
-                                   LLM 의도분석 → 카카오 장소검색 → LLM 결과 큐레이션 수행
-                                   (server/src/pipeline.js, 기존 n8n-workflow.json과 동일 로직)
+   └─ /api/auth/google/*: BACKEND_MODE와 무관하게 항상 이 서버가 직접 처리
+                            (server/src/googleAuth.js — Google 표준 OAuth라 ActionFlow로 옮기지 않음)
    ▼
-{ candidates[], destination, transportMode, spoken, topPick, clarification }
-   ▼
-브라우저: 후보 카드 렌더링 → "길찾기" 클릭 → 네이버지도 앱/웹 딥링크
+브라우저: 후보 카드/브리핑/일정 등록 결과 렌더링
 ```
 
 `mock` 모드는 ActionFlow 플로우를 아직 사내 도구에 구성하기 전에도 프론트엔드를 바로 테스트할 수
-있게 해줍니다(해커톤 데모 최소 안전망). 원래 `n8nMapService/n8n-workflow.json`의 노드 구성을 그대로
-ActionFlow에 옮겨 만든 뒤 `.env`의 `BACKEND_MODE=actionflow`로 바꾸면, 프론트엔드 코드 수정 없이
-전환됩니다.
+있게 해줍니다(해커톤 데모 최소 안전망). `BACKEND_MODE=actionflow`로 바꾸면 프론트엔드 코드 수정
+없이 전환되는데, 지금은 요청 종류(inputType)별로 플로우가 4개로 나뉘어 있습니다 — 각 플로우가
+정확히 어떤 요청을 받고 어떤 JSON을 돌려줘야 하는지는 바로 아래 "ActionFlow 플로우 계약"을
+참고하세요. Google Calendar 연동(OAuth)은 ActionFlow로 옮기는 대상이 아닙니다 — 사내 도구가
+아니라 Google 표준 프로토콜이라 이 서버가 직접 처리합니다.
+
+## ActionFlow 플로우 계약
+
+`BACKEND_MODE=actionflow`일 때 `server/`가 호출하는 4개 플로우입니다. 각 플로우는 ActionFlow의
+API Trigger 노드(POST + JSON body)로 만들고, 마지막 노드(Json Result)에서 아래 "응답" 형태의
+JSON을 그대로 돌려주면 됩니다(n8n의 Webhook + Respond to Webhook과 동일한 동기 방식). 요청
+바디는 프론트엔드가 보낸 것 그대로 전달되므로, 필드 이름은 아래 표와 정확히 일치해야 합니다.
+
+### 1. 장소 검색 — `ACTIONFLOW_SEARCH_URL` (inputType: `text` / `chip` / `locate`)
+
+기존 로직: `server/src/pipeline.js`의 `runMockPipeline()` 중 `text`/`chip`/`locate` 분기
+(`resolveIntent` LLM → Kakao 키워드/카테고리/전국/주소 검색 → `curateResults` LLM. `chip`/`locate`는
+LLM을 건너뛰고 Kakao 검색만 함 — `skipLLM` 플래그로 구분).
+
+- **요청**: `{ text, lat, lng, landmark, transportMode, categoryGroupCode, inputType, chipRadius, lang, favorites[], recentSearches[], userId, llmProvider?, llmApiKey? }`
+- **응답**: `{ candidates: Candidate[], destination, locationLabel?, transportMode, spoken, topPick: {index, reason} | null, clarification }`
+  - `Candidate`: `{ index, name, address, category, lat, lng, distanceM, distanceLabel, phone, placeUrl }`
+
+### 2. 오늘 일정 브리핑 — `ACTIONFLOW_BRIEFING_URL` (inputType: `briefing`)
+
+기존 로직: `generateBriefing()` — LLM 하나만 호출, 외부 API 없음.
+
+- **요청**: `{ inputType: 'briefing', lang, scheduleFacts: { events: [...], tightGapWarnings: [...] }, llmProvider?, llmApiKey? }`
+- **응답**: `{ briefingText }`
+
+### 3. 음성 → 일정 생성 — `ACTIONFLOW_CREATE_EVENT_URL` (inputType: `create-event`)
+
+기존 로직: `parseEventFromText()` — LLM 하나만 호출, 외부 API 없음. 실제 캘린더 등록(POST)은
+ActionFlow가 아니라 프론트엔드가 이 응답을 받은 뒤 Google Calendar API로 직접 한다 — 이 플로우는
+"발화 해석"만 담당.
+
+- **요청**: `{ inputType: 'create-event', text, lang, todayDate, todayWeekday, nowTime, llmProvider?, llmApiKey? }`
+- **응답**: `{ understood: boolean, title, date, startTime, durationMinutes, location, clarification }`
+  - `understood:false`면 나머지 필드는 프론트엔드가 쓰지 않으니 `clarification`(왜 이해 못 했는지)만 채워도 됨.
+
+### 4. 실시간 자동차 이동시간 — `ACTIONFLOW_TRAVEL_TIME_URL` (inputType: `travel-time`)
+
+기존 로직: `fetchNaverDrivingMinutes()` — LLM 없음, Naver Directions 5 API 호출만.
+
+- **요청**: `{ inputType: 'travel-time', originLat, originLng, destLat, destLng }`
+- **응답**: `{ travelMinutes: number, real: true }` 성공 시. 실패 시 `{ travelMinutes: null, real: false, error }`
+  (프론트엔드가 `real:false`면 자동으로 직선거리 추정치로 대체하므로, 실패를 에러로 던지지 말고
+  이 형태로 응답해야 함).
 
 ## 로컬 실행
 
@@ -74,8 +119,14 @@ npm start                 # http://localhost:4000
 
 - `BACKEND_MODE=mock` (기본값): ActionFlow 없이 로컬에서 바로 동작. `LLM_PROVIDER`(gemini/claude),
   해당 API 키, `KAKAO_REST_API_KEY`(developers.kakao.com)가 필요합니다.
-- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. ActionFlow에서 만든 플로우의 API Trigger URI를
-  `ACTIONFLOW_API_URL`에 넣으면 됩니다 (인증이 있다면 `ACTIONFLOW_API_KEY`도).
+- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. 위 "ActionFlow 플로우 계약"대로 만든 4개
+  플로우의 API Trigger URI를 각각 `ACTIONFLOW_SEARCH_URL` / `ACTIONFLOW_BRIEFING_URL` /
+  `ACTIONFLOW_CREATE_EVENT_URL` / `ACTIONFLOW_TRAVEL_TIME_URL`에 넣으면 됩니다
+  (인증이 있다면 `ACTIONFLOW_API_KEY`도, 4개 플로우 공통으로 적용됨).
+- **`GOOGLE_CLIENT_SECRET`**: `BACKEND_MODE`와 무관하게 Google Calendar 연동(오늘 일정 브리핑,
+  음성 일정 등록)을 쓰려면 항상 필요합니다. Google Cloud Console의 OAuth 클라이언트에서
+  "승인된 리디렉션 URI"로 `http://localhost:4000/api/auth/google/callback`을 등록해두세요
+  (포트를 바꿨다면 그 포트로).
 
 ## 저장소 구조
 
