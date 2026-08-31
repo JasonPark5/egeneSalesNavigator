@@ -19,7 +19,8 @@
 3. **Flow 캔버스 안의 액션 아이템**: 등록된 Plugin-API를 실제로 "호출하는 자리". 이 노드를
    클릭하면 (Plugin-API Manager와는 별개로) **"API 설정 > 파라미터"**라는 자체 입력 폼이 있고,
    여기서 Plugin-API가 요구하는 각 input value(query/x/y/...)에 실제 flow 데이터를
-   Smart Component로 연결함 (예: `#{parameter.text}`).
+   Smart Component로 연결함 (예: `#{parameter.body.text}` — POST+JSON body 트리거일 때.
+   자세한 건 2-1번 참고).
 
 **겪었던 실수**: Plugin-API Manager의 params 탭(2번)에 flow 데이터 참조(`#{text}` 등)를
 직접 넣으려고 시도 → 안 먹힘. 대신 **flow 캔버스의 액션 아이템(3번)**에서 연결해야 함.
@@ -31,9 +32,38 @@
 | 위치 | 문법 | 예시 |
 |---|---|---|
 | Plugin-API Manager의 params/header/body (템플릿 정의) | `#{key}` — 이 Plugin-API 자신의 input values 이름 | `#{query}` |
-| Flow 액션 아이템의 파라미터 입력 폼 | `#{parameter.필드명}` — Trigger가 선언한 파라미터 | `#{parameter.text}` |
+| Flow 액션 아이템의 파라미터 입력 폼 (**POST+JSON body 트리거일 때**) | `#{parameter.body.필드명}` — 아래 2-1 참고 | `#{parameter.body.text}` |
 | Code 노드(JavaScript) 안에서 상위 노드 결과 참조 | `model["아이템 이름"]` | `model["KAKAO MAP"]` |
 | Result/End 노드의 JSON 템플릿에서 상위 노드 결과 참조 | `#{아이템 이름.경로.경로}` (dot notation) | `#{KAKAO MAP.meta.same_name.keyword}` |
+
+### 2-1. ⚠️ API Trigger의 "parameter" 목록 vs "요청 본문(Request Body)" — 제일 크게 삽질한 부분
+
+API Trigger 속성 화면에는 두 가지 입력 선언이 따로 있음:
+
+1. **파라미터 목록**(text/lat/lng/... 같은 필드를 하나씩 추가하는 표) — flow 캔버스의 액션
+   아이템에서 `#{parameter.필드명}`(body 없이)로 참조하는, **flat 구조**.
+2. **요청 본문(Request Body)** — 드롭다운에서 `application/json`을 고르고 JSON 스키마를
+   입력하는 칸.
+
+**실제 겪은 문제**: 우리 서버는 `Content-Type: application/json`으로 body를 통째로 POST함.
+- 이 "요청 본문"을 **설정 안 하면(기본값 None)**, 진짜 POST 요청의 body가 아예 파싱이
+  안 됨(활동 로그의 `__body__.contentType`이 `"empty"`로 찍힘) → `parameter.*`가 죄다
+  비어서 → 뒤에서 카카오 호출이 400 남.
+- `application/json`으로 바꾸고 body 스키마를 채워도, **body로 들어온 값은 flat
+  `parameter.필드명`이 아니라 `parameter.body.필드명`처럼 `body` 밑에 중첩되어 들어옴.**
+  즉 flow 액션 아이템에서 `#{parameter.lat}`처럼 참조하고 있었다면 그것도 다 고쳐야 함
+  → `#{parameter.body.lat}`로.
+
+**결론**: POST+JSON body로 호출하는 트리거라면
+- 요청 본문을 반드시 `application/json`으로 설정하고, 실제 우리가 보내는 필드 구조와
+  이름이 같은 JSON을 스키마로 채워둘 것 (예시 값은 빈 문자열/빈 배열이어도 됨).
+- flow 안에서 그 값들을 쓸 땐 전부 **`#{parameter.body.필드명}`**로 참조할 것.
+- 맨 위 "파라미터 목록"(flat)은 **Simulation의 입력값 모달을 편하게 쓰려고 만드는 것일
+  뿐, 실제 POST 요청에서는 쓰이지 않는다.** (Simulation은 이 모달 값을 body 파싱 없이
+  바로 꽂아넣는 방식이라 항상 성공하는 것처럼 보여서, 진짜 버그(본문 파싱 문제)를
+  숨기고 있었음 — 아래 10번 디버깅 체크리스트에도 반영.) 필요 없으면 지워도 되지만,
+  지우면 Simulation 모달로 편하게 값 채우던 걸 못 하고 매번 Request Body의 JSON
+  텍스트를 직접 고쳐야 함.
 
 ## 3. 한글(비-ASCII) 인코딩 문제 — 여러 겹의 함정
 
@@ -130,7 +160,7 @@ Result 노드의 Response(JSON) 템플릿은 **엄격한 JSON 문법**을 지켜
 {
   "candidates": #{Code1},
   "destination": "#{KAKAO MAP.meta.same_name.keyword}",
-  "transportMode": "#{parameter.transportMode}",
+  "transportMode": "#{parameter.body.transportMode}",
   "spoken": "",
   "topPick": null,
   "clarification": ""
@@ -174,3 +204,9 @@ Result 노드의 Response(JSON) 템플릿은 **엄격한 JSON 문법**을 지켜
 4. Code 노드 결과가 이상하면 → 일단 원본을 그대로 return해서 실제 데이터 구조부터 확인
    (단, 원본 통째 반환 자체가 에러날 수 있음 — 7번 참고).
 5. 최종 Result가 이상하면 → JSON 템플릿의 따옴표부터 의심.
+6. **Simulation은 되는데 진짜 앱(localhost)에서 호출하면 안 되면** → 거의 항상 "요청
+   본문(Request Body)" 문제. Simulation은 입력값 모달의 값을 body 파싱 없이 바로
+   `parameter.*`에 꽂아넣기 때문에, 진짜 POST 요청의 body 파싱 문제를 재현하지 못함
+   (2-1번 참고). Activity Log의 `__body__.contentType`이 `"empty"`면 body가 아예 안
+   읽힌 것 — 요청 본문을 `application/json`으로 설정하고 `#{parameter.body.필드명}`으로
+   참조하는지부터 확인.
