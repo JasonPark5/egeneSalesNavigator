@@ -810,14 +810,27 @@ async function runMockPipeline(body) {
   // 방금 정확히 찾은 즐겨찾기 좌표가 무관한 동명 장소(카카오 전국 검색 1위)로 덮어써지는
   // 버그가 있었다("회사" 검색 시 제주도의 상호명에 "회사"가 들어간 업체로 잘못 이동한 사례).
   if (!originResolved && intent.locationHint) {
-    const resolved = await resolveNamedLocation(intent.locationHint);
-    if (resolved) {
-      searchLat = resolved.lat;
-      searchLng = resolved.lng;
-      anchorLabel = resolved.name;
-      console.log(`[search] 기준 위치 = "${intent.locationHint}" -> (${resolved.lat}, ${resolved.lng}) [${resolved.name}]`);
+    // LLM이 "집"/"회사"처럼 즐겨찾기 별칭에 해당하는 단어를 originHint가 아니라 locationHint로
+    // 잘못 분류하는 경우가 실제로 있다("집 근처 편의점" -> originHint는 비고 locationHint="집").
+    // 이 경우 위 originHint 분기 자체가 안 돌기 때문에 그 방어코드로도 못 잡는다 — 그래서
+    // 카카오 전국검색으로 넘기기 전에 즐겨찾기와 먼저 매칭해본다(엉뚱한 동명 장소로 새는
+    // 것을 막는 마지막 안전망).
+    const favMatch = findFavorite(ctx.favorites, intent.locationHint);
+    if (favMatch) {
+      searchLat = favMatch.lat;
+      searchLng = favMatch.lng;
+      anchorLabel = favMatch.alias || favMatch.name;
+      console.log(`[search] 기준 위치 = locationHint "${intent.locationHint}"가 즐겨찾기와 일치 -> (${favMatch.lat}, ${favMatch.lng})`);
     } else {
-      console.log(`[search] 기준 위치 "${intent.locationHint}" 확인 실패 -> 현재 GPS로 대체`);
+      const resolved = await resolveNamedLocation(intent.locationHint);
+      if (resolved) {
+        searchLat = resolved.lat;
+        searchLng = resolved.lng;
+        anchorLabel = resolved.name;
+        console.log(`[search] 기준 위치 = "${intent.locationHint}" -> (${resolved.lat}, ${resolved.lng}) [${resolved.name}]`);
+      } else {
+        console.log(`[search] 기준 위치 "${intent.locationHint}" 확인 실패 -> 현재 GPS로 대체`);
+      }
     }
   }
 
