@@ -759,12 +759,14 @@
     // 기준점부터의 거리가 된다 — anchorLabel로 그 이름을 같이 넘겨 프론트가 "OO 기준"으로
     // 표시하게 한다.
     var anchorLabel = '';
+    var originResolved = false;
     if (intent.originHint && intent.originHint !== '현재위치') {
       var origin = findFavorite(ctx.favorites, intent.originHint);
       if (origin) {
         searchLat = origin.lat;
         searchLng = origin.lng;
         anchorLabel = origin.alias || origin.name;
+        originResolved = true;
         console.log('[search] 기준 위치 = 즐겨찾기 "' + intent.originHint + '" -> (' + origin.lat + ', ' + origin.lng + ')');
       } else {
         console.log('[search] 기준 위치 = 즐겨찾기 "' + intent.originHint + '" (매칭 실패, 현재 GPS로 대체)');
@@ -773,7 +775,10 @@
 
     // 즐겨찾기가 아닌 임의 지역/랜드마크명("미사역 주변 맛집"의 "미사역")이 검색 기준
     // 위치로 쓰인 경우 — 예전엔 이런 지명이 반영될 방법이 없어서 항상 현재 GPS 근처만 뒤졌다.
-    if (intent.locationHint) {
+    // originHint가 이미 즐겨찾기로 정확히 해석됐으면 건너뛴다 — 안 그러면 LLM이 같은 단어를
+    // originHint/locationHint 양쪽에 채웠을 때, 방금 정확히 찾은 즐겨찾기 좌표가 무관한 동명
+    // 장소(카카오 전국 검색 1위)로 덮어써지는 버그가 있었다.
+    if (!originResolved && intent.locationHint) {
       var resolved = await resolveNamedLocation(intent.locationHint);
       if (resolved) {
         searchLat = resolved.lat;
