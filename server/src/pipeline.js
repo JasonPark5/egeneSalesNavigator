@@ -484,14 +484,18 @@ const BRIEFING_TOOL_SCHEMA = {
       briefingText: {
         type: 'string',
         description:
-          '1~2문장의 자연스러운 음성 브리핑. scheduleFacts.events의 각 항목은 title/time/location은 항상 있고, ' +
-          'travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 경우에만 있습니다 ' +
-          '(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). ' +
-          'travelTimeKnown:false인 일정은 몇 시에 무슨 일정이 있다고만 언급하고, 이동시간·출발 권장 시각을 ' +
-          '지어내지 마세요. estimated:true인 일정은 실제 길찾기가 아니라 직선거리 기반 추정치이므로, ' +
-          "'정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 부드럽게 표현하세요. " +
-          '날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
-          'tightGapWarnings가 있으면 반드시 언급하세요.',
+          '짧은 인사로 시작해서 자연스럽게 이어지는 대화체 음성 브리핑. scheduleFacts.events의 각 항목은 ' +
+          'title/time/location은 항상 있고, travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 ' +
+          '경우에만 있습니다(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). ' +
+          'events에 있는 일정은 하나도 빠짐없이 전부 언급하세요. travelTimeKnown:false인 일정은 몇 시에 무슨 ' +
+          '일정이 있다고만 언급하고, 이동시간·출발 권장 시각을 지어내지 마세요. estimated:true인 일정은 실제 ' +
+          "길찾기가 아니라 직선거리 기반 추정치이므로, '정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 " +
+          '부드럽게 표현하세요. 날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
+          'tightGapWarnings가 있으면 반드시 언급하되, 필드 이름을 그대로 말하지 말고 자연스러운 한국어 문장으로 ' +
+          "풀어서 표현하세요(예: 'OO 일정과 OO 일정 사이 이동 여유가 부족해요, 서둘러 주세요'). 일정 사이는 " +
+          "'이동하신 뒤에는', '그다음', '~부터는' 같은 연결어로 이어서 하나의 흐름으로 읽히게 쓰고, 딱딱하게 " +
+          '사실만 나열하지 말고 대화하듯 친절하고 따뜻한 어조로 쓰세요. 문장 수는 정해두지 않으니 일정이 많으면 ' +
+          '자연스럽게 길어져도 되지만, 반복 없이 하나의 흐름으로 쓰세요.',
       },
     },
     required: ['briefingText'],
@@ -512,9 +516,14 @@ async function generateBriefing(body) {
   const systemPrompt =
     langDirective +
     '당신은 외근이 많은 영업직 사용자를 위한 아침 일정 브리핑 어시스턴트입니다. ' +
-    '제공된 오늘 일정 사실만 바탕으로 자연스럽게 소리내어 읽기 좋은 1~2문장 브리핑을 작성하세요. ' +
-    'travelMinutes가 없는(travelTimeKnown:false) 일정은 이동시간/출발 시각을 지어내지 말고 제목·시각만 언급하세요. ' +
-    '사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 지어내지 마세요. ' +
+    '제공된 오늘 일정 사실(scheduleFacts)만 바탕으로, 소리 내어 듣기 좋은 자연스러운 브리핑을 작성하세요. ' +
+    '짧은 인사로 시작하고(예: "좋은 아침이에요, 오늘 일정 안내해 드릴게요"), scheduleFacts.events에 있는 ' +
+    '일정은 하나도 빠짐없이 전부 언급하세요. travelMinutes가 없는(travelTimeKnown:false) 일정도 제목·시각만은 ' +
+    '반드시 포함하되 이동시간/출발 시각은 지어내지 마세요. tightGapWarnings가 있으면 반드시 언급하되 필드 ' +
+    '이름을 그대로 말하지 말고 자연스러운 문장으로 풀어서 표현하세요. 일정 사이는 "이동하신 뒤에는", "그다음", ' +
+    '"~부터는" 같은 연결어로 이어서 하나의 흐름으로 읽히게 쓰고, 딱딱하게 사실만 나열하지 말고 대화하듯 ' +
+    '친절하고 따뜻한 어조로 쓰세요. 사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 ' +
+    '지어내지 마세요. ' +
     langDirective;
   const userMessage = `# 오늘 일정 사실\n${JSON.stringify(scheduleFacts)}`;
 
