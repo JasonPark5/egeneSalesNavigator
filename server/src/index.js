@@ -31,6 +31,15 @@ app.post('/api/search', async (req, res) => {
         : await runMockPipeline(req.body);
     res.json(result);
   } catch (err) {
+    // travel-time은 실패해도 절대 HTTP 에러로 응답하면 안 된다 — 프론트엔드가 real:false를
+    // 보고 직선거리 추정치로 자동 대체하는 계약이라(README 참고), mock 모드의
+    // fetchNaverDrivingMinutes 실패 처리(runMockPipeline 내부)와 동일하게 맞춘다.
+    // ActionFlow의 travel-time 플로우는 네이버 쪽이 4xx를 던지면 플로우 자체가 중간에
+    // 멈춰버려서(org.sdf.slim.BizException) 여기서 항상 방어해야 함 — 확인된 실제 현상.
+    if (pickFlowKey(req.body) === 'travel-time') {
+      console.error('[search] travel-time failed, degrading to real:false:', err);
+      return res.json({ travelMinutes: null, real: false, error: err.message || String(err) });
+    }
     const status = err instanceof ActionFlowError ? 502 : 500;
     console.error('[search] failed:', err);
     res.status(status).json({ error: err.message || 'search failed' });
