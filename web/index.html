@@ -2493,20 +2493,25 @@ async function resolveEventTravelTimes(events) {
   var targets = events.filter(function(e) { return e.travelKnown === false && eventLocationName(e); });
   if (!targets.length) return false;
 
-  // 좌표 찾기는 각 일정이 서로 독립적이라 병렬로 먼저 끝낸다. 이동시간 계산은 직전
-  // 일정 좌표가 있어야 다음 일정의 출발지가 정해지니(아래) 순서대로(체인) 처리해야 한다.
-  await Promise.all(targets.map(async function(ev) {
+  // 좌표 찾기는 원래 각 일정이 서로 독립적이라 병렬(Promise.all)로 처리했는데,
+  // ActionFlow 백엔드 모드에서 동시에 여러 건이 같은 검색 플로우 인스턴스를 타면
+  // Variable 상태가 섞여 서로 다른 일정이 같은 좌표로 잘못 반환되는 현상이 간헐적으로
+  // 확인되어(재현이 안정적이지 않음 — 전형적인 레이스 컨디션 증상) 순차 처리로 바꿨다.
+  // 일정이 보통 몇 개 안 되니 체감 속도 차이는 크지 않음.
+  for (var t = 0; t < targets.length; t++) {
+    var ev = targets[t];
     try {
       var placeName = extractPlaceName(eventLocationName(ev));
       var candidates = await kakaoLocateSearch(placeName, 'car');
-      if (!candidates.length) return;
-      ev.lat = candidates[0].lat;
-      ev.lng = candidates[0].lng;
-      ev.transportMode = 'car';
+      if (candidates.length) {
+        ev.lat = candidates[0].lat;
+        ev.lng = candidates[0].lng;
+        ev.transportMode = 'car';
+      }
     } catch (err) {
       console.error('[Today] "' + ev.title + '" 위치 확인 실패:', err);
     }
-  }));
+  }
 
   // GPS가 아직 안 끝난 상태(currentLocation===null)에서 여기 먼저 도달하면 서울시청
   // 폴백 좌표로 최초 이동시간이 계산돼버려서, 나중에 "실시간 교통 반영"으로 진짜 위치를
