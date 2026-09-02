@@ -469,6 +469,16 @@ function inferCategoryFromText(text) {
   const found = CATEGORY_KEYWORDS.find(([, keywords]) => keywords.some((kw) => text.includes(kw)));
   return found ? found[0] : '';
 }
+// query가 "편의점"처럼 categoryGroupCode 자체를 그대로 가리키는 일반명사면(구체적인
+// 상호명이 아니면), 키워드검색(sort=accuracy, "정확도"일 뿐 거리와 무관)보다
+// 카테고리검색(sort=distance)이 우선돼야 한다 — 안 그러면 "집주변 편의점"처럼 실제로는
+// "가장 가까운 X" 의도인데 반경 20km 안에서 이름 관련도로만 뽑혀서 훨씬 가까운 곳을
+// 두고 멀리 있는 동일 카테고리 업체가 나오는 문제가 있었다.
+function isGenericCategoryTerm(query, categoryGroupCode) {
+  const entry = CATEGORY_KEYWORDS.find(([code]) => code === categoryGroupCode);
+  if (!entry) return false;
+  return entry[1].includes(String(query || '').trim());
+}
 
 // ─── 오늘의 브리핑 (캘린더 연동 + LLM) ───────────────────────────────
 // 시간 계산(이동시간/출발 권장 시각/빠듯한 구간 경고)은 프론트엔드(index.html의
@@ -859,7 +869,13 @@ async function runMockPipeline(body) {
   // 다시 검색어에 섞여 들어간다(애초에 이 문제를 풀려고 만든 기능인데 폴백에서 되풀이됨).
   // 그래서 locationHint가 있을 땐 원문 대신 빈 문자열로 둬서 categoryGroupCode 기반
   // 카테고리 검색 폴백(아래)에 맡긴다.
-  const query = intent.query || (intent.locationHint ? '' : ctx.text);
+  let query = intent.query || (intent.locationHint ? '' : ctx.text);
+  // "편의점"/"카페"처럼 query가 categoryGroupCode를 그대로 가리키는 일반명사면(구체적인
+  // 상호명이 아니면) 키워드검색을 건너뛰고 바로 아래 카테고리+거리순 검색으로 보낸다
+  // (isGenericCategoryTerm 주석 참고).
+  if (query && intent.categoryGroupCode && isGenericCategoryTerm(query, intent.categoryGroupCode)) {
+    query = '';
+  }
   // 정확도순 검색이라도 반경은 걸어둠 — 안 그러면 이름만 비슷한 수백km 밖 결과가 섞여 들어옴.
   // 자동차는 카카오 로컬 API의 radius 파라미터 최대값(20km)까지 허용, 그 외(대중교통/도보)는
   // 사용자가 설정한 칩 검색 반경을 그대로 씀.

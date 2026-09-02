@@ -500,6 +500,14 @@
     });
     return found ? found[0] : '';
   }
+  // query가 "편의점"처럼 categoryGroupCode 자체를 그대로 가리키는 일반명사면(구체적인
+  // 상호명이 아니면), 키워드검색(sort=accuracy, 거리와 무관)보다 카테고리검색
+  // (sort=distance)이 우선돼야 한다 — server/src/pipeline.js와 동일 로직.
+  function isGenericCategoryTerm(query, categoryGroupCode) {
+    var entry = CATEGORY_KEYWORDS.find(function (e) { return e[0] === categoryGroupCode; });
+    if (!entry) return false;
+    return entry[1].indexOf(String(query || '').trim()) !== -1;
+  }
 
   // 발화에 나온 지역/역/동네/랜드마크명(예: '미사역', '홍대')을 좌표로 변환한다 — 반경 제한 없이
   // 정확도순으로 국내 전체에서 찾는다(locate 모드와 동일한 방식). 실패하면 조용히 null을
@@ -824,6 +832,9 @@
     // 다시 검색어에 섞여 들어간다 — locationHint가 있을 땐 원문 대신 빈 문자열로 둬서
     // categoryGroupCode 기반 카테고리 검색에 맡긴다.
     var query = intent.query || (intent.locationHint ? '' : ctx.text);
+    if (query && intent.categoryGroupCode && isGenericCategoryTerm(query, intent.categoryGroupCode)) {
+      query = '';
+    }
     var CAR_SEARCH_RADIUS_M = 20000;
     var searchRadius = intent.transportMode === 'car' ? CAR_SEARCH_RADIUS_M : ctx.userChipRadius;
 
