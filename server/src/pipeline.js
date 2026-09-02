@@ -867,9 +867,13 @@ async function runMockPipeline(body) {
 
   // query가 비어서 ctx.text(원문 발화 전체)로 대체될 때, locationHint가 있으면 그 지명이
   // 다시 검색어에 섞여 들어간다(애초에 이 문제를 풀려고 만든 기능인데 폴백에서 되풀이됨).
-  // 그래서 locationHint가 있을 땐 원문 대신 빈 문자열로 둬서 categoryGroupCode 기반
-  // 카테고리 검색 폴백(아래)에 맡긴다.
-  let query = intent.query || (intent.locationHint ? '' : ctx.text);
+  // originHint가 즐겨찾기로 해석된 경우도 마찬가지다 — "집주변 편의점"처럼 위치 참조가
+  // locationHint가 아니라 originHint 쪽에 담기고 정상적으로 해석돼도, ctx.text에는
+  // "집주변"이 그대로 남아있어서 이걸 검색어로 쓰면 카카오 키워드검색(sort=accuracy)이
+  // "집주변"이라는 글자와의 관련도로 엉뚱한 곳을 1순위로 뽑아버린다(거리와 무관한 정렬).
+  // 그래서 locationHint가 있거나 originHint가 이미 해석됐을 땐 원문 대신 빈 문자열로
+  // 둬서 categoryGroupCode 기반 카테고리 검색(sort=distance) 폴백에 맡긴다.
+  let query = intent.query || ((intent.locationHint || originResolved) ? '' : ctx.text);
   // "편의점"/"카페"처럼 query가 categoryGroupCode를 그대로 가리키는 일반명사면(구체적인
   // 상호명이 아니면) 키워드검색을 건너뛰고 바로 아래 카테고리+거리순 검색으로 보낸다
   // (isGenericCategoryTerm 주석 참고).

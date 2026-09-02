@@ -828,10 +828,13 @@
       }
     }
 
-    // query가 비어서 ctx.text(원문 발화 전체)로 대체될 때, locationHint가 있으면 그 지명이
-    // 다시 검색어에 섞여 들어간다 — locationHint가 있을 땐 원문 대신 빈 문자열로 둬서
-    // categoryGroupCode 기반 카테고리 검색에 맡긴다.
-    var query = intent.query || (intent.locationHint ? '' : ctx.text);
+    // query가 비어서 ctx.text(원문 발화 전체)로 대체될 때, locationHint가 있거나
+    // originHint가 이미 즐겨찾기로 해석됐으면 그 위치 참조 단어가 ctx.text에 그대로
+    // 남아있어서 검색어에 섞여 들어간다("집주변 편의점"의 "집주변"처럼) — 그러면
+    // 키워드검색(sort=accuracy)이 거리와 무관하게 엉뚱한 곳을 1순위로 뽑는다.
+    // 그래서 이 경우 원문 대신 빈 문자열로 둬서 categoryGroupCode 기반 카테고리
+    // 검색(sort=distance)에 맡긴다.
+    var query = intent.query || ((intent.locationHint || originResolved) ? '' : ctx.text);
     if (query && intent.categoryGroupCode && isGenericCategoryTerm(query, intent.categoryGroupCode)) {
       query = '';
     }
