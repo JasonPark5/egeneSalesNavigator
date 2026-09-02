@@ -2571,7 +2571,7 @@ function computeScheduleFacts(events) {
   return { eventCount: events.length, events: factEvents, tightGapWarnings: warnings };
 }
 
-function renderToday() {
+function renderToday(skipBriefing) {
   var panel = document.getElementById('todayPanel');
   var events = TODAY_EVENTS;
 
@@ -2683,7 +2683,10 @@ function renderToday() {
   html += '</div>';
 
   panel.innerHTML = html;
-  refreshBriefingWithLLM(events);
+  // 캘린더 로드 직후 1차 렌더링(이동시간 아직 모름)에서는 브리핑 LLM을 건너뛴다 —
+  // 어차피 위치/이동시간이 확정된 뒤 resolveEventTravelTimes() 완료 시점에 2차
+  // 렌더링에서 다시 호출되므로, 곧 버려질 불완전한 데이터로 LLM을 두 번 부르지 않는다.
+  if (!skipBriefing) refreshBriefingWithLLM(events);
 }
 
 // 브리핑을 즉시 템플릿 문구로 먼저 보여준 뒤(위 renderToday), 백그라운드에서 LLM이 만든
@@ -2977,11 +2980,12 @@ async function refreshTodayFromCalendar(allowRetry) {
         transportMode: transportMode,
       };
     });
-    renderToday();
+    renderToday(true); // 1차: 이동시간 아직 모름 — 브리핑 LLM 호출은 건너뜀
     // 위치가 있는 일정들의 자동차 이동시간을 백그라운드에서 추정 — 끝나면 다시 렌더링
-    // (브리핑 LLM도 renderToday()가 알아서 최신 정보로 다시 갱신함).
-    resolveEventTravelTimes(TODAY_EVENTS).then(function(changed) {
-      if (changed) renderToday();
+    // (브리핑 LLM도 renderToday()가 알아서 최신 정보로 다시 갱신함). changed 여부와
+    // 무관하게 항상 재렌더링해야 브리핑이 최소 한 번은 확정된 데이터로 호출된다.
+    resolveEventTravelTimes(TODAY_EVENTS).then(function() {
+      renderToday();
     });
   } catch (err) {
     calendarConnected = false;
