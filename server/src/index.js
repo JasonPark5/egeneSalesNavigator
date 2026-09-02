@@ -38,7 +38,7 @@ app.post('/api/search', async (req, res) => {
     // 멈춰버려서(org.sdf.slim.BizException) 여기서 항상 방어해야 함 — 확인된 실제 현상.
     if (pickFlowKey(req.body) === 'travel-time') {
       console.error('[search] travel-time failed, degrading to real:false:', err);
-      return res.json({ travelMinutes: null, real: false, error: err.message || String(err) });
+      return res.json({ travelMinutes: null, distanceM: null, real: false, error: err.message || String(err) });
     }
     const status = err instanceof ActionFlowError ? 502 : 500;
     console.error('[search] failed:', err);

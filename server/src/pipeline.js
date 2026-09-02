@@ -687,7 +687,10 @@ async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng
     const route = data.route && data.route.traoptimal && data.route.traoptimal[0];
     if (!route || !route.summary) throw new Error(`Naver Directions 응답에 경로 정보가 없습니다(${domain}).`);
     console.log(`[travel-time] Naver Directions 성공 (도메인: ${domain})`);
-    return Math.max(Math.round(route.summary.duration / 60000), 1);
+    return {
+      minutes: Math.max(Math.round(route.summary.duration / 60000), 1),
+      distanceM: Math.round(route.summary.distance),
+    };
   }
   throw lastErr;
 }
@@ -701,10 +704,10 @@ async function runMockPipeline(body) {
   }
   if ((body.inputType || '') === 'travel-time') {
     try {
-      const travelMinutes = await fetchNaverDrivingMinutes(body);
-      return { travelMinutes, real: true };
+      const { minutes, distanceM } = await fetchNaverDrivingMinutes(body);
+      return { travelMinutes: minutes, distanceM, real: true };
     } catch (err) {
-      return { travelMinutes: null, real: false, error: String(err.message || err) };
+      return { travelMinutes: null, distanceM: null, real: false, error: String(err.message || err) };
     }
   }
   const ctx = prepareContext(body);

@@ -2373,6 +2373,7 @@ let TODAY_EVENTS = [
     locationName: '판교 테크노밸리 A동 12층',
     lat: 37.4020, lng: 127.1085,
     travelMinutes: 39,
+    travelDistanceM: 24500,
     transportMode: 'car',
   },
   {
@@ -2382,6 +2383,7 @@ let TODAY_EVENTS = [
     inferredName: '강남파이낸스센터 21층',
     lat: 37.5013, lng: 127.0396,
     travelMinutes: 27,
+    travelDistanceM: 11200,
     transportMode: 'transit',
   },
 ];
@@ -2427,13 +2429,14 @@ async function resolveCarTravelMinutes(originLat, originLng, destLat, destLng) {
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var data = await res.json();
-      if (data.real && data.travelMinutes) return { minutes: data.travelMinutes, real: true };
+      if (data.real && data.travelMinutes) return { minutes: data.travelMinutes, distanceM: data.distanceM, real: true };
       throw new Error(data.error || 'Naver Directions 응답 없음');
     } catch (err) {
       console.warn('[Today] 서버 경유 Naver Directions 실패, 추정치로 대체:', err);
     }
   }
-  return { minutes: estimateCarTravelMinutes(originLat, originLng, destLat, destLng), real: false };
+  var est = estimateCarTravel(originLat, originLng, destLat, destLng);
+  return { minutes: est.minutes, distanceM: est.distanceM, real: false };
 }
 function haversineKm(lat1, lng1, lat2, lng2) {
   var R = 6371;
@@ -2444,11 +2447,16 @@ function haversineKm(lat1, lng1, lat2, lng2) {
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-function estimateCarTravelMinutes(originLat, originLng, destLat, destLng) {
+function estimateCarTravel(originLat, originLng, destLat, destLng) {
   var straightKm = haversineKm(originLat, originLng, destLat, destLng);
   var roadKm = straightKm * 1.3; // 직선거리 -> 대략적인 도로거리 보정
   var avgSpeedKmh = roadKm < 5 ? 20 : roadKm < 15 ? 30 : 45; // 시내/근교/장거리
-  return Math.max(Math.round((roadKm / avgSpeedKmh) * 60), 5);
+  var minutes = Math.max(Math.round((roadKm / avgSpeedKmh) * 60), 5);
+  return { minutes: minutes, distanceM: Math.round(roadKm * 1000) };
+}
+function distLabel(m) {
+  if (m == null) return '';
+  return m < 1000 ? (m + 'm') : ((m / 1000).toFixed(1) + 'km');
 }
 
 // 하루 일정의 실제 동선을 반영해 이동시간을 계산한다. 1번째(좌표가 확인된 첫) 일정은
@@ -2472,6 +2480,7 @@ async function computeChainedTravelTimes(events) {
     try {
       var result = await resolveCarTravelMinutes(origin.lat, origin.lng, ev.lat, ev.lng);
       ev.travelMinutes = result.minutes;
+      ev.travelDistanceM = result.distanceM;
       ev.travelEstimated = !result.real || chainSkipped;
       ev.travelKnown = true;
     } catch (err) {
@@ -2647,7 +2656,7 @@ function renderToday(skipBriefing) {
       html +=
         '<div class="event-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>' + escHtml(ev.locationName) + '</div>' +
         '<div class="event-travel-row">' +
-          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + (ev.travelEstimated ? ' ' + t('today.estimated') : '') + ' · ' + recommendedDepartureTime(ev.time, ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
+          '<div class="event-travel-info">' + modeLabel + ' ' + minLabel(ev.travelMinutes) + (ev.travelDistanceM != null ? ' (' + distLabel(ev.travelDistanceM) + ')' : '') + (ev.travelEstimated ? ' ' + t('today.estimated') : '') + ' · ' + recommendedDepartureTime(ev.time, ev.travelMinutes) + ' ' + t('today.recommendDeparture') + '</div>' +
           '<button class="event-go-btn" onclick="navigateTo(' + ev.lat + ',' + ev.lng + ',\'' + escAttr(ev.locationName) + '\',\'' + ev.transportMode + '\')">' + t('today.goBtn') + '</button>' +
         '</div>';
     } else if (ev.resolved && ev.travelKnown === false) {
