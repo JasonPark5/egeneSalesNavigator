@@ -500,6 +500,14 @@
     });
     return found ? found[0] : '';
   }
+  // query가 "편의점"처럼 categoryGroupCode 자체를 그대로 가리키는 일반명사면(구체적인
+  // 상호명이 아니면), 키워드검색(sort=accuracy, 거리와 무관)보다 카테고리검색
+  // (sort=distance)이 우선돼야 한다 — server/src/pipeline.js와 동일 로직.
+  function isGenericCategoryTerm(query, categoryGroupCode) {
+    var entry = CATEGORY_KEYWORDS.find(function (e) { return e[0] === categoryGroupCode; });
+    if (!entry) return false;
+    return entry[1].indexOf(String(query || '').trim()) !== -1;
+  }
 
   // 발화에 나온 지역/역/동네/랜드마크명(예: '미사역', '홍대')을 좌표로 변환한다 — 반경 제한 없이
   // 정확도순으로 국내 전체에서 찾는다(locate 모드와 동일한 방식). 실패하면 조용히 null을
@@ -532,18 +540,22 @@
         briefingText: {
           type: 'string',
           description:
-            '짧은 인사로 시작해서 자연스럽게 이어지는 대화체 음성 브리핑. scheduleFacts.events의 각 항목은 ' +
-            'title/time/location은 항상 있고, travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 ' +
-            '경우에만 있습니다(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). ' +
-            'events에 있는 일정은 하나도 빠짐없이 전부 언급하세요. travelTimeKnown:false인 일정은 몇 시에 무슨 ' +
-            '일정이 있다고만 언급하고, 이동시간·출발 권장 시각을 지어내지 마세요. estimated:true인 일정은 실제 ' +
-            "길찾기가 아니라 직선거리 기반 추정치이므로, '정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 " +
-            '부드럽게 표현하세요. 날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
-            'tightGapWarnings가 있으면 반드시 언급하되, 필드 이름을 그대로 말하지 말고 자연스러운 한국어 문장으로 ' +
-            "풀어서 표현하세요(예: 'OO 일정과 OO 일정 사이 이동 여유가 부족해요, 서둘러 주세요'). 일정 사이는 " +
-            "'이동하신 뒤에는', '그다음', '~부터는' 같은 연결어로 이어서 하나의 흐름으로 읽히게 쓰고, 딱딱하게 " +
-            '사실만 나열하지 말고 대화하듯 친절하고 따뜻한 어조로 쓰세요. 문장 수는 정해두지 않으니 일정이 많으면 ' +
-            '자연스럽게 길어져도 되지만, 반복 없이 하나의 흐름으로 쓰세요.',
+            '짧은 인사로 시작하는 간결한 음성 브리핑. scheduleFacts.events의 각 항목은 title/time/location은 ' +
+            '항상 있고, travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 경우에만 있습니다 ' +
+            '(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). events에 있는 일정은 하나도 ' +
+            '빠짐없이 전부 언급하되, **각 일정은 딱 한 문장으로만** 다루세요 — 제목·시각·이동시간(몇 분 ' +
+            "걸리는지)·출발 권장 시각을 자연스러운 한 문장에 녹여서 말하세요(예: '여의도 미팅은 11시, 약 " +
+            "38분 걸려서 10시 8분쯤 출발하시면 돼요'). 같은 시각/숫자를 다시 반복하지 마세요. location은 " +
+            '전체 도로명주소를 그대로 읽지 말고, 그 안에서 상호명·건물명 같은 짧은 핵심 지명만 골라 ' +
+            "언급하세요(예: '대한민국 서울특별시 영등포구 여의대로 108 파크원타워 2 43층' → '여의도 " +
+            "파크원타워'). 매 일정마다 똑같은 문장 틀을 기계적으로 반복하지 말고 자연스럽게 어조를 " +
+            '바꿔가며 쓰세요. travelTimeKnown:false인 일정은 제목·시각만 언급하고 이동시간·출발 권장 시각을 ' +
+            "지어내지 마세요. estimated:true인 일정은 '정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 " +
+            '부드럽게 표현하세요. tightGapWarnings가 있으면 한 문장으로만 짧게 언급하되(필드 이름 그대로 ' +
+            "말하지 말고 자연스러운 한국어로, 예: 'OO과 OO 사이는 이동 여유가 부족해요'), 앞에서 이미 말한 " +
+            '이동시간 숫자를 또 반복하지 마세요. 일정 사이는 "그다음" 정도의 짧은 연결어만 쓰세요. 날씨/ ' +
+            '교통상황/시설 등 제공되지 않은 정보는 절대 지어내지 말고, 체크리스트 제안 같은 부가 멘트도 ' +
+            '덧붙이지 마세요. 전체 분량은 인사 한 문장 + 일정당 한 문장 정도로 짧게 유지하세요.',
         },
       },
       required: ['briefingText'],
@@ -564,14 +576,19 @@
     var systemPrompt =
       langDirective +
       '당신은 외근이 많은 영업직 사용자를 위한 아침 일정 브리핑 어시스턴트입니다. ' +
-      '제공된 오늘 일정 사실(scheduleFacts)만 바탕으로, 소리 내어 듣기 좋은 자연스러운 브리핑을 작성하세요. ' +
+      '제공된 오늘 일정 사실(scheduleFacts)만 바탕으로, 소리 내어 듣기 좋은 **간결한** 브리핑을 작성하세요. ' +
       '짧은 인사로 시작하고(예: "좋은 아침이에요, 오늘 일정 안내해 드릴게요"), scheduleFacts.events에 있는 ' +
-      '일정은 하나도 빠짐없이 전부 언급하세요. travelMinutes가 없는(travelTimeKnown:false) 일정도 제목·시각만은 ' +
-      '반드시 포함하되 이동시간/출발 시각은 지어내지 마세요. tightGapWarnings가 있으면 반드시 언급하되 필드 ' +
-      '이름을 그대로 말하지 말고 자연스러운 문장으로 풀어서 표현하세요. 일정 사이는 "이동하신 뒤에는", "그다음", ' +
-      '"~부터는" 같은 연결어로 이어서 하나의 흐름으로 읽히게 쓰고, 딱딱하게 사실만 나열하지 말고 대화하듯 ' +
-      '친절하고 따뜻한 어조로 쓰세요. 사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 ' +
-      '지어내지 마세요. ' +
+      '일정은 하나도 빠짐없이 전부 언급하되 **각 일정은 딱 한 문장으로만** 다루세요 — 제목·시각·이동시간(몇 ' +
+      '분 걸리는지)·출발 권장 시각을 자연스러운 한 문장에 녹여서 말하고(예: "여의도 미팅은 11시, 약 38분 ' +
+      '걸려서 10시 8분쯤 출발하시면 돼요"), 같은 시각/숫자를 다시 반복하지 마세요. location은 전체 ' +
+      '도로명주소를 그대로 읽지 말고 상호명·건물명 같은 짧은 핵심 지명만 골라 언급하세요. 매 일정마다 똑같은 ' +
+      '문장 틀을 기계적으로 반복하지 말고 자연스럽게 어조를 바꿔가며 쓰세요. travelMinutes가 없는 ' +
+      '(travelTimeKnown:false) 일정도 제목·시각만은 반드시 포함하되 이동시간/출발 시각은 지어내지 마세요. ' +
+      'tightGapWarnings가 있으면 한 문장으로만 짧게 언급하되, 필드 이름을 그대로 말하지 말고 자연스러운 ' +
+      '문장으로 풀어 쓰고, 앞에서 이미 말한 이동시간 숫자를 또 반복하지 마세요. 일정 사이는 "그다음" 정도의 ' +
+      '짧은 연결어만 쓰세요. 사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 지어내지 말고, ' +
+      '체크리스트 제안 같은 부가 멘트도 덧붙이지 마세요. 전체 분량은 인사 한 문장 + 일정당 한 문장 정도로 ' +
+      '짧게 유지하세요. ' +
       langDirective;
     var userMessage = '# 오늘 일정 사실\n' + JSON.stringify(scheduleFacts);
 
@@ -815,6 +832,9 @@
     // 다시 검색어에 섞여 들어간다 — locationHint가 있을 땐 원문 대신 빈 문자열로 둬서
     // categoryGroupCode 기반 카테고리 검색에 맡긴다.
     var query = intent.query || (intent.locationHint ? '' : ctx.text);
+    if (query && intent.categoryGroupCode && isGenericCategoryTerm(query, intent.categoryGroupCode)) {
+      query = '';
+    }
     var CAR_SEARCH_RADIUS_M = 20000;
     var searchRadius = intent.transportMode === 'car' ? CAR_SEARCH_RADIUS_M : ctx.userChipRadius;
 

@@ -88,9 +88,11 @@ ActionFlow가 아니라 프론트엔드가 이 응답을 받은 뒤 Google Calen
 기존 로직: `fetchNaverDrivingMinutes()` — LLM 없음, Naver Directions 5 API 호출만.
 
 - **요청**: `{ inputType: 'travel-time', originLat, originLng, destLat, destLng }`
-- **응답**: `{ travelMinutes: number, real: true }` 성공 시. 실패 시 `{ travelMinutes: null, real: false, error }`
+- **응답**: `{ travelMinutes: number, distanceM: number, real: true }` 성공 시. 실패 시
+  `{ travelMinutes: null, distanceM: null, real: false, error }`
   (프론트엔드가 `real:false`면 자동으로 직선거리 추정치로 대체하므로, 실패를 에러로 던지지 말고
-  이 형태로 응답해야 함).
+  이 형태로 응답해야 함). `distanceM`은 Naver Directions 응답의 `route.summary.distance`(미터)를
+  그대로 반올림한 값.
 
 ActionFlow에서 플로우를 실제로 만들 때 겪는 UI 사용법/함정(파라미터 바인딩, 한글 인코딩,
 Code 노드, Result JSON 따옴표 규칙 등)은 [`docs/actionflow-notes.md`](docs/actionflow-notes.md)에

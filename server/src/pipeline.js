@@ -469,6 +469,16 @@ function inferCategoryFromText(text) {
   const found = CATEGORY_KEYWORDS.find(([, keywords]) => keywords.some((kw) => text.includes(kw)));
   return found ? found[0] : '';
 }
+// query가 "편의점"처럼 categoryGroupCode 자체를 그대로 가리키는 일반명사면(구체적인
+// 상호명이 아니면), 키워드검색(sort=accuracy, "정확도"일 뿐 거리와 무관)보다
+// 카테고리검색(sort=distance)이 우선돼야 한다 — 안 그러면 "집주변 편의점"처럼 실제로는
+// "가장 가까운 X" 의도인데 반경 20km 안에서 이름 관련도로만 뽑혀서 훨씬 가까운 곳을
+// 두고 멀리 있는 동일 카테고리 업체가 나오는 문제가 있었다.
+function isGenericCategoryTerm(query, categoryGroupCode) {
+  const entry = CATEGORY_KEYWORDS.find(([code]) => code === categoryGroupCode);
+  if (!entry) return false;
+  return entry[1].includes(String(query || '').trim());
+}
 
 // ─── 오늘의 브리핑 (캘린더 연동 + LLM) ───────────────────────────────
 // 시간 계산(이동시간/출발 권장 시각/빠듯한 구간 경고)은 프론트엔드(index.html의
@@ -484,18 +494,22 @@ const BRIEFING_TOOL_SCHEMA = {
       briefingText: {
         type: 'string',
         description:
-          '짧은 인사로 시작해서 자연스럽게 이어지는 대화체 음성 브리핑. scheduleFacts.events의 각 항목은 ' +
-          'title/time/location은 항상 있고, travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 ' +
-          '경우에만 있습니다(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). ' +
-          'events에 있는 일정은 하나도 빠짐없이 전부 언급하세요. travelTimeKnown:false인 일정은 몇 시에 무슨 ' +
-          '일정이 있다고만 언급하고, 이동시간·출발 권장 시각을 지어내지 마세요. estimated:true인 일정은 실제 ' +
-          "길찾기가 아니라 직선거리 기반 추정치이므로, '정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 " +
-          '부드럽게 표현하세요. 날씨/교통상황/시설 등 제공되지 않은 정보도 절대 지어내지 마세요. ' +
-          'tightGapWarnings가 있으면 반드시 언급하되, 필드 이름을 그대로 말하지 말고 자연스러운 한국어 문장으로 ' +
-          "풀어서 표현하세요(예: 'OO 일정과 OO 일정 사이 이동 여유가 부족해요, 서둘러 주세요'). 일정 사이는 " +
-          "'이동하신 뒤에는', '그다음', '~부터는' 같은 연결어로 이어서 하나의 흐름으로 읽히게 쓰고, 딱딱하게 " +
-          '사실만 나열하지 말고 대화하듯 친절하고 따뜻한 어조로 쓰세요. 문장 수는 정해두지 않으니 일정이 많으면 ' +
-          '자연스럽게 길어져도 되지만, 반복 없이 하나의 흐름으로 쓰세요.',
+          '짧은 인사로 시작하는 간결한 음성 브리핑. scheduleFacts.events의 각 항목은 title/time/location은 ' +
+          '항상 있고, travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 경우에만 있습니다 ' +
+          '(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). events에 있는 일정은 하나도 ' +
+          '빠짐없이 전부 언급하되, **각 일정은 딱 한 문장으로만** 다루세요 — 제목·시각·이동시간(몇 분 ' +
+          "걸리는지)·출발 권장 시각을 자연스러운 한 문장에 녹여서 말하세요(예: '여의도 미팅은 11시, 약 " +
+          "38분 걸려서 10시 8분쯤 출발하시면 돼요'). 같은 시각/숫자를 다시 반복하지 마세요. location은 " +
+          '전체 도로명주소를 그대로 읽지 말고, 그 안에서 상호명·건물명 같은 짧은 핵심 지명만 골라 ' +
+          "언급하세요(예: '대한민국 서울특별시 영등포구 여의대로 108 파크원타워 2 43층' → '여의도 " +
+          "파크원타워'). 매 일정마다 똑같은 문장 틀을 기계적으로 반복하지 말고 자연스럽게 어조를 " +
+          '바꿔가며 쓰세요. travelTimeKnown:false인 일정은 제목·시각만 언급하고 이동시간·출발 권장 시각을 ' +
+          "지어내지 마세요. estimated:true인 일정은 '정확히 X분'처럼 단정하지 말고 '약 X분 정도'처럼 " +
+          '부드럽게 표현하세요. tightGapWarnings가 있으면 한 문장으로만 짧게 언급하되(필드 이름 그대로 ' +
+          "말하지 말고 자연스러운 한국어로, 예: 'OO과 OO 사이는 이동 여유가 부족해요'), 앞에서 이미 말한 " +
+          '이동시간 숫자를 또 반복하지 마세요. 일정 사이는 "그다음" 정도의 짧은 연결어만 쓰세요. 날씨/ ' +
+          '교통상황/시설 등 제공되지 않은 정보는 절대 지어내지 말고, 체크리스트 제안 같은 부가 멘트도 ' +
+          '덧붙이지 마세요. 전체 분량은 인사 한 문장 + 일정당 한 문장 정도로 짧게 유지하세요.',
       },
     },
     required: ['briefingText'],
@@ -516,14 +530,19 @@ async function generateBriefing(body) {
   const systemPrompt =
     langDirective +
     '당신은 외근이 많은 영업직 사용자를 위한 아침 일정 브리핑 어시스턴트입니다. ' +
-    '제공된 오늘 일정 사실(scheduleFacts)만 바탕으로, 소리 내어 듣기 좋은 자연스러운 브리핑을 작성하세요. ' +
+    '제공된 오늘 일정 사실(scheduleFacts)만 바탕으로, 소리 내어 듣기 좋은 **간결한** 브리핑을 작성하세요. ' +
     '짧은 인사로 시작하고(예: "좋은 아침이에요, 오늘 일정 안내해 드릴게요"), scheduleFacts.events에 있는 ' +
-    '일정은 하나도 빠짐없이 전부 언급하세요. travelMinutes가 없는(travelTimeKnown:false) 일정도 제목·시각만은 ' +
-    '반드시 포함하되 이동시간/출발 시각은 지어내지 마세요. tightGapWarnings가 있으면 반드시 언급하되 필드 ' +
-    '이름을 그대로 말하지 말고 자연스러운 문장으로 풀어서 표현하세요. 일정 사이는 "이동하신 뒤에는", "그다음", ' +
-    '"~부터는" 같은 연결어로 이어서 하나의 흐름으로 읽히게 쓰고, 딱딱하게 사실만 나열하지 말고 대화하듯 ' +
-    '친절하고 따뜻한 어조로 쓰세요. 사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 ' +
-    '지어내지 마세요. ' +
+    '일정은 하나도 빠짐없이 전부 언급하되 **각 일정은 딱 한 문장으로만** 다루세요 — 제목·시각·이동시간(몇 ' +
+    '분 걸리는지)·출발 권장 시각을 자연스러운 한 문장에 녹여서 말하고(예: "여의도 미팅은 11시, 약 38분 ' +
+    '걸려서 10시 8분쯤 출발하시면 돼요"), 같은 시각/숫자를 다시 반복하지 마세요. location은 전체 ' +
+    '도로명주소를 그대로 읽지 말고 상호명·건물명 같은 짧은 핵심 지명만 골라 언급하세요. 매 일정마다 똑같은 ' +
+    '문장 틀을 기계적으로 반복하지 말고 자연스럽게 어조를 바꿔가며 쓰세요. travelMinutes가 없는 ' +
+    '(travelTimeKnown:false) 일정도 제목·시각만은 반드시 포함하되 이동시간/출발 시각은 지어내지 마세요. ' +
+    'tightGapWarnings가 있으면 한 문장으로만 짧게 언급하되, 필드 이름을 그대로 말하지 말고 자연스러운 ' +
+    '문장으로 풀어 쓰고, 앞에서 이미 말한 이동시간 숫자를 또 반복하지 마세요. 일정 사이는 "그다음" 정도의 ' +
+    '짧은 연결어만 쓰세요. 사실에 없는 내용(날씨, 실시간 교통상황, 장소 시설 정보 등)은 절대 지어내지 말고, ' +
+    '체크리스트 제안 같은 부가 멘트도 덧붙이지 마세요. 전체 분량은 인사 한 문장 + 일정당 한 문장 정도로 ' +
+    '짧게 유지하세요. ' +
     langDirective;
   const userMessage = `# 오늘 일정 사실\n${JSON.stringify(scheduleFacts)}`;
 
@@ -678,7 +697,10 @@ async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng
     const route = data.route && data.route.traoptimal && data.route.traoptimal[0];
     if (!route || !route.summary) throw new Error(`Naver Directions 응답에 경로 정보가 없습니다(${domain}).`);
     console.log(`[travel-time] Naver Directions 성공 (도메인: ${domain})`);
-    return Math.max(Math.round(route.summary.duration / 60000), 1);
+    return {
+      minutes: Math.max(Math.round(route.summary.duration / 60000), 1),
+      distanceM: Math.round(route.summary.distance),
+    };
   }
   throw lastErr;
 }
@@ -692,10 +714,10 @@ async function runMockPipeline(body) {
   }
   if ((body.inputType || '') === 'travel-time') {
     try {
-      const travelMinutes = await fetchNaverDrivingMinutes(body);
-      return { travelMinutes, real: true };
+      const { minutes, distanceM } = await fetchNaverDrivingMinutes(body);
+      return { travelMinutes: minutes, distanceM, real: true };
     } catch (err) {
-      return { travelMinutes: null, real: false, error: String(err.message || err) };
+      return { travelMinutes: null, distanceM: null, real: false, error: String(err.message || err) };
     }
   }
   const ctx = prepareContext(body);
@@ -847,7 +869,13 @@ async function runMockPipeline(body) {
   // 다시 검색어에 섞여 들어간다(애초에 이 문제를 풀려고 만든 기능인데 폴백에서 되풀이됨).
   // 그래서 locationHint가 있을 땐 원문 대신 빈 문자열로 둬서 categoryGroupCode 기반
   // 카테고리 검색 폴백(아래)에 맡긴다.
-  const query = intent.query || (intent.locationHint ? '' : ctx.text);
+  let query = intent.query || (intent.locationHint ? '' : ctx.text);
+  // "편의점"/"카페"처럼 query가 categoryGroupCode를 그대로 가리키는 일반명사면(구체적인
+  // 상호명이 아니면) 키워드검색을 건너뛰고 바로 아래 카테고리+거리순 검색으로 보낸다
+  // (isGenericCategoryTerm 주석 참고).
+  if (query && intent.categoryGroupCode && isGenericCategoryTerm(query, intent.categoryGroupCode)) {
+    query = '';
+  }
   // 정확도순 검색이라도 반경은 걸어둠 — 안 그러면 이름만 비슷한 수백km 밖 결과가 섞여 들어옴.
   // 자동차는 카카오 로컬 API의 radius 파라미터 최대값(20km)까지 허용, 그 외(대중교통/도보)는
   // 사용자가 설정한 칩 검색 반경을 그대로 씀.
