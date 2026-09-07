@@ -338,54 +338,72 @@ location) 해석 + 카카오 폴백 체인 + `curateResults()` 전체를 ActionF
 
 ### 13-2. 전체 노드 순서 (이 순서 그대로 캔버스에 배치 — 아래 13-3~13-7이 각 행의 상세)
 
+⚠️ **확인됨(스크린샷 기준): Condition 노드는 "소스 / 연산자 / 값"으로 딱 하나만 비교하는
+구조다 — `&&`/`||`로 여러 조건을 한 노드에 합칠 수 없다.** 그래서 예전 판에 `A && B`처럼
+써둔 조건은 전부 **Condition 노드 2개를 체인으로 연결**하는 형태로 바꿨다(아래 4a/4b,
+8a/8b, 14a/14b, 23a/23b, 26a/26b). 또 `#{candidates}.length == 0`처럼 배열에 `.length`를
+붙이는 표현이 소스 칸에서 그대로 되는지 불확실해서(11번 항목에서 확인된 건
+`#{카카오맵.meta.total_count}` 같은 **JSON의 중첩 필드** 참조였지, 배열의 `.length`
+같은 JS 전용 속성은 아니었음), 아예 **Code 노드가 배열과 함께 그 개수(`count`, 숫자)도
+같이 반환**하게 해서 Condition은 항상 숫자 필드끼리만 비교하도록 설계를 바꿨다(18번
+"후보변수"에 `candidates`(배열) 옆에 `count`(숫자) 필드 추가).
+
 ```
  1. API Trigger                     [있음]        13-1
  2. 의도분석            (Agent)      [있음]        13-3
  3. 의도파싱            (Code)       [있음]        13-3
- 4. 즐겨찾기목적지분기   (Condition)  [신규]  ─┐    13-4
-      YES → 5. 즐겨찾기매칭destination (Code) [신규]     13-4
-              → 6. 즐겨찾기매칭destination확인 (Condition) [신규]  13-4
-                   YES → 7. 즉시응답즐겨찾기 (Result, 종료) [신규]  13-4
-                   NO  ↘
-      NO  ─────────────┴→ 8. 모호분기 (Condition) [신규]  13-4
-                              YES → 9. 즉시응답모호 (Result, 종료) [신규]  13-4
-                              NO  ↓
-10. 검색변수            (Variable)   [있음, 필드 재확인]  13-5
+ 4a. 즐겨찾기목적지분기_intent (Condition) [신규] — 소스=#{의도파싱.intent}, ==, "navigate_favorite"  13-4
+      YES → 4b. 즐겨찾기목적지분기_이름 (Condition) [신규] — 소스=#{의도파싱.destinationFavoriteName}, !=, ""  13-4
+              YES → 5. 즐겨찾기매칭destination (Code) [신규]  13-4
+                      → 6. 즐겨찾기매칭destination확인 (Condition) [신규]  13-4
+                           YES → 7. 즉시응답즐겨찾기 (Result, 종료) [신규]  13-4
+                           NO  ↘
+              NO  ↘
+      NO  ─────────┴──────────┴→ 8a. 모호분기_intent (Condition) [신규] — 소스=#{의도파싱.intent}, ==, "ambiguous"  13-4
+                                    YES → 8b. 모호분기_질문있음 (Condition) [신규] — 소스=#{의도파싱.clarification}, !=, ""  13-4
+                                            YES → 9. 즉시응답모호 (Result, 종료) [신규]  13-4
+                                            NO  ↘
+                                    NO  ↘
+                                    ────┴────┴→ 10. 검색변수 (Variable) [있음, 필드 재확인]  13-5
 11. 검색분기            (Condition)  [있음]        13-5
       YES → 12. 즐겨찾기매칭origin (Code) [있음, 반환형태 다듬기 권장]  13-5
               → 13. 즐겨찾기매칭origin확인 (Condition) [신규]  13-5
-                   YES → 검색변수 재대입(Variable) [신규] → 14
+                   YES → 검색변수 재대입(Variable) [신규] → 14a
                    NO  ↘
-      NO  ─────────────┴→ 14. location힌트분기 (Condition) [신규]  13-5
-      YES → 15. 즐겨찾기매칭location (Code) [신규]  13-5
-              → 16. 즐겨찾기매칭location확인 (Condition) [신규]  13-5
-                   YES → 검색변수 재대입(Variable) [신규] → 18
-                   NO  → 17. 카카오지명검색 (Plugin-API) [신규] 13-5
-                           → 지명검색결과분기 (Condition) [신규] 13-5
-                                0건아님 → 지명검색결과정규화(Code) → 검색변수 재대입(Variable) → 18
-                                0건    ↘
-      NO  ─────────────┴→ 18. 후보변수  (Variable)   [신규]  13-6
+      NO  ─────────────┴→ 14a. location힌트분기_미해결 (Condition) [신규] — 소스=#{originResolved}, !=, true  13-5
+      YES → 14b. location힌트분기_힌트있음 (Condition) [신규] — 소스=#{의도파싱.locationHint}, !=, ""  13-5
+              YES → 15. 즐겨찾기매칭location (Code) [신규]  13-5
+                      → 16. 즐겨찾기매칭location확인 (Condition) [신규]  13-5
+                           YES → 검색변수 재대입(Variable) [신규] → 18
+                           NO  → 17. 카카오지명검색 (Plugin-API) [신규] 13-5
+                                   → 지명검색결과분기 (Condition) [신규] 13-5
+                                        0건아님 → 지명검색결과정규화(Code) → 검색변수 재대입(Variable) → 18
+                                        0건    ↘
+              NO  ↘
+      NO  ─────────┴──────────┴→ 18. 후보변수  (Variable, candidates+count)   [신규]  13-6
 19. 쿼리결정            (Code)       [신규]        13-6
-20. 키워드검색분기       (Condition)  [신규]  ─┐    13-6
-      YES → 카카오키워드검색메인(Plugin-API) → 키워드검색결과정규화(Code) → 후보변수 재대입(Variable) → 23
+20. 키워드검색분기       (Condition)  [신규] — 소스=#{쿼리결정.query}, !=, ""       13-6
+      YES → 카카오키워드검색메인(Plugin-API) → 키워드검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 23a
       NO  ─────────────────────────────────────────────────────────────┘
-23. 카테고리검색분기     (Condition)  [신규]
-      YES → 카카오카테고리검색(Plugin-API) → 카테고리검색결과정규화(Code) → 후보변수 재대입(Variable) → 26
+23a. 카테고리검색분기_비었음 (Condition) [신규] — 소스=#{count}, ==, 0
+      YES → 23b. 카테고리검색분기_카테고리있음 (Condition) [신규] — 소스=#{의도파싱.categoryGroupCode}, !=, ""
+              YES → 카카오카테고리검색(Plugin-API) → 카테고리검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 26a
+              NO  ↘
+      NO  ────────┴→ 26a. 전국검색분기_비었음 (Condition) [신규] — 소스=#{count}, ==, 0
+      YES → 26b. 전국검색분기_쿼리있음 (Condition) [신규] — 소스=#{쿼리결정.query}, !=, ""
+              YES → 카카오키워드검색전국(Plugin-API) → 전국검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 29
+              NO  ↘
+      NO  ────────┴→ 29. 주소검색분기         (Condition)  [신규] — 소스=#{count}, ==, 0
+      YES → 건물상세제거(Code) → 카카오주소검색(Plugin-API) → 주소검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 32
       NO  ─────────────────────────────────────────────────────────────┘
-26. 전국검색분기         (Condition)  [신규]
-      YES → 카카오키워드검색전국(Plugin-API) → 전국검색결과정규화(Code) → 후보변수 재대입(Variable) → 29
-      NO  ─────────────────────────────────────────────────────────────┘
-29. 주소검색분기         (Condition)  [신규]
-      YES → 건물상세제거(Code) → 카카오주소검색(Plugin-API) → 주소검색결과정규화(Code) → 후보변수 재대입(Variable) → 32
-      NO  ─────────────────────────────────────────────────────────────┘
-32. 큐레이션분기         (Condition)  [신규]        13-7
+32. 큐레이션분기         (Condition)  [신규] — 소스=#{count}, >, 0        13-7
       YES → 후보목록축약(Code) → 큐레이션(Agent) → 큐레이션파싱(Code) → 36. 최종응답큐레이션있음(Result, 종료)
       NO  → 37. 최종응답큐레이션없음(Result, 종료)
 ```
 
 **주의(중요)**: `pipeline.js`에서는 `navigate_favorite`인데 즐겨찾기 매칭에 실패하거나
 `ambiguous`인데 `clarification`이 비어있으면 **그냥 검색 분기(10번, 검색변수)로 자연스럽게
-흘러간다**(별도 에러 처리 없음) — 즉 4/6/8번 Condition의 "NO" 쪽은 전부 최종적으로
+흘러간다**(별도 에러 처리 없음) — 즉 4a/4b/6/8a/8b번 Condition의 "NO" 쪽은 전부 최종적으로
 10번(검색변수)에 도달해야 원본과 동작이 같아진다.
 
 ### 13-3. 노드 2~3 — 의도분석(Agent) / 의도파싱(Code) [이미 있음]
@@ -519,18 +537,19 @@ return intent; // 순수 객체 — 6번 항목의 "Can not parse json result" �
 이후 모든 노드에서 이 결과는 `#{의도파싱.intent}`, `#{의도파싱.query}` 처럼(Condition/
 Result 등) 또는 `model["의도파싱"].intent`처럼(Code 노드 안) 참조한다.
 
-### 13-4. 노드 4~9 — 즐겨찾기목적지분기 / 모호분기 (조기 종료, 전부 신규)
+### 13-4. 노드 4a~9 — 즐겨찾기목적지분기 / 모호분기 (조기 종료, 전부 신규)
 
 `intent`가 `navigate_favorite`이면서 즐겨찾기가 실제로 매칭되거나, `ambiguous`이면서
 `clarification`이 있으면 카카오 검색/큐레이션 없이 **바로 응답하고 끝낸다.** 둘 다 아니면
 10번(검색변수)으로 흘러간다.
 
-**4. Condition "즐겨찾기목적지분기"**:
-```
-#{의도파싱.intent} == "navigate_favorite" && #{의도파싱.destinationFavoriteName} != ""
-```
+**4a. Condition "즐겨찾기목적지분기_intent"**: 소스 `#{의도파싱.intent}`, 연산자 `==`, 값
+`navigate_favorite` — YES면 4b로, NO면 8a로.
 
-**5. Code "즐겨찾기매칭destination"** (YES 분기):
+**4b. Condition "즐겨찾기목적지분기_이름"** (4a YES 분기): 소스
+`#{의도파싱.destinationFavoriteName}`, 연산자 `!=`, 값 (빈 문자열) — YES면 5로, NO면 8a로.
+
+**5. Code "즐겨찾기매칭destination"** (4b YES 분기):
 ```javascript
 var favorites = model.parameter.body.favorites || [];
 var hint = (model["의도파싱"].destinationFavoriteName || '').trim();
@@ -546,10 +565,8 @@ return match
 플랫폼이 `null` 비교를 어떻게 처리하는지 몰라도 안전함. 아래 즐겨찾기매칭origin/location도
 같은 패턴.)
 
-**6. Condition "즐겨찾기매칭destination확인"**:
-```
-#{즐겨찾기매칭destination.matched} == true
-```
+**6. Condition "즐겨찾기매칭destination확인"**: 소스 `#{즐겨찾기매칭destination.matched}`,
+연산자 `==`, 값 `true` — YES면 7로, NO면 8a로.
 
 **7. Result "즉시응답즐겨찾기"** (YES 분기, 플로우 종료):
 ```json
@@ -577,12 +594,13 @@ return match
 ```
 (`lat`/`lng`는 숫자라 따옴표 없이 — 7번 항목 규칙.)
 
-**8. Condition "모호분기"** (4번 NO 또는 6번 NO에서 합류):
-```
-#{의도파싱.intent} == "ambiguous" && #{의도파싱.clarification} != ""
-```
+**8a. Condition "모호분기_intent"** (4a NO / 4b NO / 6 NO에서 합류): 소스
+`#{의도파싱.intent}`, 연산자 `==`, 값 `ambiguous` — YES면 8b로, NO면 10(검색변수)으로.
 
-**9. Result "즉시응답모호"** (YES 분기, 플로우 종료):
+**8b. Condition "모호분기_질문있음"** (8a YES 분기): 소스 `#{의도파싱.clarification}`, 연산자
+`!=`, 값 (빈 문자열) — YES면 9로, NO면 10(검색변수)으로.
+
+**9. Result "즉시응답모호"** (8b YES 분기, 플로우 종료):
 ```json
 {
   "candidates": [],
@@ -594,30 +612,25 @@ return match
 }
 ```
 
-8번 Condition의 NO는 10번(검색변수)으로 이어진다.
+8a/8b Condition의 NO는 전부 10번(검색변수)으로 이어진다.
 
-### 13-5. 노드 10~17 — 검색변수 / 검색분기 / location힌트분기 (원점 해석)
+### 13-5. 노드 10~17 — 검색변수 / 검색분기 / location힌트분기_미해결·힌트있음 (원점 해석)
 
 `originHint` → 즐겨찾기 매칭 → (실패 시) `locationHint` → 즐겨찾기 매칭 → (실패 시) 카카오
 지명 검색 순서로 `searchLat`/`searchLng`/`anchorLabel`을 정한다.
 
-**10. Variable "검색변수"** (이미 있음 — 필드가 아래 4개와 같은지만 재확인. 화면에 3개+1로
-보였던 그 "+1"이 `originResolved`면 맞음):
+**10. Variable "검색변수"** (이미 있음 — 확인됨: Variable 타입에 불리언이 실제로 있음, 지금
+있는 4개 필드가 아래와 같은지만 재확인):
 ```
-searchLat = #{parameter.body.lat}   (Number)
-searchLng = #{parameter.body.lng}   (Number)
-anchorLabel = ''                     (String)
-originResolved = false               (Boolean/String — 이 플랫폼에 Boolean 타입이 따로
-                                       없으면 String으로 'false'/'true' 두고 Condition에서
-                                       #{originResolved} == "true"처럼 비교. 15번 질문 참고)
+searchLat = #{parameter.body.lat}   (문자열 타입으로 만들었어도 숫자 문자열이라 비교/연산엔
+searchLng = #{parameter.body.lng}    문제없음 — 스크린샷상 지금 문자열 타입으로 보임, 그대로 둬도 됨)
+anchorLabel = ''                     (문자열)
+originResolved = false               (불리언)
 ```
 
-**11. Condition "검색분기"** (이미 있음 — 그대로 유지):
-```
-#{의도파싱.originHint} != "현재위치"
-```
-(`defaultIntent`에서 `originHint`가 항상 `'현재위치'` 기본값을 가지므로 빈 문자열 체크는
-불필요 — 지금 만든 그대로 맞음.)
+**11. Condition "검색분기"** (이미 있음 — 그대로 유지): 소스 `#{의도파싱.originHint}`, 연산자
+`!=`, 값 `현재위치`. (`defaultIntent`에서 `originHint`가 항상 `'현재위치'` 기본값을 가지므로
+빈 문자열 체크는 불필요 — 지금 만든 그대로 맞음, 스크린샷과 동일.)
 
 **12. Code "즐겨찾기매칭origin"** (이미 있음 — 지금 `return match || null;` 형태라면 아래로
 바꾸는 걸 권장. 5번과 같은 패턴):
@@ -633,10 +646,8 @@ return match
   : { matched: false };
 ```
 
-**13. Condition "즐겨찾기매칭origin확인"** (신규):
-```
-#{즐겨찾기매칭origin.matched} == true
-```
+**13. Condition "즐겨찾기매칭origin확인"** (신규): 소스 `#{즐겨찾기매칭origin.matched}`,
+연산자 `==`, 값 `true`.
 YES → **Variable "검색변수" 재대입**(같은 이름의 Variable 노드를 하나 더 둠):
 ```
 searchLat = #{즐겨찾기매칭origin.lat}
@@ -644,14 +655,15 @@ searchLng = #{즐겨찾기매칭origin.lng}
 anchorLabel = #{즐겨찾기매칭origin.alias}
 originResolved = true
 ```
-NO → 그대로(변경 없이) 14번으로.
+NO → 그대로(변경 없이) 14a번으로.
 
-**14. Condition "location힌트분기"** (신규, 13번 YES/NO 둘 다 여기로 합류):
-```
-#{originResolved} != true && #{의도파싱.locationHint} != ""
-```
+**14a. Condition "location힌트분기_미해결"** (신규, 13번 YES 뒤(재대입 후)/NO 둘 다 여기로
+합류): 소스 `#{originResolved}`, 연산자 `!=`, 값 `true` — YES면 14b로, NO면 18(후보변수)로.
 
-**15. Code "즐겨찾기매칭location"** (YES 분기, 신규 — 12번과 동일 패턴, `hint`만 다름):
+**14b. Condition "location힌트분기_힌트있음"** (14a YES 분기): 소스
+`#{의도파싱.locationHint}`, 연산자 `!=`, 값 (빈 문자열) — YES면 15로, NO면 18(후보변수)로.
+
+**15. Code "즐겨찾기매칭location"** (14b YES 분기, 신규 — 12번과 동일 패턴, `hint`만 다름):
 ```javascript
 var favorites = model.parameter.body.favorites || [];
 var hint = (model["의도파싱"].locationHint || '').trim();
@@ -664,10 +676,8 @@ return match
   : { matched: false };
 ```
 
-**16. Condition "즐겨찾기매칭location확인"** (신규):
-```
-#{즐겨찾기매칭location.matched} == true
-```
+**16. Condition "즐겨찾기매칭location확인"** (신규): 소스 `#{즐겨찾기매칭location.matched}`,
+연산자 `==`, 값 `true`.
 YES → **Variable "검색변수" 재대입**:
 ```
 searchLat = #{즐겨찾기매칭location.lat}
@@ -683,7 +693,9 @@ anchorLabel = #{즐겨찾기매칭location.alias}
 - **카카오지명검색** (Plugin-API 액션아이템, 키워드검색 API 재사용): `query =
   #{의도파싱.locationHint}`, `x`/`y`/`radius`/`category_group_code`는 **비워둠**(전국
   정확도순 검색이라 좌표/반경 없이), `sort = accuracy`, `size = 5`.
-- **Condition "지명검색결과분기"**: `#{카카오지명검색.meta.total_count} == 0`
+- **Condition "지명검색결과분기"**: 소스 `#{카카오지명검색.meta.total_count}`, 연산자 `==`,
+  값 `0` (11번 항목에서 이미 확인된 nested 필드 참조 방식 그대로 — 이건 배열의 `.length`가
+  아니라 카카오 응답의 실제 JSON 필드라 안전함).
   - YES(0건) → 그대로(변경 없이) 18번으로.
   - NO(0건 아님) → **Code "지명검색결과정규화"**:
     ```javascript
@@ -700,15 +712,20 @@ anchorLabel = #{즐겨찾기매칭location.alias}
     ```
     → 18번으로.
 
-### 13-6. 노드 18~31 — 후보변수 / 쿼리결정 / 4단계 카카오 폴백
+### 13-6. 노드 18~29 — 후보변수(candidates+count) / 쿼리결정 / 4단계 카카오 폴백
 
 `pipeline.js`의 4단계 폴백(키워드→카테고리→전국→주소)을 그대로 옮긴다. 11번 항목의
 "키워드검색 0건 → 주소검색" 2단계 구조를 확장하는 개념.
 
 **18. Variable "후보변수"** (신규):
 ```
-candidates = [] (ListData)
+candidates = [] (배열)
+count = 0        (숫자)
 ```
+(`count`를 따로 두는 이유: Condition의 소스 칸이 `#{카카오맵.meta.total_count}`처럼 JSON
+중첩 필드는 되지만, 배열의 `.length`처럼 JS 전용 속성까지 붙여 쓸 수 있는지 불확실해서 —
+아래 정규화 Code 노드들이 배열 개수를 이미 계산해서 `count`로 같이 반환하게 하고, Condition은
+그 숫자 필드만 비교하도록 설계.)
 
 **19. Code "쿼리결정"** (신규):
 ```javascript
@@ -752,15 +769,15 @@ var searchRadius = intent.transportMode === 'car' ? 20000 : (model.parameter.bod
 return { query: query, searchRadius: searchRadius };
 ```
 
-**20. Condition "키워드검색분기"**: `#{쿼리결정.query} != ""`
+**20. Condition "키워드검색분기"**: 소스 `#{쿼리결정.query}`, 연산자 `!=`, 값 (빈 문자열).
 - YES → **카카오키워드검색메인**(Plugin-API, 키워드검색 재사용): `query =
   #{쿼리결정.query}`, `x = #{searchLng}`, `y = #{searchLat}`, `radius =
   #{쿼리결정.searchRadius}`, `sort = accuracy`, `category_group_code =
   #{의도파싱.categoryGroupCode}`.
-  → **Code "키워드검색결과정규화"** (6번 항목 패턴 그대로):
+  → **Code "키워드검색결과정규화"** (6번 항목 패턴 + 배열과 함께 `count`도 반환):
   ```javascript
   var docs = model["카카오키워드검색메인"].documents || [];
-  return docs.map(function (d, i) {
+  var list = docs.map(function (d, i) {
     var distanceM = parseInt(d.distance, 10) || 0;
     return {
       index: i + 1,
@@ -775,26 +792,39 @@ return { query: query, searchRadius: searchRadius };
       placeUrl: d.place_url || ''
     };
   });
+  return { candidates: list, count: list.length };
   ```
-  → **Variable "후보변수" 재대입**: `candidates = #{키워드검색결과정규화}`
-- NO → 그대로(빈 배열 유지) 23번으로.
+  → **Variable "후보변수" 재대입**: `candidates = #{키워드검색결과정규화.candidates}`,
+  `count = #{키워드검색결과정규화.count}`
+- NO → 그대로(빈 배열/count=0 유지) 23a번으로.
 
-**23. Condition "카테고리검색분기"**: `#{candidates}.length == 0 && #{의도파싱.categoryGroupCode} != ""`
+**23a. Condition "카테고리검색분기_비었음"**: 소스 `#{count}`, 연산자 `==`, 값 `0` — YES면
+23b로, NO면 26a로.
+
+**23b. Condition "카테고리검색분기_카테고리있음"** (23a YES 분기): 소스
+`#{의도파싱.categoryGroupCode}`, 연산자 `!=`, 값 (빈 문자열) — YES면 카카오카테고리검색으로,
+NO면 26a로.
 - YES → **카카오카테고리검색**(Plugin-API, 5번 항목에서 이미 따로 등록해둔 카테고리검색
   API): `category_group_code = #{의도파싱.categoryGroupCode}`, `x = #{searchLng}`, `y =
   #{searchLat}`, `radius = #{쿼리결정.searchRadius}`, `sort = distance`.
-  → **Code "카테고리검색결과정규화"** (위와 동일한 정규화 로직, `model["카카오카테고리검색"]`만 다름)
-  → **Variable "후보변수" 재대입**: `candidates = #{카테고리검색결과정규화}`
-- NO → 그대로 26번으로.
+  → **Code "카테고리검색결과정규화"** (위와 동일한 정규화+count 로직, `model["카카오카테고리검색"]`만 다름)
+  → **Variable "후보변수" 재대입**: `candidates = #{카테고리검색결과정규화.candidates}`,
+  `count = #{카테고리검색결과정규화.count}`
+  → 26a로.
 
-**26. Condition "전국검색분기"**: `#{candidates}.length == 0 && #{쿼리결정.query} != ""`
+**26a. Condition "전국검색분기_비었음"**: 소스 `#{count}`, 연산자 `==`, 값 `0` — YES면 26b로,
+NO면 29로.
+
+**26b. Condition "전국검색분기_쿼리있음"** (26a YES 분기): 소스 `#{쿼리결정.query}`, 연산자
+`!=`, 값 (빈 문자열) — YES면 카카오키워드검색전국으로, NO면 29로.
 - YES → **카카오키워드검색전국**(Plugin-API, 키워드검색 재사용): `query =
   #{쿼리결정.query}`, `x`/`y`/`radius`/`category_group_code`는 **비워둠**, `sort = accuracy`.
-  → **Code "전국검색결과정규화"** (동일 정규화 로직, `model["카카오키워드검색전국"]`)
-  → **Variable "후보변수" 재대입**: `candidates = #{전국검색결과정규화}`
-- NO → 그대로 29번으로.
+  → **Code "전국검색결과정규화"** (동일 정규화+count 로직, `model["카카오키워드검색전국"]`)
+  → **Variable "후보변수" 재대입**: `candidates = #{전국검색결과정규화.candidates}`,
+  `count = #{전국검색결과정규화.count}`
+  → 29로.
 
-**29. Condition "주소검색분기"**: `#{candidates}.length == 0`
+**29. Condition "주소검색분기"**: 소스 `#{count}`, 연산자 `==`, 값 `0`.
 - YES → **Code "건물상세제거"** (11번 항목과 동일):
   ```javascript
   var s = (model.parameter.body.text || '').trim();
@@ -812,7 +842,7 @@ return { query: query, searchRadius: searchRadius };
   → **Code "주소검색결과정규화"**:
   ```javascript
   var docs = model["카카오주소검색"].documents || [];
-  return docs.map(function (d, i) {
+  var list = docs.map(function (d, i) {
     var road = d.road_address;
     var addressName = (road && road.address_name) || d.address_name || '';
     return {
@@ -828,8 +858,10 @@ return { query: query, searchRadius: searchRadius };
       placeUrl: ''
     };
   });
+  return { candidates: list, count: list.length };
   ```
-  → **Variable "후보변수" 재대입**: `candidates = #{주소검색결과정규화}`
+  → **Variable "후보변수" 재대입**: `candidates = #{주소검색결과정규화.candidates}`,
+  `count = #{주소검색결과정규화.count}`
 - NO → 그대로 32번으로.
 
 카카오 Plugin-API가 아직 3종(키워드/카테고리/주소) 다 없다면(11번 항목 기준으로는
@@ -842,7 +874,7 @@ return { query: query, searchRadius: searchRadius };
 후보가 있을 때만 두 번째 LLM 호출(`curateResults`)을 태운다 — 없으면 호출 자체를 건너뛰고
 바로 응답(불필요한 LLM 호출 비용 절감, `pipeline.js`도 동일).
 
-**32. Condition "큐레이션분기"**: `#{candidates}.length > 0`
+**32. Condition "큐레이션분기"**: 소스 `#{count}`, 연산자 `>`, 값 `0`.
 
 **33. Code "후보목록축약"** (YES 분기, 신규 — Agent 프롬프트에 넣을 후보 요약):
 ```javascript
@@ -966,13 +998,14 @@ return {
 }
 ```
 
-**4/8번 조기분기**: `intent`가 `search`라 즐겨찾기목적지분기/모호분기 둘 다 NO → 10번(검색변수)으로.
+**4a/4b/8a/8b번 조기분기**: `intent`가 `search`라 즐겨찾기목적지분기(4a)/모호분기(8a) 둘 다
+첫 비교에서부터 NO → 10번(검색변수)으로.
 
-**11번 검색분기**: `originHint`="현재위치"라 NO → 14번(location힌트분기)로.
+**11번 검색분기**: `originHint`="현재위치"라 NO → 14a번(location힌트분기_미해결)로.
 
-**14번 location힌트분기**: `originResolved`=false, `locationHint`="미사역"(비어있지 않음) → YES
-→ 15번(즐겨찾기매칭location): "미사역"은 즐겨찾기에 없음 → `{matched:false}` → 16번 NO →
-17번(카카오지명검색):
+**14a번**: `originResolved`=false(즉 `!= true`는 참) → YES → **14b번**:
+`locationHint`="미사역"(비어있지 않음) → YES → 15번(즐겨찾기매칭location): "미사역"은
+즐겨찾기에 없음 → `{matched:false}` → 16번 NO → 17번(카카오지명검색):
 
 ```
 GET /v2/local/search/keyword.json?query=미사역&sort=accuracy&size=5
@@ -982,10 +1015,11 @@ GET /v2/local/search/keyword.json?query=미사역&sort=accuracy&size=5
 → 검색변수 재대입: `searchLat=37.560597, searchLng=127.194719, anchorLabel="미사역"`
 
 **19번 쿼리결정**: `query="파스타"` — ⚠️ **"파스타"는 `CATEGORY_KEYWORDS`의 FD6 목록에 실제로
-포함된 단어라** 카테고리 검색 우선 분기가 걸려 `query`가 빈 문자열로 바뀜 → **20번
-키워드검색분기가 NO** → 23번(카테고리검색분기)로 바로 감(이건 버그가 아니라 원본
-`pipeline.js`와 동일한 동작 — "파스타" 하나만 딱 말하면 상호명 매칭보다 거리순 카테고리
-검색이 더 정확한 결과를 준다고 판단한 설계).
+포함된 단어라** 카테고리 검색 우선 분기가 걸려 `query`가 빈 문자열로 바뀜(→ `count`도 아직
+0) → **20번 키워드검색분기가 NO** → 23a번(카테고리검색분기_비었음, `count==0` 참) → 23b번
+(`categoryGroupCode`="FD6" 비어있지 않음 → YES) → 카카오카테고리검색으로 바로 감(이건
+버그가 아니라 원본 `pipeline.js`와 동일한 동작 — "파스타" 하나만 딱 말하면 상호명 매칭보다
+거리순 카테고리 검색이 더 정확한 결과를 준다고 판단한 설계).
 
 **카카오카테고리검색**:
 ```
@@ -1011,7 +1045,7 @@ GET /v2/local/search/category.json?category_group_code=FD6&x=127.194719&y=37.560
 ]
 ```
 
-**32번 큐레이션분기**: `candidates.length > 0` → YES → 34번 Agent "큐레이션" 응답(기대값):
+**32번 큐레이션분기**: `count > 0`(2건) → YES → 34번 Agent "큐레이션" 응답(기대값):
 ```json
 {
   "rankedIndices": [0, 1],
@@ -1057,7 +1091,8 @@ GET /v2/local/search/category.json?category_group_code=FD6&x=127.194719&y=37.560
 anchorLabel="집", originResolved=true`. **카카오 API 호출 없이 즉시 확정됨.**
 
 **19번 쿼리결정**: `query="편의점"` — CS2 목록이 `['편의점']` 딱 하나뿐이라 카테고리 검색
-우선 분기가 걸려 `query=""` → 20번 NO → 23번(카테고리검색분기)로. **여기서 `searchLat`/
+우선 분기가 걸려 `query=""` → 20번 NO → 23a번(`count==0` 참) → 23b번(`categoryGroupCode`=
+"CS2" 비어있지 않음 → YES) → 카카오카테고리검색으로. **여기서 `searchLat`/
 `searchLng`가 집 좌표(37.4979, 127.0276)를 쓰는지가 핵심** — 만약 12번 Code가 매칭에
 실패하거나 13번 Condition의 `matched` 비교가 잘못돼 있으면, `searchLat/Lng`가 검색변수의
 초기값(트리거 GPS 좌표 37.5665, 126.9780 — 서울시청 부근)으로 남아서 엉뚱하게 먼 편의점이
@@ -1080,7 +1115,8 @@ anchorLabel="집", originResolved=true`. **카카오 API 호출 없이 즉시 �
 }
 ```
 
-**4번 즐겨찾기목적지분기** YES → **5번 즐겨찾기매칭destination**: "회사" 매칭됨
+**4a번**(`intent`=="navigate_favorite" → YES) → **4b번**(`destinationFavoriteName`="회사" 비어있지
+않음 → YES) → **5번 즐겨찾기매칭destination**: "회사" 매칭됨
 (`{matched:true, name:"우리금융 상암센터", alias:"회사", lat:37.5793, lng:126.8912}`) →
 **6번 확인 YES** → **카카오 호출도 큐레이션도 없이 즉시 7번 Result**:
 ```json
@@ -1110,7 +1146,9 @@ anchorLabel="집", originResolved=true`. **카카오 API 호출 없이 즉시 �
 }
 ```
 
-**4번 NO → 8번 모호분기 YES** → **카카오 호출도 큐레이션도 없이 즉시 9번 Result**:
+**4a번 NO**(`intent`이 "navigate_favorite"가 아님) **→ 8a번**(`intent`=="ambiguous" → YES)
+**→ 8b번**(`clarification` 비어있지 않음 → YES) **→ 카카오 호출도 큐레이션도 없이 즉시
+9번 Result**:
 ```json
 {
   "candidates": [], "destination": "", "transportMode": "transit",
@@ -1128,12 +1166,14 @@ intent.clarification` 로직과 동일한 결과. `spoken`이 비어있으면 `c
    못 걷어내므로 프롬프트를 더 강하게 다듬어야 함 — 예: "반드시 `{`로 시작해서 `}`로 끝나야
    한다"처럼 더 명시적으로).
 2. `{matched: boolean}` 패턴의 Condition 비교(`#{노드.matched} == true`)가 실제로 잘
-   동작하는지 — 이 플랫폼의 Boolean 표현이 `true`/`"true"` 중 뭔지 확실치 않으면 Code
-   노드에서 `matched: true`(실제 JS boolean) 대신 `matched: "true"`(문자열)로 반환하고
-   Condition도 `== "true"`로 맞추는 실험을 해볼 것.
-3. Variable "검색변수"의 `originResolved` 필드 타입(Boolean/String) — 이 플랫폼에 진짜
-   Boolean 타입이 있는지, 아니면 String으로 `'true'`/`'false'`를 넣고 비교해야 하는지
-   (15번 항목 질문).
+   동작하는지 — 검색변수의 `originResolved`는 Variable의 네이티브 불리언 타입으로 확인됐지만
+   (스크린샷), Code 노드가 return하는 일반 객체의 `matched` 필드(Variable이 아님)도 똑같이
+   Condition에서 `true`/`false` 리터럴로 비교되는지는 아직 실제로 안 찍어봄 — 5/6/13/16번
+   Condition을 만들 때 확인.
+3. Condition의 "값" 칸에 문자열 리터럴(`navigate_favorite`, `현재위치` 등)을 따옴표 없이
+   그냥 타이핑하면 되는지(스크린샷의 검색분기가 `!=` 연산자만 보여줘서 "값" 칸 실제 모습은
+   아직 안 봄) — 빈 문자열(`""`)을 "값" 칸에 넣는 방법(빈 칸으로 두면 되는지, 따옴표
+   두 개를 타이핑해야 하는지)도 확인 필요.
 4. 카테고리검색 Plugin-API가 아직 없다면 새로 등록(5번 항목 참고, `category_group_code` 필수
    파라미터로).
 5. `findFavorite`/`isGenericCategoryTerm`/`stripBuildingDetail`을 Code 노드로 옮길 때 원본
@@ -1186,17 +1226,27 @@ Sub-flow로 분리하고, `chip`/`locate`/`text` 세 플로우가 전부 그걸 
 
 ## 15. 확인이 필요한 질문 (다음에 답 주시면 위 설계를 확정)
 
-1. **Agent 노드의 System/User Prompt에도 Smart Component(`#{parameter.body.x}`)가
-   그대로 먹히는가?** — 지금까지 확인된 Smart Component는 전부 Plugin-API 파라미터/Result
-   JSON 템플릿 쪽이었고, Agent 노드의 프롬프트 입력창에서도 똑같이 동작하는지는 아직 실제로
-   본 적이 없음(13-3의 User Prompt 설계 전체가 이 전제 위에 있음). 안 먹히면 Agent 앞에
-   Code 노드로 프롬프트 문자열을 직접 조립해서 넘겨야 함.
-2. **`favorites`/`recentSearches` 같은 배열을 Smart Component로 그대로 넣으면 어떻게
-   치환되는가?** — 유효한 JSON 문자열로 나오는지, `[object Object]`로 깨지는지.
-3. **이 플랫폼에 진짜 Boolean 타입이 있는가, 아니면 String `'true'`/`'false'`로 다뤄야
-   하는가?** — Variable의 `originResolved`, Code 노드가 반환하는 `matched` 필드,
-   Condition의 `== true` 비교가 전부 이 답에 달려있음(13-4/13-5/13-9 참고).
-4. **Sub-flow 노드가 호출할 수 있는 트리거 타입이 정확히 무엇인가?** — API Trigger로 만든
+**해결됨** (스크린샷으로 확인, 감사합니다):
+- Agent 노드 System/User Prompt에 `#{parameter.body.x}` Smart Component가 정상적으로
+  먹힌다(프롬프트 칸에 파란 태그로 삽입되는 걸 확인) — 13-3의 User Prompt 설계 그대로 유효.
+- `favorites`/`recentSearches` 같은 배열도 Agent 프롬프트에 잘 들어가는 것으로 보임(직접
+  로그로 100% 확인은 아니지만 문제 없어 보임).
+- 이 플랫폼에 **네이티브 불리언(Boolean) 타입이 실제로 있음**(Variable 타입 선택지에
+  문자열/숫자/**불리언**/객체/배열) — `originResolved`는 그냥 불리언 타입으로 선언하면 됨.
+- **Condition 노드는 "소스/연산자/값" 구조의 단일 비교만 가능** — `&&`/`||`로 여러 조건을
+  한 노드에 합칠 수 없다(연산자 목록: `>`, `<`, `>=`, `<=`, `==`, `!=`, `equals`,
+  `contains`). 13-2~13-7을 전부 이 구조에 맞게 다시 설계했다(compound 조건은 Condition
+  노드 체인으로 분리, 배열 개수 비교는 `.length`를 직접 쓰는 대신 Code 노드가 미리 계산한
+  `count` 숫자 필드를 참조하도록 변경).
+
+**아직 남은 것**:
+1. Condition의 "값" 칸에 문자열 리터럴(예: `navigate_favorite`)을 따옴표 없이 그냥
+   타이핑하는 게 맞는지, 빈 문자열(`""`) 비교는 "값" 칸을 비워두면 되는지 — 이번 스크린샷은
+   연산자 선택 드롭다운까지만 보여서 "값" 입력 칸의 실제 모습은 아직 못 봄.
+2. Code 노드가 return하는 일반 객체(Variable이 아닌)의 boolean 필드(예:
+   `{matched: true}`)도 Condition에서 `true` 리터럴과 정상 비교되는지 — Variable의 네이티브
+   불리언과 Code 노드의 JS boolean이 이 플랫폼에서 같은 취급을 받는지는 아직 실제로 확인 전.
+3. **Sub-flow 노드가 호출할 수 있는 트리거 타입이 정확히 무엇인가?** — API Trigger로 만든
    플로우도 되는지, 아니면 전용 트리거 타입으로 새로 만들어야 하는지. 입출력 계약이
    API Trigger 호출(Plugin-API처럼 동기적으로 끝나고 `#{서브플로우 이름.필드}`로 결과
    참조)과 동일한 모양인지도 같이 확인되면 좋음. 14번 항목의 Sub-flow 분리 제안이 이 답에
