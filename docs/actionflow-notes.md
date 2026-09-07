@@ -340,31 +340,44 @@ location) 해석 + 카카오 폴백 체인 + `curateResults()` 전체를 ActionF
 
 ⚠️ **확인됨(스크린샷 기준): Condition 노드는 "소스 / 연산자 / 값"으로 딱 하나만 비교하는
 구조다 — `&&`/`||`로 여러 조건을 한 노드에 합칠 수 없다.** 그래서 예전 판에 `A && B`처럼
-써둔 조건은 전부 **Condition 노드 2개를 체인으로 연결**하는 형태로 바꿨다(아래 4a/4b,
-8a/8b, 14a/14b, 23a/23b, 26a/26b). 또 `#{candidates}.length == 0`처럼 배열에 `.length`를
-붙이는 표현이 소스 칸에서 그대로 되는지 불확실해서(11번 항목에서 확인된 건
-`#{카카오맵.meta.total_count}` 같은 **JSON의 중첩 필드** 참조였지, 배열의 `.length`
-같은 JS 전용 속성은 아니었음), 아예 **Code 노드가 배열과 함께 그 개수(`count`, 숫자)도
-같이 반환**하게 해서 Condition은 항상 숫자 필드끼리만 비교하도록 설계를 바꿨다(18번
-"후보변수"에 `candidates`(배열) 옆에 `count`(숫자) 필드 추가).
+써둔 조건은 전부 **Condition 노드 2개를 체인으로 연결**하는 형태로 바꿨다(아래 4b(전
+`4a`+`4b`), 8b(전 `8a`+`8b`), 14a/14b, 23a/23b, 26a/26b). 또 `#{candidates}.length == 0`처럼
+배열에 `.length`를 붙이는 표현이 소스 칸에서 그대로 되는지 불확실해서(11번 항목에서
+확인된 건 `#{카카오맵.meta.total_count}` 같은 **JSON의 중첩 필드** 참조였지, 배열의
+`.length` 같은 JS 전용 속성은 아니었음), 아예 **Code 노드가 배열과 함께 그 개수(`count`,
+숫자)도 같이 반환**하게 해서 Condition은 항상 숫자 필드끼리만 비교하도록 설계를 바꿨다
+(18번 "후보변수"에 `candidates`(배열) 옆에 `count`(숫자) 필드 추가).
+
+**Switch로 바꾼 부분(질문에 대한 답)**: `#{의도파싱.intent}`는 `search`/`navigate_favorite`/
+`ambiguous` 셋 중 하나인 **전형적인 enum 분기**라서, 예전에 같은 값을 두 번 따로 비교하던
+`4a`(`intent == navigate_favorite`)와 `8a`(`intent == ambiguous`) Condition 두 개를 **Switch
+노드 하나**로 합쳤다(11번 항목에 이미 나온 `Switch(inputType)` 예시와 같은 3-way 분기).
+반면 `14a/14b`(originResolved && locationHint 있음), `23a/23b`(count==0 && categoryGroupCode
+있음), `26a/26b`(count==0 && query 있음)는 **서로 다른 필드 두 개를 AND로 묶는 것**이라
+Switch가 대신할 수 있는 모양이 아니다(Switch는 "한 값이 어느 case냐"를 묻는 노드지,
+"A이고 동시에 B냐"를 묻는 노드가 아님) — 이건 그대로 Condition 체인으로 남겨뒀다. 13-6의
+폴백 체인(20/23a/26a/29)도 마찬가지로 "이전 단계 결과가 비었으면 다음 단계 시도"라는
+**순차 상태 확인**이지 고정된 enum 값 분기가 아니라서 Switch로는 표현이 안 된다.
 
 ```
  1. API Trigger                     [있음]        13-1
  2. 의도분석            (Agent)      [있음]        13-3
  3. 의도파싱            (Code)       [있음]        13-3
- 4a. 즐겨찾기목적지분기_intent (Condition) [신규] — 소스=#{의도파싱.intent}, ==, "navigate_favorite"  13-4
-      YES → 4b. 즐겨찾기목적지분기_이름 (Condition) [신규] — 소스=#{의도파싱.destinationFavoriteName}, !=, ""  13-4
-              YES → 5. 즐겨찾기매칭destination (Code) [신규]  13-4
-                      → 6. 즐겨찾기매칭destination확인 (Condition) [신규]  13-4
-                           YES → 7. 즉시응답즐겨찾기 (Result, 종료) [신규]  13-4
-                           NO  ↘
-              NO  ↘
-      NO  ─────────┴──────────┴→ 8a. 모호분기_intent (Condition) [신규] — 소스=#{의도파싱.intent}, ==, "ambiguous"  13-4
-                                    YES → 8b. 모호분기_질문있음 (Condition) [신규] — 소스=#{의도파싱.clarification}, !=, ""  13-4
-                                            YES → 9. 즉시응답모호 (Result, 종료) [신규]  13-4
-                                            NO  ↘
-                                    NO  ↘
-                                    ────┴────┴→ 10. 검색변수 (Variable) [있음, 필드 재확인]  13-5
+ 4. 의도분기            (Switch)     [신규] — 소스=#{의도파싱.intent}  13-4
+    case "navigate_favorite":
+      → 4b. 즐겨찾기목적지분기_이름 (Condition) [신규] — 소스=#{의도파싱.destinationFavoriteName}, !=, ""  13-4
+           YES → 5. 즐겨찾기매칭destination (Code) [신규] → 6. 즐겨찾기매칭destination확인 (Condition) [신규]  13-4
+                    YES → 7. 즉시응답즐겨찾기 (Result, 종료) [신규]  13-4
+                    NO  → 10. 검색변수로
+           NO  → 10. 검색변수로
+    case "ambiguous":
+      → 8b. 모호분기_질문있음 (Condition) [신규] — 소스=#{의도파싱.clarification}, !=, ""  13-4
+           YES → 9. 즉시응답모호 (Result, 종료) [신규]  13-4
+           NO  → 10. 검색변수로
+    default(그 외 = "search" 등):
+      → 10. 검색변수로
+
+10. 검색변수 (Variable) [있음, 필드 재확인]  13-5
 11. 검색분기            (Condition)  [있음]        13-5
       YES → 12. 즐겨찾기매칭origin (Code) [있음, 반환형태 다듬기 권장]  13-5
               → 13. 즐겨찾기매칭origin확인 (Condition) [신규]  13-5
@@ -403,8 +416,8 @@ location) 해석 + 카카오 폴백 체인 + `curateResults()` 전체를 ActionF
 
 **주의(중요)**: `pipeline.js`에서는 `navigate_favorite`인데 즐겨찾기 매칭에 실패하거나
 `ambiguous`인데 `clarification`이 비어있으면 **그냥 검색 분기(10번, 검색변수)로 자연스럽게
-흘러간다**(별도 에러 처리 없음) — 즉 4a/4b/6/8a/8b번 Condition의 "NO" 쪽은 전부 최종적으로
-10번(검색변수)에 도달해야 원본과 동작이 같아진다.
+흘러간다**(별도 에러 처리 없음) — 즉 4번 Switch의 default 케이스뿐 아니라, 4b/6/8b번
+Condition의 "NO" 쪽도 전부 최종적으로 10번(검색변수)에 도달해야 원본과 동작이 같아진다.
 
 ### 13-3. 노드 2~3 — 의도분석(Agent) / 의도파싱(Code) [이미 있음]
 
@@ -537,17 +550,25 @@ return intent; // 순수 객체 — 6번 항목의 "Can not parse json result" �
 이후 모든 노드에서 이 결과는 `#{의도파싱.intent}`, `#{의도파싱.query}` 처럼(Condition/
 Result 등) 또는 `model["의도파싱"].intent`처럼(Code 노드 안) 참조한다.
 
-### 13-4. 노드 4a~9 — 즐겨찾기목적지분기 / 모호분기 (조기 종료, 전부 신규)
+### 13-4. 노드 4~9 — 의도분기(Switch) / 즐겨찾기목적지분기_이름 / 모호분기_질문있음 (조기 종료, 전부 신규)
 
 `intent`가 `navigate_favorite`이면서 즐겨찾기가 실제로 매칭되거나, `ambiguous`이면서
-`clarification`이 있으면 카카오 검색/큐레이션 없이 **바로 응답하고 끝낸다.** 둘 다 아니면
+`clarification`이 있으면 카카오 검색/큐레이션 없이 **바로 응답하고 끝낸다.** 그 외엔 전부
 10번(검색변수)으로 흘러간다.
 
-**4a. Condition "즐겨찾기목적지분기_intent"**: 소스 `#{의도파싱.intent}`, 연산자 `==`, 값
-`navigate_favorite` — YES면 4b로, NO면 8a로.
+**4. Switch "의도분기"**: 소스 `#{의도파싱.intent}`. `intent`는 `search`/`navigate_favorite`/
+`ambiguous` 셋 중 하나만 나오는 enum 값이라, 예전 판에서 같은 필드를 두 번 따로 비교하던
+Condition 2개(`intent==navigate_favorite`, `intent==ambiguous`) 대신 **Switch 하나로 3-way
+분기**했다(11번 항목의 `Switch(inputType)` 예시와 같은 패턴). case는 3개: `navigate_favorite`
+→ 4b로, `ambiguous` → 8b로, **default(그 외 — 사실상 `search`)** → 10(검색변수)으로. (Switch
+노드가 정말 "그 외 전부"를 받는 default/기타 케이스를 지원하는지, 아니면 case를 하나하나
+다 나열해야만 하는지는 만들면서 확인 필요 — 15번 항목 질문.)
 
-**4b. Condition "즐겨찾기목적지분기_이름"** (4a YES 분기): 소스
-`#{의도파싱.destinationFavoriteName}`, 연산자 `!=`, 값 (빈 문자열) — YES면 5로, NO면 8a로.
+**4b. Condition "즐겨찾기목적지분기_이름"** (Switch의 `navigate_favorite` 케이스): 소스
+`#{의도파싱.destinationFavoriteName}`, 연산자 `!=`, 값 (빈 문자열) — YES면 5로, NO면
+10(검색변수)으로. (`intent`가 이미 Switch에서 `navigate_favorite`로 확정된 상태라, 여기서
+NO가 나와도 "그럼 ambiguous인가?"를 다시 물을 필요가 없다 — 바로 검색 분기로 감. 이게
+Switch로 바꾸면서 자연스럽게 드러난 정리 포인트.)
 
 **5. Code "즐겨찾기매칭destination"** (4b YES 분기):
 ```javascript
@@ -566,7 +587,7 @@ return match
 같은 패턴.)
 
 **6. Condition "즐겨찾기매칭destination확인"**: 소스 `#{즐겨찾기매칭destination.matched}`,
-연산자 `==`, 값 `true` — YES면 7로, NO면 8a로.
+연산자 `==`, 값 `true` — YES면 7로, NO면 10(검색변수)으로.
 
 **7. Result "즉시응답즐겨찾기"** (YES 분기, 플로우 종료):
 ```json
@@ -594,11 +615,8 @@ return match
 ```
 (`lat`/`lng`는 숫자라 따옴표 없이 — 7번 항목 규칙.)
 
-**8a. Condition "모호분기_intent"** (4a NO / 4b NO / 6 NO에서 합류): 소스
-`#{의도파싱.intent}`, 연산자 `==`, 값 `ambiguous` — YES면 8b로, NO면 10(검색변수)으로.
-
-**8b. Condition "모호분기_질문있음"** (8a YES 분기): 소스 `#{의도파싱.clarification}`, 연산자
-`!=`, 값 (빈 문자열) — YES면 9로, NO면 10(검색변수)으로.
+**8b. Condition "모호분기_질문있음"** (Switch의 `ambiguous` 케이스): 소스
+`#{의도파싱.clarification}`, 연산자 `!=`, 값 (빈 문자열) — YES면 9로, NO면 10(검색변수)으로.
 
 **9. Result "즉시응답모호"** (8b YES 분기, 플로우 종료):
 ```json
@@ -612,7 +630,8 @@ return match
 }
 ```
 
-8a/8b Condition의 NO는 전부 10번(검색변수)으로 이어진다.
+4b/6/8b Condition의 NO는 전부 10번(검색변수)으로 이어진다(Switch의 default 케이스와 합쳐서
+결국 4갈래 전부 같은 곳으로 모임).
 
 ### 13-5. 노드 10~17 — 검색변수 / 검색분기 / location힌트분기_미해결·힌트있음 (원점 해석)
 
@@ -998,8 +1017,7 @@ return {
 }
 ```
 
-**4a/4b/8a/8b번 조기분기**: `intent`가 `search`라 즐겨찾기목적지분기(4a)/모호분기(8a) 둘 다
-첫 비교에서부터 NO → 10번(검색변수)으로.
+**4번 의도분기(Switch)**: `intent`가 `search`라 default 케이스 → 곧장 10번(검색변수)으로.
 
 **11번 검색분기**: `originHint`="현재위치"라 NO → 14a번(location힌트분기_미해결)로.
 
@@ -1115,8 +1133,8 @@ anchorLabel="집", originResolved=true`. **카카오 API 호출 없이 즉시 �
 }
 ```
 
-**4a번**(`intent`=="navigate_favorite" → YES) → **4b번**(`destinationFavoriteName`="회사" 비어있지
-않음 → YES) → **5번 즐겨찾기매칭destination**: "회사" 매칭됨
+**4번 의도분기(Switch)**(`intent`=="navigate_favorite" → 그 case로) → **4b번**
+(`destinationFavoriteName`="회사" 비어있지 않음 → YES) → **5번 즐겨찾기매칭destination**: "회사" 매칭됨
 (`{matched:true, name:"우리금융 상암센터", alias:"회사", lat:37.5793, lng:126.8912}`) →
 **6번 확인 YES** → **카카오 호출도 큐레이션도 없이 즉시 7번 Result**:
 ```json
@@ -1146,8 +1164,8 @@ anchorLabel="집", originResolved=true`. **카카오 API 호출 없이 즉시 �
 }
 ```
 
-**4a번 NO**(`intent`이 "navigate_favorite"가 아님) **→ 8a번**(`intent`=="ambiguous" → YES)
-**→ 8b번**(`clarification` 비어있지 않음 → YES) **→ 카카오 호출도 큐레이션도 없이 즉시
+**4번 의도분기(Switch)**(`intent`=="ambiguous" → 그 case로) **→ 8b번**(`clarification`
+비어있지 않음 → YES) **→ 카카오 호출도 큐레이션도 없이 즉시
 9번 Result**:
 ```json
 {
@@ -1183,6 +1201,11 @@ intent.clarification` 로직과 동일한 결과. `spoken`이 비어있으면 `c
 6. 12번 항목의 레이스 컨디션 이슈 — 이 플로우도 Variable을 많이 쓰므로, 프론트엔드가 검색을
    병렬로 여러 번 동시 호출하지 않는지 확인(오늘 탭의 일정 위치 확인은 이미 순차 처리로
    고쳐져 있음, `c56ba55`).
+7. **4번 Switch "의도분기"에 "그 외 전부"를 받는 default/기타 케이스가 실제로 있는지** —
+   없고 case를 나열한 값과 정확히 일치할 때만 그 case로 가는 구조라면, `search`뿐 아니라
+   Agent가 혹시 스키마 밖의 값(오타, 다른 언어 등)을 내놓았을 때 어디로도 안 빠지는 case가
+   생길 수 있음. 그런 경우 `search` 케이스를 명시로 하나 더 추가하고, 나머지(정말 예상
+   못 한 값)에 대비해 뒤에 안전망 Condition을 하나 더 둘지 판단.
 
 ## 14. Sub-flow로 공통 로직 재사용 (제안 — 트리거 타입 제약 확인됨, 아직 안 만들어봄)
 
