@@ -280,27 +280,59 @@ Switch/Condition/Variable을 검색 플로우에 추가한 뒤로 눈에 띄게 
 옮기는 것. 이 절은 그 설계를 정리한다 (실제 노드는 아직 안 만들어봤으므로, 만들면서
 겪는 실제 함정은 이 절 아래에 계속 추가할 것).
 
-### 13-1. ⚠️ 확인 필요: Code 노드에서 트리거 body 필드를 바로 쓸 수 있는가
+### 13-1. ✅ 확인됨: Code 노드에서 트리거 body 필드 접근법 + 실제 요청 본문 스키마
 
-지금까지 만든 Code 노드는 전부 `model["다른 액션아이템 이름"]`만 참조했다(카카오 응답
-가공 등) — 트리거의 `parameter.body.*`를 Code 노드 안에서 직접 읽어본 적이 없다.
-`resolveIntent`를 옮기려면 Code 노드에서 `favorites`(즐겨찾기 매칭), `text`, `lang` 같은
-트리거 필드를 최소 두 번(의도분석 파싱 후 기본값 채우기, `findFavorite` 매칭) 더 읽어야
-하는데, Smart Component 문법표(2번)에 Code 노드용 트리거 참조 문법이 없다.
+**Code 노드**에서는 `model.parameter.body.필드명`으로 트리거 body를 바로 읽을 수 있다
+(예: `var q = model.parameter.body.text;`). 2번 항목의 Smart Component 문법표에 있는
+`#{parameter.body.필드명}`(Plugin-API 파라미터/Result JSON 템플릿용)과는 문법만 다를 뿐
+같은 데이터를 가리킨다 — Code 노드 안에서는 `#{}` 없이 `model.parameter.body.x`로 바로
+JS 값처럼 쓰면 된다. 13-1이 막혀서 만들었던 "Variable 우회" 아이디어는 필요 없다.
 
-**확인 안 되면 쓸 우회로**: 플로우 맨 앞에 Variable 노드를 하나 두고 `text`/`favorites`/
-`recentSearches`/`transportMode`/`lang`/`inputType`을 전부 `#{parameter.body.필드명}`으로
-대입해 선언해두면, 이후 Code 노드가 (Variable도 다른 액션아이템처럼) `model["그 Variable
-아이템 이름"]`으로 값을 가져올 수 있을 가능성이 높다(Variable도 액션아이템이므로). 만들면서
-바로 확인하고 안 되면 이 절을 갱신.
+**실제 요청 본문(Request Body)** — `web/index.html`의 `buildSearchPayload()`가 실제로
+보내는 필드 그대로(README 표의 요약보다 상세함, API Trigger의 "요청 본문" 스키마에
+그대로 붙여넣을 것):
+
+```json
+{
+  "text": "미사역 주변에 아이랑 갈만한 파스타집 찾아줘",
+  "lat": 37.5665,
+  "lng": 126.9780,
+  "landmark": "",
+  "transportMode": "transit",
+  "categoryGroupCode": "",
+  "inputType": "text",
+  "userId": "b3f1c2e4-3a1d-4b7a-9c2e-1f0a2b3c4d5e",
+  "tz": "Asia/Seoul",
+  "chipRadius": 5000,
+  "lang": "ko",
+  "favorites": [
+    { "name": "래미안강남포레스트", "alias": "집", "lat": 37.4979, "lng": 127.0276 },
+    { "name": "우리금융 상암센터", "alias": "회사", "lat": 37.5793, "lng": 126.8912 }
+  ],
+  "recentSearches": [
+    { "text": "강남역 스타벅스", "code": "CE7" }
+  ],
+  "localTime": "2026-09-07T08:04:12.345Z",
+  "llmProvider": "openai",
+  "llmApiKey": "sk-..."
+}
+```
+
+⚠️ **`llmProvider`/`llmApiKey`는 사용자가 설정에서 개인 키를 입력하지 않은 대부분의 경우
+아예 body에서 빠진다** (`index.html`이 `undefined`로 넣는데 `JSON.stringify`가 `undefined`
+값 키를 통째로 생략함) — `null`이나 빈 문자열이 아니라 **필드 자체가 없음**. API Trigger의
+요청 본문 스키마에서 이 둘은 required로 두지 말고, Code 노드에서 읽을 땐
+`model.parameter.body.llmProvider || ''`처럼 항상 기본값을 깔 것(트리거 파싱 방식에 따라
+없는 필드를 읽으면 `undefined`가 아니라 에러가 날 수도 있으니 방어적으로).
+`recentSearches[].code`는 그 검색 당시의 `categoryGroupCode`를 기록해둔 것(있으면).
 
 ### 13-2. 전체 플로우 구조
 
 ```
 Trigger (parameter.body: text/lat/lng/landmark/transportMode/categoryGroupCode/
          inputType/chipRadius/lang/favorites[]/recentSearches[])
- └ Agent "의도분석" (LLM, 13-3 프롬프트) — 발화 → JSON 텍스트
- └ Code "의도파싱" (13-4) — 코드블록 벗기고 JSON.parse + 기본값 채우기 + 카테고리 키워드 보정
+ └ Agent "의도분석" (LLM, 13-3 — 함수 호출/tool use로 `resolve_intent` 스키마 강제) — 발화 → 구조화된 인자
+ └ Code "의도파싱" (13-4) — Agent 결과에서 인자 꺼내기 + 기본값 채우기 + 카테고리 키워드 보정
  └ Condition A: #{의도파싱.intent} == "navigate_favorite" && #{의도파싱.destinationFavoriteName} != ""
     ├ 참: Code "즐겨찾기매칭"(alias/name로 찾기)
     │      └ Condition A2: 매칭됨?
@@ -320,47 +352,85 @@ Trigger (parameter.body: text/lat/lng/landmark/transportMode/categoryGroupCode/
 (별도 에러 처리 없음) — ActionFlow에서도 Condition의 "거짓" 쪽이 전부 같은 검색 분기로
 합류하게 만들어야 원본과 동작이 같아진다.
 
-### 13-3. Agent "의도분석" 프롬프트
+### 13-3. Agent "의도분석" — 함수 호출(tool use)로 `resolve_intent` 스키마 강제
 
-Agent 노드가 함수 호출(tool use)을 지원하는지 확인 안 됐고(6번 항목 기준으로는 텍스트
-응답 + 가끔 마크다운 코드블록으로 감싸진 JSON으로 추정), 우선 **순수 텍스트 프롬프트로
-JSON을 강제로 뱉게** 하는 방식으로 설계한다. 지원 여부를 확인하면 이 절을 갱신할 것.
+Agent 노드가 함수 호출을 지원하므로, `pipeline.js`의 `INTENT_TOOL_SCHEMA`를 그대로
+가져다 쓴다 — "JSON으로만 답하라"는 프롬프트 트릭이 필요 없고, 스키마가 출력 구조를
+강제하므로 훨씬 안정적이다. 아래는 OpenAI 함수 호출 규격(`.env.example`의 주석대로
+Agent 노드가 OpenAI 계열로 추정)으로 표현한 것 — **Agent 노드의 실제 "Tools/Functions"
+설정 UI가 이 JSON을 통째로 붙여넣는 방식인지, 아니면 Name/Description/Parameters를
+필드별로 나눠 입력하는 방식인지 확인 필요**(15번 항목 질문 참고). 필드별 입력이면 이
+JSON의 `name`/`description`/`parameters`를 그대로 각 칸에 나눠 넣으면 됨.
 
-**System Prompt** (`pipeline.js`의 `resolveIntent` 시스템 프롬프트에 출력 형식 지시만 추가):
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "resolve_intent",
+    "description": "사용자 발화에서 검색 의도를 추출합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": ["search", "navigate_favorite", "ambiguous"],
+          "description": "즐겨찾기 별칭 자체가 목적지면(예: '집으로 가자') navigate_favorite. 즐겨찾기 별칭이 검색 기준 위치로만 쓰이면(예: '집 근처 편의점') search (originHint에만 반영, destinationFavoriteName은 비움)."
+        },
+        "query": {
+          "type": "string",
+          "description": "카카오 키워드 검색(장소명/업종명 매칭)에 쓸 짧고 구체적인 검색어. 실제 상호명/업종에 들어갈 법한 단어만 넣으세요. '아이랑 갈만한', '분위기 좋은' 같은 동반자/분위기/목적 수식어는 query에 넣지 말고 filters에만 넣으세요 — 그대로 넣으면 검색결과가 0건이 됩니다. locationHint에 넣은 지역/랜드마크명도 query에서 반드시 빼세요. 구체적인 상호/메뉴가 없으면 categoryGroupCode만으로 찾도록 query는 해당 업종의 일반명사로 짧게 두세요."
+        },
+        "categoryGroupCode": {
+          "type": "string",
+          "enum": ["", "FD6", "CE7", "CS2", "PM9", "SW8", "PK6", "BK9", "OL7", "HP8", "MT1", "AD5", "AT4", "CT1", "PO3", "AC5", "SC4", "PS3", "AG2"],
+          "description": "요청이 아래 업종 중 하나에 해당하면 query에 구체적인 상호/메뉴가 있어도 항상 같이 채우세요: FD6=음식점/맛집/밥집/식당, CE7=카페, CS2=편의점, PM9=약국, SW8=지하철역, PK6=주차장, BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트, AD5=숙박(호텔/모텔/펜션/게스트하우스), AT4=관광명소, CT1=문화시설(영화관/미술관/박물관/공연장), PO3=공공기관(주민센터/구청/우체국/경찰서), AC5=학원, SC4=학교, PS3=어린이집/유치원, AG2=부동산/중개업소. 해당 없으면 빈 문자열."
+        },
+        "transportMode": {
+          "type": "string",
+          "enum": ["transit", "car"],
+          "description": "발화에 이동수단이 명시되면(예: '대중교통으로', '차 타고') 그 값을 반영. 명시되지 않았으면 컨텍스트의 '이동수단 기본' 값을 그대로 사용(임의로 바꾸지 말 것)."
+        },
+        "originHint": {
+          "type": "string",
+          "description": "'현재위치' 또는 즐겨찾기 별칭(locationHint와 동시에 채우지 말 것). '# 즐겨찾기' 목록의 alias 값을 토씨 하나 안 틀리고 그대로 복사해서 넣으세요."
+        },
+        "locationHint": {
+          "type": "string",
+          "description": "발화에 특정 지역/역/동네/랜드마크명이 검색 기준 위치로 언급되면(예: '미사역', '홍대', '강남역') 그 이름만 넣으세요 — '~주변/~근처/~에서'처럼 다른 걸 찾기 위한 기준 위치로 쓰인 경우입니다. 즐겨찾기 별칭은 여기 넣지 말고 originHint에 넣으세요. 명시적인 지역 언급이 없으면 빈 문자열."
+        },
+        "destinationFavoriteName": {
+          "type": "string",
+          "description": "intent가 navigate_favorite일 때만 채움. search일 때는 항상 빈 문자열."
+        },
+        "filters": { "type": "array", "items": { "type": "string" } },
+        "spoken": { "type": "string" },
+        "clarification": { "type": "string" }
+      },
+      "required": ["intent", "query", "transportMode", "originHint", "locationHint", "destinationFavoriteName", "filters", "spoken", "clarification"]
+    }
+  }
+}
+```
+
+**System Prompt** (스키마가 필드 구조를 강제하므로, 스키마 설명에 못 담는 "필드 간 관계"
+지시만 남기면 됨 — `pipeline.js`의 `resolveIntent` 시스템 프롬프트에서 출력 형식 지시
+부분만 빼면 그대로):
 
 ```
-중요: 사용자 UI 언어는 한국어입니다. spoken, clarification 등 모든 자유 텍스트 출력 필드를 한국어로 작성하세요. (UI 언어가 english면 이 문단 대신 "IMPORTANT: ... English only"로 교체)
+중요: 사용자 UI 언어는 한국어입니다. spoken, clarification 등 모든 자유 텍스트 출력 필드를 한국어로 작성하세요. (UI 언어가 english면 "IMPORTANT: ... English only"로 교체)
 
 당신은 한국 길찾기 앱의 의도 분석 어시스턴트입니다. 사용자의 자연어 발화에서 카카오 로컬 검색에 쓸 쿼리/카테고리/필터를 추출하세요.
 즐겨찾기 별칭(집, 회사 등)이 발화에서 목적지 자체로 쓰이면(예: '집으로 가자', '회사 가는 길') intent='navigate_favorite'이고 destinationFavoriteName에 그 별칭을 넣으세요.
 즐겨찾기 별칭이 검색 기준 위치로만 쓰이면(예: '집 근처 편의점', '회사 주변 카페') intent='search'이고 originHint에만 넣으세요 (destinationFavoriteName은 비움).
-originHint/destinationFavoriteName에 즐겨찾기를 넣을 때는 '# 즐겨찾기' 목록에 있는 alias 값을 토씨 하나 안 틀리고 그대로 복사해서 넣으세요.
-즐겨찾기가 아닌 임의의 지역/역/동네/랜드마크명이 검색 기준 위치로 쓰이면(예: '미사역 주변 맛집', '홍대에서 혼술', '판교역 근처 카페') locationHint에 그 지명만 넣으세요(originHint는 '현재위치'로 둠). 이때 query에는 그 지명을 절대 포함하지 마세요.
+즐겨찾기가 아닌 임의의 지역/역/동네/랜드마크명이 검색 기준 위치로 쓰이면(예: '미사역 주변 맛집', '홍대에서 혼술') locationHint에 그 지명만 넣으세요(originHint는 '현재위치'로 둠). 이때 query에는 그 지명을 절대 포함하지 마세요.
 지명 없이 그냥 '카페 찾아줘'처럼 현재 위치 기준이면 locationHint는 비워두세요.
-발화가 지역/역/동네/랜드마크명 단독으로만 이루어져 있으면(예: '미사역', '강남역', '홍대') query에 그 이름을 그대로 넣고 categoryGroupCode와 locationHint는 반드시 빈 문자열로 두세요.
-'# 최근 검색'은 '거기', '그 근처', '아까 거기서' 처럼 지금 발화만으로는 뜻이 불완전할 때만 참고하세요.
-이동수단(transportMode)은 발화에 명시적으로 언급된 경우에만 그 값으로 바꾸고, 언급이 없으면 컨텍스트의 '이동수단 기본' 값을 그대로 유지하세요.
-query는 실제 상호명/업종에 매칭될 짧은 검색어만 넣고, '아이랑 갈만한' 같은 동반자/분위기/목적 수식어는 query에서 빼서 filters에 넣으세요.
+발화가 지역/역/동네/랜드마크명 단독으로만 이루어져 있으면(예: '미사역', '강남역') query에 그 이름을 그대로 넣고 categoryGroupCode와 locationHint는 반드시 빈 문자열로 두세요.
+'# 최근 검색'은 '거기', '그 근처'처럼 지금 발화만으로는 뜻이 불완전할 때만 참고하세요.
 모호하면 clarification에 짧은 질문을 넣고 intent='ambiguous'.
-
-categoryGroupCode는 다음 중 하나이거나 빈 문자열: FD6=음식점/맛집, CE7=카페, CS2=편의점, PM9=약국, SW8=지하철역, PK6=주차장, BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트, AD5=숙박, AT4=관광명소, CT1=문화시설, PO3=공공기관, AC5=학원, SC4=학교, PS3=어린이집/유치원, AG2=부동산.
-
-아래 JSON 형식으로만 답하세요. 설명 문장이나 마크다운 코드블록 없이, 이 스키마의 순수 JSON 객체 하나만 출력하세요. 모든 필드를 항상 포함하세요(해당 없으면 빈 문자열 "" 또는 빈 배열 []):
-{
-  "intent": "search" | "navigate_favorite" | "ambiguous",
-  "query": "string",
-  "categoryGroupCode": "string",
-  "transportMode": "transit" | "car",
-  "originHint": "string",
-  "locationHint": "string",
-  "destinationFavoriteName": "string",
-  "filters": ["string"],
-  "spoken": "string",
-  "clarification": "string"
-}
 ```
 
-**User Prompt** (Smart Component로 트리거 값 바인딩):
+**User Prompt** (Smart Component로 트리거 값 바인딩 — 문법은 13-1 참고, 이건 Code 노드가
+아니라 Agent 노드 입력 폼이므로 `#{parameter.body.필드명}`):
 
 ```
 # 사용자 발화
@@ -379,18 +449,32 @@ categoryGroupCode는 다음 중 하나이거나 빈 문자열: FD6=음식점/맛
 #{parameter.body.recentSearches}
 ```
 
-`favorites`/`recentSearches`는 배열이라, Smart Component가 그대로 문자열 치환했을 때
-`[object Object]`처럼 깨지지 않는지 확인 필요 — 깨지면 Agent 노드 앞에 Code 노드를 하나
-두고 `JSON.stringify(model["Trigger"].favorites)`처럼 문자열로 미리 만들어서 넘길 것
-(13-1과 같은 트리거 접근 방법 확인이 선행돼야 함).
+⚠️ `favorites`/`recentSearches`는 배열인데, Smart Component가 프롬프트 텍스트에 그대로
+치환했을 때 `[object Object]`로 깨지는지 아니면 JSON 문자열(`[{"name":"..."}]`)로 잘
+치환되는지 확인 필요(15번 항목 질문). 깨지면 Agent 앞에 Code 노드를 하나 두고
+`JSON.stringify(model.parameter.body.favorites)`로 미리 문자열을 만들어(13-1 접근법 확인됐으니
+이제 이 자체는 쉬움) 그 Code 노드 결과를 Agent 프롬프트에 넣는 방식으로 바꾸면 됨.
 
 ### 13-4. Code "의도파싱"
 
+함수 호출 결과가 Agent 결과 안에 어떤 필드명으로 들어오는지 아직 확인 전이라(15번 항목
+질문), 아래처럼 흔한 후보 경로를 순서대로 시도하는 방어적 코드로 시작 — 실제 구조를
+한 번 그대로 `return`해서 Simulation으로 찍어본 뒤, 맞는 한 줄만 남기고 나머지는 지울 것.
+
 ```javascript
 var agent = model["의도분석"];
-var text = (agent.answer || '').replace(/```json/g, '').replace(/```/g, '').trim();
-var parsed = {};
-try { parsed = JSON.parse(text); } catch (e) { parsed = {}; }
+// 아래 중 실제로 값이 있는 경로로 교체(플랫폼마다 이름이 다름 — 흔한 후보들):
+var raw =
+  (agent.toolCalls && agent.toolCalls[0] && agent.toolCalls[0].arguments) ||
+  (agent.tool_calls && agent.tool_calls[0] && agent.tool_calls[0].function && agent.tool_calls[0].function.arguments) ||
+  (agent.functionCall && agent.functionCall.arguments) ||
+  agent.arguments ||
+  agent.answer;
+// tool-call 인자가 문자열(JSON 텍스트)로 오는 API도 있고, 이미 파싱된 객체로 오는
+// API도 있음 — 방어적으로 둘 다 처리. (문자열이면 혹시 모를 코드블록도 벗겨냄.)
+var parsed = (typeof raw === 'string')
+  ? JSON.parse(raw.replace(/```json/g, '').replace(/```/g, '').trim())
+  : (raw || {});
 
 // 즐겨찾기 목록에 없는 흔한 업종 단어가 원문에 있으면 categoryGroupCode 보조 추론
 // (pipeline.js의 CATEGORY_KEYWORDS와 완전히 동일해야 함 — 새 업종 추가 시 양쪽 다 갱신).
@@ -415,9 +499,10 @@ var CATEGORY_KEYWORDS = [
   ['AG2', ['부동산','공인중개사']]
 ];
 
-var originalText = /* 13-1 확인 후: model["Trigger 값 담은 Variable"].text 등 */ '';
-var defaultCategory = /* parameter.body.categoryGroupCode, 13-1 참고 */ '';
-var userTransportMode = /* parameter.body.transportMode, 13-1 참고 */ 'transit';
+// 트리거 body는 Code 노드에서 model.parameter.body.*로 직접 읽는다(13-1 확인됨).
+var originalText = model.parameter.body.text || '';
+var defaultCategory = model.parameter.body.categoryGroupCode || '';
+var userTransportMode = model.parameter.body.transportMode || 'transit';
 
 var intent = {
   intent: parsed.intent || 'search',
@@ -470,7 +555,18 @@ Condition: !originResolved && #{의도파싱.locationHint} != ""
 ```
 
 `findFavorite`는 `server/src/pipeline.js`의 버전(부분일치: `clean.startsWith(f.alias)`)을
-그대로 옮기면 됨 — `pipeline-client.js` 버전(`indexOf === 0`)과 동치.
+그대로 옮기면 됨 — `pipeline-client.js` 버전(`indexOf === 0`)과 동치. Code 노드 구현:
+
+```javascript
+// "즐겨찾기매칭(origin)" — locationHint 매칭용도 hint 값만 바꿔서 그대로 재사용
+var favorites = model.parameter.body.favorites || [];
+var hint = (model["의도파싱"].originHint || '').trim(); // location 매칭이면 .locationHint
+var match = favorites.find(function (f) {
+  return (f.alias && (f.alias === hint || hint.indexOf(f.alias) === 0)) ||
+         (f.name && (f.name === hint || hint.indexOf(f.name) === 0));
+});
+return match || null; // 매칭 안 되면 null — 이어지는 Condition에서 null 체크
+```
 
 ### 13-6. 카카오 검색 폴백 체인 — `candidates`
 
@@ -504,12 +600,53 @@ Condition: #{candidates}.length == 0
 후보가 있을 때만 두 번째 LLM 호출(`curateResults`)을 태운다 — `candidates.length==0`이면
 호출 자체를 건너뛰고 바로 Result로 감(불필요한 LLM 호출 비용 절감, `pipeline.js`도 동일).
 
+**Agent "큐레이션" 함수 스키마** (`pipeline.js`의 `CURATE_TOOL_SCHEMA`, 13-3과 같은 방식):
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "curate_results",
+    "description": "검색 결과 후보 중 사용자 의도에 가장 잘 맞는 곳을 추천합니다.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "rankedIndices": { "type": "array", "items": { "type": "integer" } },
+        "topPickIndex": { "type": "integer" },
+        "topPickReason": {
+          "type": "string",
+          "description": "반드시 후보 데이터에 실제로 있는 정보(이름, 카테고리, 주소, 거리)와 사용자 발화/필터만 근거로 삼으세요. 카카오 장소 데이터에는 평점·가격대·시설·서비스 품질 정보가 전혀 없습니다. '고급스러운 시설', '평점이 높은', '가성비 좋은', '분위기 좋은' 처럼 확인할 수 없는 사실을 지어내지 마세요."
+        },
+        "spoken": { "type": "string" }
+      },
+      "required": ["rankedIndices", "topPickIndex", "topPickReason", "spoken"]
+    }
+  }
+}
+```
+
+**User Prompt**:
+```
+# 원본 발화
+"#{parameter.body.text}"
+
+# 의도 필터
+#{의도파싱.filters}
+
+# 언어: #{parameter.body.lang}
+
+# 후보 (0-based)
+#{후보JSON목록}
+```
+`후보 목록`은 `candidates`를 `{i, name, category, address, distance}`로 축약한 배열이어야
+함(`pipeline.js`와 동일) — Code 노드로 `candidates.map(function(c,i){return {i:i, name:c.name,
+category:c.category, address:c.address, distance:c.distanceLabel};})`를 만들어서 Agent 프롬프트
+앞에 하나 더 두거나, Agent 프롬프트 자체 안에서 `#{candidates}`를 그대로 넣고 System Prompt에
+"각 후보는 name/category/address/distanceLabel 필드를 갖는다"고 알려줘도 됨(둘 다 시도해볼 것).
+
 ```
 Condition: #{candidates}.length > 0
- ├ 참: Agent "큐레이션" (System/User 프롬프트는 pipeline.js의 curateResults를 13-3과 같은 방식으로
- │      "순수 JSON만 출력" 지시로 변환 — rankedIndices/topPickIndex/topPickReason/spoken)
- │      └ Code "큐레이션파싱" — 코드블록 벗기고 JSON.parse, rankedIndices로 candidates 재정렬,
- │         topPickIndex의 재정렬 후 새 인덱스 계산 (pipeline.js의 curateResults 로직 그대로)
+ ├ 참: Agent "큐레이션" (위 스키마로 함수 호출) → Code "큐레이션파싱" (아래 코드)
  └ 거짓: (curated = candidates 그대로, spoken = 의도파싱.spoken, topPick = null)
 Result: {
   "candidates": #{최종candidates},
@@ -520,6 +657,26 @@ Result: {
   "topPick": #{최종topPick},
   "clarification": ""
 }
+```
+
+**Code "큐레이션파싱"** — 13-4와 같은 방식으로 인자 꺼낸 뒤, `rankedIndices`로 `candidates`
+재정렬 + `topPickIndex`의 재정렬 후 새 인덱스 계산 (`pipeline.js`의 `curateResults` 로직 그대로):
+
+```javascript
+var agent = model["큐레이션"];
+var raw = (agent.toolCalls && agent.toolCalls[0] && agent.toolCalls[0].arguments) || agent.answer;
+var args = (typeof raw === 'string') ? JSON.parse(raw) : (raw || {});
+var candidates = model["candidates 대입한 Variable/Code"]; // 13-6 결과
+var ranked = (args.rankedIndices || [])
+  .map(function (i) { return candidates[i]; })
+  .filter(Boolean)
+  .map(function (c, newI) { return Object.assign({}, c, { index: newI + 1 }); });
+var newTopIdx = (args.rankedIndices || []).indexOf(args.topPickIndex);
+return {
+  candidates: ranked.length ? ranked : candidates,
+  spoken: args.spoken || model["의도파싱"].spoken || '',
+  topPick: { index: newTopIdx >= 0 ? newTopIdx : 0, reason: args.topPickReason || '' }
+};
 ```
 
 `topPick`은 객체 또는 `null`이라 7번 항목 규칙대로 **따옴표 없이** 그대로 넣어야 함
@@ -709,16 +866,74 @@ GET /v2/local/search/category.json?category_group_code=FD6&x=127.194719&y=37.560
 
 ### 13-9. 만들면서 확인할 것 (체크리스트)
 
-1. 13-1 — Code 노드가 트리거 body를 직접 읽을 수 있는지, 안 되면 Variable 우회가 되는지.
-2. Agent 노드가 진짜 순수 JSON만 주는지, 아니면 매번 마크다운 코드블록/사족이 붙는지
-   (붙으면 13-4/13-7의 코드블록 제거 정규식이 이미 대응하지만, 사족 문장까지 섞이면 정규식으로는
-   못 걷어내므로 프롬프트를 더 강하게 다듬어야 함).
-3. 카테고리검색 Plugin-API가 아직 없다면 새로 등록(5번 항목 참고, `category_group_code` 필수
+1. Agent 노드의 함수 호출 결과가 실제로 `model["의도분석"]` 안에서 어떤 필드명으로
+   오는지 확정 — 13-4/13-7의 방어적 `raw` 추출 코드에서 실제로 맞는 한 줄만 남기고
+   나머지 후보는 지울 것 (15번 항목 질문).
+2. 카테고리검색 Plugin-API가 아직 없다면 새로 등록(5번 항목 참고, `category_group_code` 필수
    파라미터로).
-4. `findFavorite`/`isGenericCategoryTerm`/`stripBuildingDetail`을 Code 노드로 옮길 때 원본
+3. `findFavorite`/`isGenericCategoryTerm`/`stripBuildingDetail`을 Code 노드로 옮길 때 원본
    함수(`pipeline.js`)와 완전히 같은 로직인지 대조 — 미묘하게 다르면 "그 버그"(originHint가
    즐겨찾기로 해석됐는데 query에 원문이 남는 것 등, e7cac3e/600f3ef에서 고친 것들)가 ActionFlow
    쪽에서 재발할 수 있음.
-5. 12번 항목의 레이스 컨디션 이슈 — 이 플로우도 Variable을 많이 쓰므로, 프론트엔드가 검색을
+4. 12번 항목의 레이스 컨디션 이슈 — 이 플로우도 Variable을 많이 쓰므로, 프론트엔드가 검색을
    병렬로 여러 번 동시 호출하지 않는지 확인(오늘 탭의 일정 위치 확인은 이미 순차 처리로
    고쳐져 있음, `c56ba55`).
+5. Agent 노드의 함수 호출이 매번 스키마를 안정적으로 지키는지(가끔 `required` 필드를
+   비우거나 `enum` 밖의 값을 주는 경우가 있는지) — tool use라도 100% 강제는 아닐 수 있어서,
+   13-4의 기본값 채우기(`|| ''` 등)를 지우지 말고 안전망으로 유지할 것.
+
+## 14. Sub-flow로 공통 로직 재사용 (제안 — 아직 안 만들어봄)
+
+Sub-flow 노드로 기존 플로우를 호출할 수 있다는 걸 확인했으므로, `chip`/`locate`/`text`
+세 분기가 각자 중복해서 만들 뻔한 로직을 하나로 뽑아 재사용할 수 있다. 특히 13-6(카카오
+검색 폴백 체인)은 `chip`/`locate`가 이미 만든 "키워드검색 → (0건이면) 주소검색"(11번 항목)
+구조와 사실상 같은 뼈대라, 처음부터 다시 만들기보다 **기존 검색 플로우의 핵심 로직을
+Sub-flow로 분리하고, `chip`/`locate`/`text` 세 플로우가 전부 그걸 호출**하는 편이 유지보수가
+쉽다(카카오 API 파라미터가 바뀌면 한 곳만 고치면 됨).
+
+**제안하는 Sub-flow 3개와 입출력 계약**:
+
+1. **"카카오검색체인" Sub-flow** — 13-6 전체(키워드→카테고리→전국→주소 폴백)를 감싼다.
+   - 입력: `{ query, categoryGroupCode, lat, lng, radius, originalTextForAddressFallback }`
+     (`chip`/`locate`는 `categoryGroupCode`를 트리거에서 그대로, `text`는 `의도파싱` 결과에서
+     가져와 이 값들로 채워서 호출)
+   - 출력: `{ candidates: Candidate[] }` (13-6에서 정의한 정규화 형태 그대로)
+   - `locate`는 반경 제한이 없다는 차이가 있으니, `radius`를 `null`/빈 값으로 넘기면 그
+     단계를 건너뛰는 분기가 Sub-flow 안에 이미 있어야 함(지금 `locate` 플로우에 있는 로직을
+     그대로 Sub-flow 쪽으로 옮기는 방식이 될 것).
+2. **"즐겨찾기매칭" Sub-flow** — 13-5의 `findFavorite`.
+   - 입력: `{ favorites, hint }`
+   - 출력: 매칭된 즐겨찾기 객체 또는 `null`
+3. **"지명좌표확인" Sub-flow** — `resolveNamedLocation`(13-5, locationHint를 좌표로).
+   - 입력: `{ hint }`
+   - 출력: `{ lat, lng, name }` 또는 못 찾으면 `null`
+
+**단, 지금 당장 리팩터링하지 말고 순서 제안**: 이미 동작 중인 `chip`/`locate` 플로우를
+건드리는 건 위험 부담이 있으니, ① 먼저 `text` 분기를 지금 설계(13-3~13-8)대로 **독립적으로**
+새로 만들어서 끝까지 동작시키고, ② 그 다음에 `chip`/`locate`가 쓰는 카카오 폴백 로직을
+"카카오검색체인" Sub-flow로 뽑아내면서 `text`도 거기 맞춰 리팩터링하는 2단계로 가는 걸
+권장. 처음부터 세 플로우를 동시에 Sub-flow 공유 구조로 만들면, 문제가 생겼을 때 그게
+Sub-flow 자체 문제인지 호출부 문제인지 구분하기가 더 어려움.
+
+## 15. 확인이 필요한 질문 (다음에 답 주시면 위 설계를 확정)
+
+1. **Agent 노드의 "함수/도구" 설정 UI가 정확히 어떤 모양인가?** — 13-3의 JSON 스키마를
+   통째로 붙여넣는 raw JSON 입력 칸인지, 아니면 함수 이름/설명/파라미터를 필드별로 하나씩
+   추가하는 폼인지. 폼이라면 `enum`/`required`도 UI에서 지정 가능한지, 아니면 타입만
+   String/Number/Array 정도로 단순한지.
+2. **Agent 노드 결과에서 함수 호출 인자가 정확히 어떤 경로로 나오는가?** — `model["에이전트
+   이름"]`을 Code 노드에서 그대로 `return`해서 Simulation으로 실제 구조를 한 번 찍어봐 주시면
+   13-4/13-7의 방어적 코드를 정확한 한 줄로 확정할 수 있음. (예상 후보:
+   `.toolCalls[0].arguments`, `.tool_calls[0].function.arguments`, `.functionCall.arguments`,
+   또는 아예 자동으로 파싱해서 최상위에 필드가 바로 있는 경우도 있을 수 있음.)
+3. **Agent 노드의 User Prompt(Smart Component)에 배열(`#{parameter.body.favorites}`)을
+   그대로 넣으면 어떻게 치환되는가?** — 유효한 JSON 문자열로 나오는지, `[object Object]`로
+   깨지는지. 깨지면 13-3에 적어둔 대로 Agent 앞에 `JSON.stringify` Code 노드를 하나 추가.
+4. **Sub-flow 노드의 입출력 계약이 API Trigger 호출(Plugin-API처럼 동기적으로 끝나고
+   `#{서브플로우 이름.필드}`로 결과 참조)과 동일한 모양인가?** — 아니면 별도의 입력/출력
+   매핑 UI가 있는지. 14번 항목의 Sub-flow 분리 제안이 이 답에 따라 구체적인 모양이
+   달라짐.
+5. (선택) Agent 노드가 한 번에 여러 tool 중 하나를 고르게 하는 것도 되는지, 아니면 항상
+   "이 함수 하나만 강제 호출"(OpenAI의 `tool_choice: {type:"function", function:{name:...}}`
+   같은) 모드가 있는지 — 있으면 13-3/13-7 둘 다 그 모드로 강제하는 게 훨씬 안정적임(모델이
+   함수 호출을 생략하고 그냥 텍스트로만 답하는 경우를 원천 차단).
