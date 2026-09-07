@@ -525,7 +525,189 @@ Result: {
 `topPick`은 객체 또는 `null`이라 7번 항목 규칙대로 **따옴표 없이** 그대로 넣어야 함
 (문자열이 아니므로).
 
-### 13-8. 만들면서 확인할 것 (체크리스트)
+### 13-8. 실전 예시 트레이스 4가지 (Simulation 입력값으로 바로 쓸 수 있음)
+
+각 노드가 실제로 어떤 값을 받고 어떤 값을 내놓아야 하는지, 트리거 body부터 최종 Result까지
+구체적인 JSON으로 끝까지 따라가본다. ActionFlow에서 각 액션아이템의 "TEST"/Simulation
+입력값으로 그대로 붙여넣어서 중간 단계마다 실제 출력과 대조하는 용도로 쓸 것.
+
+#### 예시 A — `locationHint` + `filters` + 큐레이션까지 전부 타는 케이스
+
+**Trigger body**:
+```json
+{
+  "text": "미사역 주변에 아이랑 갈만한 파스타집 찾아줘",
+  "lat": 37.5665, "lng": 126.9780, "landmark": "",
+  "transportMode": "transit", "categoryGroupCode": "",
+  "inputType": "text", "chipRadius": 5000, "lang": "ko",
+  "favorites": [
+    { "alias": "집", "name": "래미안강남포레스트", "lat": 37.4979, "lng": 127.0276 },
+    { "alias": "회사", "name": "우리금융 상암센터", "lat": 37.5793, "lng": 126.8912 }
+  ],
+  "recentSearches": []
+}
+```
+
+**Agent "의도분석" 응답** (기대값):
+```json
+{
+  "intent": "search", "query": "파스타", "categoryGroupCode": "FD6",
+  "transportMode": "transit", "originHint": "현재위치", "locationHint": "미사역",
+  "destinationFavoriteName": "", "filters": ["아이랑 갈만한"],
+  "spoken": "", "clarification": ""
+}
+```
+
+**원점 해석**: `originHint`="현재위치"라 origin 매칭 skip(`originResolved=false`). `locationHint`="미사역"이
+즐겨찾기엔 없으므로 카카오 키워드검색(반경 없음, `accuracy`)으로 지명 좌표 확인:
+
+```
+GET /v2/local/search/keyword.json?query=미사역&sort=accuracy&size=5
+→ documents[0] = { "place_name": "미사역", "road_address_name": "경기 하남시 미사대로 지하 66",
+                    "x": "127.194719", "y": "37.560597" }
+```
+→ `searchLat=37.560597, searchLng=127.194719, anchorLabel="미사역"`
+
+**쿼리결정**: `query="파스타"` — ⚠️ **"파스타"는 `CATEGORY_KEYWORDS`의 FD6 목록에 실제로 포함된
+단어라 `isGenericCategoryTerm`이 `true`를 반환** → `query`가 빈 문자열로 바뀌어 **키워드검색을
+건너뛰고 바로 카테고리검색으로 감**(이건 버그가 아니라 원본 `pipeline.js`와 동일한 동작 —
+"파스타" 하나만 딱 말하면 상호명 매칭보다 거리순 카테고리 검색이 더 정확한 결과를 준다고
+판단한 설계. ActionFlow 쪽 결과가 이거랑 다르게 나오면 `CATEGORY_KEYWORDS` 목록이 Agent
+프롬프트/Code 노드 사이에서 최신 상태로 안 맞는 것부터 의심).
+
+**카카오 카테고리검색**:
+```
+GET /v2/local/search/category.json?category_group_code=FD6&x=127.194719&y=37.560597&radius=5000&sort=distance&size=10
+→ documents = [
+    { "place_name": "미사 파스타하우스", "road_address_name": "경기 하남시 미사대로 520",
+      "category_name": "음식점 > 양식 > 이탈리안", "x": "127.19510", "y": "37.55980",
+      "distance": "420", "phone": "031-000-0000", "place_url": "http://place.map.kakao.com/111" },
+    { "place_name": "강가에파스타", "road_address_name": "경기 하남시 미사강변대로 200",
+      "category_name": "음식점 > 양식", "x": "127.19700", "y": "37.56200", "distance": "780" }
+  ]
+```
+
+**정규화된 `candidates`**:
+```json
+[
+  { "index": 1, "name": "미사 파스타하우스", "address": "경기 하남시 미사대로 520", "category": "이탈리안",
+    "lat": 37.55980, "lng": 127.19510, "distanceM": 420, "distanceLabel": "420m",
+    "phone": "031-000-0000", "placeUrl": "http://place.map.kakao.com/111" },
+  { "index": 2, "name": "강가에파스타", "address": "경기 하남시 미사강변대로 200", "category": "양식",
+    "lat": 37.56200, "lng": 127.19700, "distanceM": 780, "distanceLabel": "780m",
+    "phone": "", "placeUrl": "" }
+]
+```
+
+**Agent "큐레이션" 응답** (기대값):
+```json
+{
+  "rankedIndices": [0, 1],
+  "topPickIndex": 0,
+  "topPickReason": "요청하신 파스타(이탈리안) 카테고리와 가장 가깝고, 미사역에서 420m로 이동이 편한 곳입니다.",
+  "spoken": "미사역 근처에서 파스타집 두 곳을 찾았어요. 가장 가까운 미사 파스타하우스를 추천드려요."
+}
+```
+
+**최종 Result**:
+```json
+{
+  "candidates": [ /* 위 candidates와 동일, index 1~2 유지 */ ],
+  "destination": "미사역 주변에 아이랑 갈만한 파스타집 찾아줘",
+  "locationLabel": "미사역",
+  "transportMode": "transit",
+  "spoken": "미사역 근처에서 파스타집 두 곳을 찾았어요. 가장 가까운 미사 파스타하우스를 추천드려요.",
+  "topPick": { "index": 0, "reason": "요청하신 파스타(이탈리안) 카테고리와 가장 가깝고, 미사역에서 420m로 이동이 편한 곳입니다." },
+  "clarification": ""
+}
+```
+
+#### 예시 B — `originHint`가 즐겨찾기로 해석되는 케이스 ("집주변 편의점" 버그의 회귀 확인용)
+
+이건 실제로 `e7cac3e`/`600f3ef`에서 고친 버그(집 근처 편의점을 찾는데 11km 떨어진 송파구
+결과가 나옴)의 원인이었던 케이스라, ActionFlow 쪽을 만들 때 **반드시 이 트레이스대로
+나오는지 확인**할 것.
+
+**Trigger body**: 위 예시 A와 같은 `favorites`, `text: "집 근처 편의점"`.
+
+**Agent "의도분석" 응답**:
+```json
+{
+  "intent": "search", "query": "편의점", "categoryGroupCode": "CS2",
+  "transportMode": "transit", "originHint": "집", "locationHint": "",
+  "destinationFavoriteName": "", "filters": [], "spoken": "", "clarification": ""
+}
+```
+
+**원점 해석**: `originHint`="집"이 즐겨찾기 alias와 정확히 일치 → **카카오 API 호출 없이 즉시**
+`searchLat=37.4979, searchLng=127.0276, anchorLabel="집", originResolved=true`.
+
+**쿼리결정**: `query="편의점"` — CS2 목록이 `['편의점']` 딱 하나뿐이라 `isGenericCategoryTerm`이
+`true` → `query=""` → 키워드검색 건너뛰고 바로 카테고리검색. **여기서 `searchLat`/`searchLng`가
+집 좌표(37.4979, 127.0276)를 쓰는지가 핵심** — 만약 Agent가 `originHint`를 빈 문자열로
+잘못 내놓거나(즐겨찾기 대신 `locationHint`에 "집"을 넣는 경우가 실제로 있었음 — 13-5의
+"즐겨찾기매칭(location)" 폴백이 바로 이걸 잡는 안전망), 즐겨찾기 매칭 Code 노드가 실패하면
+`searchLat/Lng`가 트리거의 GPS 좌표(37.5665, 126.9780 — 서울시청 부근)로 남아서 엉뚱하게
+먼 편의점이 나온다.
+
+**카카오 카테고리검색**: `x=127.0276, y=37.4979, radius=5000, category_group_code=CS2, sort=distance`
+→ 집(강남) 근처 편의점들이 거리순으로 나와야 정상. (`x=126.9780, y=37.5665`로 나가면 시청 근처
+결과가 나오는 것이므로 이게 바로 그 버그 재현.)
+
+#### 예시 C — `navigate_favorite` (즐겨찾기 자체가 목적지)
+
+**Trigger body**: `text: "회사로 가자"`, 위와 동일한 `favorites`.
+
+**Agent "의도분석" 응답**:
+```json
+{
+  "intent": "navigate_favorite", "query": "", "categoryGroupCode": "",
+  "transportMode": "transit", "originHint": "현재위치", "locationHint": "",
+  "destinationFavoriteName": "회사", "filters": [],
+  "spoken": "회사로 안내해 드릴게요.", "clarification": ""
+}
+```
+
+**Condition A** 참 → 즐겨찾기매칭("회사") → 매칭됨(alias="회사") → **카카오 호출도 큐레이션도
+없이 즉시 Result①**:
+```json
+{
+  "candidates": [
+    { "index": 1, "name": "우리금융 상암센터", "address": "", "category": "",
+      "lat": 37.5793, "lng": 126.8912, "distanceM": 0, "distanceLabel": "", "phone": "", "placeUrl": "" }
+  ],
+  "destination": "회사", "transportMode": "transit",
+  "spoken": "회사로 안내해 드릴게요.", "topPick": { "index": 0, "reason": "" }, "clarification": ""
+}
+```
+(`address`/`category`가 빈 문자열인 것도 `pipeline.js`와 동일 — 즐겨찾기 데이터 자체에
+주소/카테고리를 안 들고 있어서 원래 그럼. 프론트가 별도로 채우는 게 아니라면 정상.)
+
+#### 예시 D — `ambiguous` (되묻기)
+
+**Trigger body**: `text: "거기 다시 찾아줘"` (최근 검색 이력도 비어있는 상황 — `recentSearches: []`).
+
+**Agent "의도분석" 응답**:
+```json
+{
+  "intent": "ambiguous", "query": "", "categoryGroupCode": "",
+  "transportMode": "transit", "originHint": "현재위치", "locationHint": "",
+  "destinationFavoriteName": "", "filters": [],
+  "spoken": "", "clarification": "어디를 다시 찾아드릴까요?"
+}
+```
+
+**Condition B** 참 → 카카오 호출도 큐레이션도 없이 즉시 Result②:
+```json
+{
+  "candidates": [], "destination": "", "transportMode": "transit",
+  "spoken": "어디를 다시 찾아드릴까요?", "topPick": null, "clarification": "어디를 다시 찾아드릴까요?"
+}
+```
+(`spoken`은 `intent.spoken || intent.clarification` — `spoken`이 비어있으면 `clarification`
+문구를 그대로 음성 안내에도 씀. 두 필드에 같은 문구가 중복돼 보여도 정상.)
+
+### 13-9. 만들면서 확인할 것 (체크리스트)
 
 1. 13-1 — Code 노드가 트리거 body를 직접 읽을 수 있는지, 안 되면 Variable 우회가 되는지.
 2. Agent 노드가 진짜 순수 JSON만 주는지, 아니면 매번 마크다운 코드블록/사족이 붙는지
