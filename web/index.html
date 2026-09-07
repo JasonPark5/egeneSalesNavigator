@@ -1564,6 +1564,14 @@
       <button type="button" class="seg-btn" data-val="transit" onclick="setTransportPick('transit')" data-i18n="transport.transit">🚇 대중교통</button>
     </div>
 
+    <!-- Navigation app for 길찾기 deep links -->
+    <label data-i18n="settings.navApp" style="margin-top:14px;">내비게이션 앱</label>
+    <div class="seg-group" id="navAppSeg">
+      <button type="button" class="seg-btn" data-val="naver" onclick="setNavAppPick('naver')" data-i18n="navApp.naver">네이버 지도</button>
+      <button type="button" class="seg-btn" data-val="tmap" onclick="setNavAppPick('tmap')" data-i18n="navApp.tmap">티맵</button>
+    </div>
+    <div class="modal-note" data-i18n="settings.navApp.hint">티맵은 자동차 경로만 지원돼요(대중교통 선택 시에도 자동차 경로로 열려요). 앱이 없으면 스토어로 안내해요.</div>
+
     <!-- Chip radius -->
     <label style="margin-top:14px;">
       <span data-i18n="settings.chipRadius">칩 검색 반경</span>
@@ -1660,6 +1668,10 @@ const I18N = {
     'settings.voice.none': '시스템 기본',
     'settings.voice.preview': '미리듣기',
     'settings.transport': '기본 이동수단',
+    'settings.navApp': '내비게이션 앱',
+    'settings.navApp.hint': '티맵은 자동차 경로만 지원돼요(대중교통 선택 시에도 자동차 경로로 열려요). 앱이 없으면 스토어로 안내해요.',
+    'navApp.naver': '네이버 지도',
+    'navApp.tmap': '티맵',
     'settings.chipRadius': '칩 검색 반경',
     'settings.chipRadius.hint': '"칩"으로 검색할 때 현재 위치 기준 반경',
     'settings.advanced': '고급 설정',
@@ -1797,6 +1809,7 @@ const I18N = {
     'nav.transit': '대중교통 🚇',
     'nav.car': '자동차 🚗',
     'nav.currentLoc': '현재위치',
+    'nav.tmapDesktopFallback': '티맵은 모바일 앱에서만 열려요. 대신 네이버 지도 웹으로 안내할게요.',
     'fav.empty': '즐겨찾기가 비어있어요.<br>검색 결과에서 ☆ 버튼을 눌러<br>자주 가는 곳을 저장하세요.',
     'fav.deleted': '즐겨찾기에서 삭제했습니다.',
     'fav.deletedName': '"{0}" 즐겨찾기에서 삭제했습니다.',
@@ -1826,6 +1839,10 @@ const I18N = {
     'settings.voice.none': 'System default',
     'settings.voice.preview': 'Preview',
     'settings.transport': 'Default transport',
+    'settings.navApp': 'Navigation app',
+    'settings.navApp.hint': 'Tmap only supports driving routes (opens a driving route even if transit is selected). If the app isn\'t installed, you\'ll be sent to the store.',
+    'navApp.naver': 'Naver Map',
+    'navApp.tmap': 'Tmap',
     'settings.chipRadius': 'Chip search radius',
     'settings.chipRadius.hint': 'Radius from your location for "chip" searches',
     'settings.advanced': 'Advanced',
@@ -1963,6 +1980,7 @@ const I18N = {
     'nav.transit': 'Transit 🚇',
     'nav.car': 'Car 🚗',
     'nav.currentLoc': 'My Location',
+    'nav.tmapDesktopFallback': 'Tmap only opens on mobile. Opening Naver Map on the web instead.',
     'fav.empty': 'No favorites yet.<br>Tap ☆ on a result<br>to save places you visit often.',
     'fav.deleted': 'Removed from favorites.',
     'fav.deletedName': 'Removed "{0}" from favorites.',
@@ -2023,6 +2041,9 @@ let locationReady = null;       // Promise: GPS + Nominatim 모두 완료
 // 기본 이동수단(설정에서 저장한 값) — 검색탭 토글/음성 명령으로 바뀌는 현재 세션의 transportMode와는 별개.
 let defaultTransportMode = localStorage.getItem('transportModeDefault') || 'car';
 let transportMode = defaultTransportMode;
+// 길찾기 딥링크로 열 내비게이션 앱. 'naver'는 대중교통/자동차 둘 다 지원, 'tmap'은 자동차
+// 경로만 지원(navigateTo() 참고).
+let navApp = localStorage.getItem('navApp') || 'naver';
 let isRecording = false;
 let recognition = null;
 let lastCandidates = [];
@@ -3027,6 +3048,13 @@ function setTransportPick(mode) {
   });
   document.getElementById('transportSeg').dataset.pending = mode;
 }
+// 설정 화면의 "내비게이션 앱" 선택 — 위 기본 이동수단과 동일하게 저장(Save) 시에만 반영됨.
+function setNavAppPick(app) {
+  document.querySelectorAll('#navAppSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === app);
+  });
+  document.getElementById('navAppSeg').dataset.pending = app;
+}
 
 // ========================
 // SPEECH RECOGNITION
@@ -3635,9 +3663,28 @@ function showCandidates(candidates, topPick, locationLabel) {
 // ========================
 // NAVIGATION DEEPLINK
 // ========================
+// 설정 > 내비게이션 앱(navApp)에 따라 실제로 열 앱을 고른다. 카카오내비는 일단 스킵함 —
+// 딥링크 자체는 있지만(kakaonavi-sdk://navigate?appkey=...) 우리가 아직 등록 안 한
+// 별도의 카카오내비 전용 appkey가 필요해서(검색에 쓰는 Kakao REST/JS 키와는 다른 키),
+// 나중에 그 키를 발급받으면 openTmap()과 같은 패턴으로 openKakaoNavi()를 추가하면 됨.
 function navigateTo(dlat, dlng, dname, mode) {
   mode = mode || transportMode;
   logVisit(dlat, dlng, dname);
+
+  if (navApp === 'tmap') {
+    // 티맵 딥링크는(공식 문서가 따로 없어 커뮤니티 자료 기준) 자동차 경로만 확인돼서,
+    // 대중교통을 선택한 상태여도 자동차 경로로 열고 안내 문구도 그에 맞춘다.
+    mode = 'car';
+    openTmap(dlat, dlng, dname);
+  } else {
+    openNaverMap(dlat, dlng, dname, mode);
+  }
+
+  addBotMessage(t('nav.start', dname, mode === 'transit' ? t('nav.transit') : t('nav.car')));
+  speak(t('nav.startTts', dname));
+}
+
+function openNaverMap(dlat, dlng, dname, mode) {
   var slat = currentLocation ? currentLocation.lat : '';
   var slng = currentLocation ? currentLocation.lng : '';
   var appname = 'com.example.mapservice';
@@ -3651,20 +3698,49 @@ function navigateTo(dlat, dlng, dname, mode) {
     ? 'https://map.naver.com/v5/directions/' + slng + ',' + slat + ',' + enc(t('nav.currentLoc')) + ',15,map/' + dlng + ',' + dlat + ',' + enc(dname) + ',15,map/-/transit?c=15,0,0,0,dh'
     : 'https://map.naver.com/v5/directions/' + slng + ',' + slat + ',' + enc(t('nav.currentLoc')) + ',15,map/' + dlng + ',' + dlat + ',' + enc(dname) + ',15,map/-/car?c=15,0,0,0,dh';
 
-  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    var timer = setTimeout(function() { window.open(webUrl, '_blank'); }, 1500);
-    var iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = appUrl;
-    document.body.appendChild(iframe);
-    window.addEventListener('blur', function() { clearTimeout(timer); }, { once: true });
-  } else {
-    window.open(webUrl, '_blank');
-  }
+  openDeepLinkWithFallback(appUrl, webUrl);
+}
 
-  addBotMessage(t('nav.start', dname, mode === 'transit' ? t('nav.transit') : t('nav.car')));
-  speak(t('nav.startTts', dname));
+// 티맵 딥링크: tmap://route?goalname=목적지명&goalx=경도&goaly=위도 (WGS84라 우리 좌표
+// 그대로 씀, x=경도/y=위도 순서 주의). 티맵은 공식 개발자 문서가 따로 공개돼있지 않아
+// 커뮤니티에 정리된 형식 기준(iOS 구버전은 rGoName/rGoX/rGoY를 썼다는 자료도 있어 혹시
+// 몰라 같이 붙임 — 인식 안 되는 파라미터는 보통 무시되니 두 형식을 같이 보내도 안전함).
+// 앱이 없으면(딥링크 무반응) 스토어로 보낸다 — 네이버처럼 쓸만한 길찾기 웹 서비스가
+// 따로 없어서 웹 폴백 대신 설치 유도가 더 나음.
+function openTmap(dlat, dlng, dname) {
+  var enc = encodeURIComponent;
+  var appUrl = 'tmap://route?goalname=' + enc(dname) + '&goalx=' + dlng + '&goaly=' + dlat
+    + '&rGoName=' + enc(dname) + '&rGoX=' + dlng + '&rGoY=' + dlat;
+  var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid = /Android/i.test(navigator.userAgent);
+
+  if (!isIOS && !isAndroid) {
+    // 데스크톱엔 티맵 앱/웹 버전이 없어서 네이버 지도 웹으로 대체.
+    showToast(t('nav.tmapDesktopFallback'));
+    openNaverMap(dlat, dlng, dname, 'car');
+    return;
+  }
+  var storeUrl = isIOS
+    ? 'https://apps.apple.com/kr/app/id431589174'
+    : 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
+  openDeepLinkWithFallback(appUrl, storeUrl);
+}
+
+// 모바일에서 앱 딥링크(iframe)를 시도하고, 일정 시간 안에 앱으로 전환되지(blur) 않으면
+// fallbackUrl(웹 페이지 또는 스토어)을 새 탭으로 연다. 데스크톱이면 딥링크 시도 없이
+// fallbackUrl을 바로 연다.
+function openDeepLinkWithFallback(appUrl, fallbackUrl) {
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isMobile) {
+    window.open(fallbackUrl, '_blank');
+    return;
+  }
+  var timer = setTimeout(function() { window.open(fallbackUrl, '_blank'); }, 1500);
+  var iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = appUrl;
+  document.body.appendChild(iframe);
+  window.addEventListener('blur', function() { clearTimeout(timer); }, { once: true });
 }
 
 // ========================
@@ -3861,6 +3937,11 @@ function openConfig() {
     b.classList.toggle('active', b.dataset.val === defaultTransportMode);
   });
   document.getElementById('transportSeg').dataset.pending = '';
+  // Navigation app segmented control
+  document.querySelectorAll('#navAppSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === navApp);
+  });
+  document.getElementById('navAppSeg').dataset.pending = '';
   // Chip radius slider
   var km = chipRadius / 1000;
   document.getElementById('radiusSlider').value = km;
@@ -3908,6 +3989,12 @@ function saveConfig() {
     localStorage.setItem('transportModeDefault', defaultTransportMode);
   }
   setTransport(defaultTransportMode);
+  // Navigation app
+  var pendingNavApp = document.getElementById('navAppSeg').dataset.pending || navApp;
+  if (pendingNavApp !== navApp) {
+    navApp = pendingNavApp;
+    localStorage.setItem('navApp', navApp);
+  }
   // Radius
   var km = parseInt(document.getElementById('radiusSlider').value, 10) || 5;
   chipRadius = km * 1000;

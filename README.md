@@ -1,6 +1,7 @@
 # egeneSalesNavigator
 
-음성으로 목적지를 말하면 AI가 장소를 검색하고 네이버지도 앱 길찾기로 연결해주는 웹 앱입니다.
+음성으로 목적지를 말하면 AI가 장소를 검색하고 길찾기로 연결해주는 웹 앱입니다. 연결할
+내비게이션 앱(네이버 지도/티맵)은 설정에서 고를 수 있습니다.
 [n8nMapService](https://github.com/JasonPark5/n8nMapService)를 사내 해커톤용으로 포크하여, 백엔드
 자동화를 n8n 대신 사내 **ActionFlow**로 교체하고 GitHub Pages가 아닌 **로컬 실행** 구조로
 바꾼 버전입니다.
