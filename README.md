@@ -60,7 +60,10 @@ JSON을 그대로 돌려주면 됩니다(n8n의 Webhook + Respond to Webhook과 
 
 기존 로직: `server/src/pipeline.js`의 `runMockPipeline()` 중 `text`/`chip`/`locate` 분기
 (`resolveIntent` LLM → Kakao 키워드/카테고리/전국/주소 검색 → `curateResults` LLM. `chip`/`locate`는
-LLM을 건너뛰고 Kakao 검색만 함 — `skipLLM` 플래그로 구분).
+LLM을 건너뛰고 Kakao 검색만 함 — `skipLLM` 플래그로 구분). `text`(전체 LLM 의도분석) 분기를
+ActionFlow로 옮기는 구체적인 노드 설계는
+[`docs/actionflow-notes.md` 13번 항목](docs/actionflow-notes.md#13-text-자연어-검색--전체-llm-의도분석resolveintent-플로우-설계)
+참고.
 
 - **요청**: `{ text, lat, lng, landmark, transportMode, categoryGroupCode, inputType, chipRadius, lang, favorites[], recentSearches[], userId, llmProvider?, llmApiKey? }`
 - **응답**: `{ candidates: Candidate[], destination, locationLabel?, transportMode, spoken, topPick: {index, reason} | null, clarification }`
