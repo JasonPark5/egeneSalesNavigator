@@ -37,6 +37,7 @@
 | Code 노드 안에서 Variable 필드 참조 | `model["Variable 아이템 이름"].필드명` | `model["검색변수"].originResolved` |
 | Condition/Result/Plugin-API 파라미터 등에서 Code/Agent/Plugin-API 결과 참조 | `#{아이템 이름.경로.경로}` (dot notation) | `#{KAKAO MAP.meta.same_name.keyword}` |
 | Condition/Result/Plugin-API 파라미터 등에서 **Variable** 필드 참조 | `#{필드명}` (아이템 이름 없이 필드명만 — Variable만 예외) | `#{originResolved}` |
+| Smart Component 필드(소스 칸 등)에서 내장 Function 적용 | `함수명(#{...})` — fx 패널에서 String(`length`/`substring`/`indexOf`/`contains`/`trim`/...), Math(`add`/`sum`/`round`/...) 등 카테고리 확인됨. 고른 값의 타입에 따라 뜨는 함수 목록이 달라지는 것으로 보임(13번 항목 참고) | `length(#{candidates})` |
 
 ### 2-1. ⚠️ API Trigger의 "parameter" 목록 vs "요청 본문(Request Body)" — 제일 크게 삽질한 부분
 
@@ -352,11 +353,17 @@ location) 해석 + 카카오 폴백 체인 + `curateResults()` 전체를 ActionF
    13번 즐겨찾기매칭이 끝나야, `count`는 그때그때 카카오 API 응답이 와야 알 수 있는
    값이라 `의도파싱` 시점엔 아직 없다 — 이런 건 Code로 미리 당겨올 수가 없다.
 
-또 `#{candidates}.length == 0`처럼 배열에 `.length`를 붙이는 표현이 소스 칸에서 그대로
-되는지 불확실해서(11번 항목에서 확인된 건 `#{카카오맵.meta.total_count}` 같은 **JSON의
-중첩 필드** 참조였지, 배열의 `.length` 같은 JS 전용 속성은 아니었음), 아예 **Code 노드가
-배열과 함께 그 개수(`count`, 숫자)도 같이 반환**하게 해서 Condition은 항상 숫자 필드끼리만
-비교하도록 설계를 바꿨다(18번 "후보변수"에 `candidates`(배열) 옆에 `count`(숫자) 필드 추가).
+⚠️ **확인됨(스크린샷 기준): Smart Component 필드(소스 칸 등)에서 내장 Function을 쓸 수
+있다** — Condition "소스" 칸 오른쪽에 fx 패널이 있고, String 카테고리에
+`length`/`substring`/`indexOf`/`contains`/`trim`/... 등, Math 카테고리에
+`add`/`sum`/`round`/... 등이 있음. 그래서 배열 개수 확인은 이전 판처럼 **Code 노드가
+`count`를 따로 계산해서 반환**할 필요 없이, Condition 소스에서 바로 `length(#{candidates})`
+같은 함수 호출로 처리한다(18번 "후보변수"는 이제 `candidates`(배열) 필드 하나만 있으면 됨).
+⚠️ 단, 스크린샷은 String 타입 필드(`#{의도파싱.originHint}`)를 선택한 상태에서 뜬 패널이라
+`length`가 문자열 전용인지, 배열(ListData/Array) 타입을 고르면 다른 카테고리(예:
+"List"/"Array")에 별도의 개수 함수가 따로 뜨는지는 확인 못 함(플랫폼이 선택된 값의
+타입에 맞춰 함수 목록을 바꿔주는 것으로 보임) — `candidates`를 소스로 골랐을 때 실제로
+뜨는 함수 이름으로 아래 `length(...)` 자리를 바꿔 끼우면 됨(15번 항목 질문).
 
 **Switch로 바꾼 부분**: `#{의도파싱.intent}`는 `search`/`navigate_favorite`/`ambiguous` 셋
 중 하나인 **전형적인 enum 분기**라서, 예전에 같은 값을 두 번 따로 비교하던 Condition
@@ -364,10 +371,11 @@ location) 해석 + 카카오 폴백 체인 + `curateResults()` 전체를 ActionF
 같은 3-way 분기, default 케이스 지원 확인됨). 위 1번 방법(Code에서 미리 정리)까지
 같이 적용하니, Switch의 `navigate_favorite`/`ambiguous` 케이스는 **더 이상 뒤에 확인
 Condition을 안 두고 바로 다음 노드로 간다**(전 판의 `4b`/`8b` 삭제). 반면 `14a/14b`
-(originResolved && locationHint 있음), `23a/23b`(count==0 && categoryGroupCode 있음),
-`26a/26b`(count==0 && query 있음), 13-6의 폴백 체인(20/23a/26a/29, "이전 단계 결과가
-비었으면 다음 단계 시도")은 전부 위 2번 경우(한쪽 값이 나중에야 정해짐)라 그대로 Condition
-체인으로 남아있다 — Switch도, Code 선처리도 시점 문제 때문에 대신할 수 없다.
+(originResolved && locationHint 있음), `23a/23b`(candidates 비었음 && categoryGroupCode
+있음), `26a/26b`(candidates 비었음 && query 있음), 13-6의 폴백 체인(20/23a/26a/29, "이전
+단계 결과가 비었으면 다음 단계 시도")은 전부 위 2번 경우(한쪽 값이 나중에야 정해짐)라
+그대로 Condition 체인으로 남아있다 — Switch도, Code 선처리도 시점 문제 때문에 대신할 수
+없다.
 
 ```
  1. API Trigger                     [있음]        13-1
@@ -400,23 +408,23 @@ Condition을 안 두고 바로 다음 노드로 간다**(전 판의 `4b`/`8b` �
                                         0건아님 → 지명검색결과정규화(Code) → 검색변수 재대입(Variable) → 18
                                         0건    ↘
               NO  ↘
-      NO  ─────────┴──────────┴→ 18. 후보변수  (Variable, candidates+count)   [신규]  13-6
+      NO  ─────────┴──────────┴→ 18. 후보변수  (Variable, candidates 하나만)   [신규]  13-6
 19. 쿼리결정            (Code)       [신규]        13-6
 20. 키워드검색분기       (Condition)  [신규] — 소스=#{쿼리결정.query}, !=, ""       13-6
-      YES → 카카오키워드검색메인(Plugin-API) → 키워드검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 23a
+      YES → 카카오키워드검색메인(Plugin-API) → 키워드검색결과정규화(Code) → 후보변수 재대입(Variable) → 23a
       NO  ─────────────────────────────────────────────────────────────┘
-23a. 카테고리검색분기_비었음 (Condition) [신규] — 소스=#{count}, ==, 0
+23a. 카테고리검색분기_비었음 (Condition) [신규] — 소스=length(#{candidates}), ==, 0
       YES → 23b. 카테고리검색분기_카테고리있음 (Condition) [신규] — 소스=#{의도파싱.categoryGroupCode}, !=, ""
-              YES → 카카오카테고리검색(Plugin-API) → 카테고리검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 26a
+              YES → 카카오카테고리검색(Plugin-API) → 카테고리검색결과정규화(Code) → 후보변수 재대입(Variable) → 26a
               NO  ↘
-      NO  ────────┴→ 26a. 전국검색분기_비었음 (Condition) [신규] — 소스=#{count}, ==, 0
+      NO  ────────┴→ 26a. 전국검색분기_비었음 (Condition) [신규] — 소스=length(#{candidates}), ==, 0
       YES → 26b. 전국검색분기_쿼리있음 (Condition) [신규] — 소스=#{쿼리결정.query}, !=, ""
-              YES → 카카오키워드검색전국(Plugin-API) → 전국검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 29
+              YES → 카카오키워드검색전국(Plugin-API) → 전국검색결과정규화(Code) → 후보변수 재대입(Variable) → 29
               NO  ↘
-      NO  ────────┴→ 29. 주소검색분기         (Condition)  [신규] — 소스=#{count}, ==, 0
-      YES → 건물상세제거(Code) → 카카오주소검색(Plugin-API) → 주소검색결과정규화(Code, {candidates,count}) → 후보변수 재대입(Variable) → 32
+      NO  ────────┴→ 29. 주소검색분기         (Condition)  [신규] — 소스=length(#{candidates}), ==, 0
+      YES → 건물상세제거(Code) → 카카오주소검색(Plugin-API) → 주소검색결과정규화(Code) → 후보변수 재대입(Variable) → 32
       NO  ─────────────────────────────────────────────────────────────┘
-32. 큐레이션분기         (Condition)  [신규] — 소스=#{count}, >, 0        13-7
+32. 큐레이션분기         (Condition)  [신규] — 소스=length(#{candidates}), >, 0        13-7
       YES → 후보목록축약(Code) → 큐레이션(Agent) → 큐레이션파싱(Code) → 36. 최종응답큐레이션있음(Result, 종료)
       NO  → 37. 최종응답큐레이션없음(Result, 종료)
 ```
@@ -755,7 +763,7 @@ anchorLabel = #{즐겨찾기매칭location.alias}
     ```
     → 18번으로.
 
-### 13-6. 노드 18~29 — 후보변수(candidates+count) / 쿼리결정 / 4단계 카카오 폴백
+### 13-6. 노드 18~29 — 후보변수 / 쿼리결정 / 4단계 카카오 폴백
 
 `pipeline.js`의 4단계 폴백(키워드→카테고리→전국→주소)을 그대로 옮긴다. 11번 항목의
 "키워드검색 0건 → 주소검색" 2단계 구조를 확장하는 개념.
@@ -763,12 +771,10 @@ anchorLabel = #{즐겨찾기매칭location.alias}
 **18. Variable "후보변수"** (신규):
 ```
 candidates = [] (배열)
-count = 0        (숫자)
 ```
-(`count`를 따로 두는 이유: Condition의 소스 칸이 `#{카카오맵.meta.total_count}`처럼 JSON
-중첩 필드는 되지만, 배열의 `.length`처럼 JS 전용 속성까지 붙여 쓸 수 있는지 불확실해서 —
-아래 정규화 Code 노드들이 배열 개수를 이미 계산해서 `count`로 같이 반환하게 하고, Condition은
-그 숫자 필드만 비교하도록 설계.)
+(배열 개수는 `count` 필드를 따로 안 두고, Condition 소스에서 바로 `length(#{candidates})`
+같은 Function으로 구한다 — 13-2 참고. `candidates`를 소스로 골랐을 때 실제 함수 목록에
+뜨는 이름으로 아래 `length` 자리를 바꿔 끼울 것.)
 
 **19. Code "쿼리결정"** (신규):
 ```javascript
@@ -817,10 +823,10 @@ return { query: query, searchRadius: searchRadius };
   #{쿼리결정.query}`, `x = #{searchLng}`, `y = #{searchLat}`, `radius =
   #{쿼리결정.searchRadius}`, `sort = accuracy`, `category_group_code =
   #{의도파싱.categoryGroupCode}`.
-  → **Code "키워드검색결과정규화"** (6번 항목 패턴 + 배열과 함께 `count`도 반환):
+  → **Code "키워드검색결과정규화"** (6번 항목 패턴 그대로):
   ```javascript
   var docs = model["카카오키워드검색메인"].documents || [];
-  var list = docs.map(function (d, i) {
+  return docs.map(function (d, i) {
     var distanceM = parseInt(d.distance, 10) || 0;
     return {
       index: i + 1,
@@ -835,14 +841,12 @@ return { query: query, searchRadius: searchRadius };
       placeUrl: d.place_url || ''
     };
   });
-  return { candidates: list, count: list.length };
   ```
-  → **Variable "후보변수" 재대입**: `candidates = #{키워드검색결과정규화.candidates}`,
-  `count = #{키워드검색결과정규화.count}`
-- NO → 그대로(빈 배열/count=0 유지) 23a번으로.
+  → **Variable "후보변수" 재대입**: `candidates = #{키워드검색결과정규화}`
+- NO → 그대로(빈 배열 유지) 23a번으로.
 
-**23a. Condition "카테고리검색분기_비었음"**: 소스 `#{count}`, 연산자 `==`, 값 `0` — YES면
-23b로, NO면 26a로.
+**23a. Condition "카테고리검색분기_비었음"**: 소스 `length(#{candidates})`, 연산자 `==`, 값
+`0` — YES면 23b로, NO면 26a로.
 
 **23b. Condition "카테고리검색분기_카테고리있음"** (23a YES 분기): 소스
 `#{의도파싱.categoryGroupCode}`, 연산자 `!=`, 값 (빈 문자열) — YES면 카카오카테고리검색으로,
@@ -850,24 +854,22 @@ NO면 26a로.
 - YES → **카카오카테고리검색**(Plugin-API, 5번 항목에서 이미 따로 등록해둔 카테고리검색
   API): `category_group_code = #{의도파싱.categoryGroupCode}`, `x = #{searchLng}`, `y =
   #{searchLat}`, `radius = #{쿼리결정.searchRadius}`, `sort = distance`.
-  → **Code "카테고리검색결과정규화"** (위와 동일한 정규화+count 로직, `model["카카오카테고리검색"]`만 다름)
-  → **Variable "후보변수" 재대입**: `candidates = #{카테고리검색결과정규화.candidates}`,
-  `count = #{카테고리검색결과정규화.count}`
+  → **Code "카테고리검색결과정규화"** (위와 동일한 정규화 로직, `model["카카오카테고리검색"]`만 다름)
+  → **Variable "후보변수" 재대입**: `candidates = #{카테고리검색결과정규화}`
   → 26a로.
 
-**26a. Condition "전국검색분기_비었음"**: 소스 `#{count}`, 연산자 `==`, 값 `0` — YES면 26b로,
-NO면 29로.
+**26a. Condition "전국검색분기_비었음"**: 소스 `length(#{candidates})`, 연산자 `==`, 값 `0`
+— YES면 26b로, NO면 29로.
 
 **26b. Condition "전국검색분기_쿼리있음"** (26a YES 분기): 소스 `#{쿼리결정.query}`, 연산자
 `!=`, 값 (빈 문자열) — YES면 카카오키워드검색전국으로, NO면 29로.
 - YES → **카카오키워드검색전국**(Plugin-API, 키워드검색 재사용): `query =
   #{쿼리결정.query}`, `x`/`y`/`radius`/`category_group_code`는 **비워둠**, `sort = accuracy`.
-  → **Code "전국검색결과정규화"** (동일 정규화+count 로직, `model["카카오키워드검색전국"]`)
-  → **Variable "후보변수" 재대입**: `candidates = #{전국검색결과정규화.candidates}`,
-  `count = #{전국검색결과정규화.count}`
+  → **Code "전국검색결과정규화"** (동일 정규화 로직, `model["카카오키워드검색전국"]`)
+  → **Variable "후보변수" 재대입**: `candidates = #{전국검색결과정규화}`
   → 29로.
 
-**29. Condition "주소검색분기"**: 소스 `#{count}`, 연산자 `==`, 값 `0`.
+**29. Condition "주소검색분기"**: 소스 `length(#{candidates})`, 연산자 `==`, 값 `0`.
 - YES → **Code "건물상세제거"** (11번 항목과 동일):
   ```javascript
   var s = (model.parameter.body.text || '').trim();
@@ -885,7 +887,7 @@ NO면 29로.
   → **Code "주소검색결과정규화"**:
   ```javascript
   var docs = model["카카오주소검색"].documents || [];
-  var list = docs.map(function (d, i) {
+  return docs.map(function (d, i) {
     var road = d.road_address;
     var addressName = (road && road.address_name) || d.address_name || '';
     return {
@@ -901,10 +903,8 @@ NO면 29로.
       placeUrl: ''
     };
   });
-  return { candidates: list, count: list.length };
   ```
-  → **Variable "후보변수" 재대입**: `candidates = #{주소검색결과정규화.candidates}`,
-  `count = #{주소검색결과정규화.count}`
+  → **Variable "후보변수" 재대입**: `candidates = #{주소검색결과정규화}`
 - NO → 그대로 32번으로.
 
 카카오 Plugin-API가 아직 3종(키워드/카테고리/주소) 다 없다면(11번 항목 기준으로는
@@ -917,7 +917,7 @@ NO면 29로.
 후보가 있을 때만 두 번째 LLM 호출(`curateResults`)을 태운다 — 없으면 호출 자체를 건너뛰고
 바로 응답(불필요한 LLM 호출 비용 절감, `pipeline.js`도 동일).
 
-**32. Condition "큐레이션분기"**: 소스 `#{count}`, 연산자 `>`, 값 `0`.
+**32. Condition "큐레이션분기"**: 소스 `length(#{candidates})`, 연산자 `>`, 값 `0`.
 
 **33. Code "후보목록축약"** (YES 분기, 신규 — Agent 프롬프트에 넣을 후보 요약):
 ```javascript
@@ -1057,9 +1057,10 @@ GET /v2/local/search/keyword.json?query=미사역&sort=accuracy&size=5
 → 검색변수 재대입: `searchLat=37.560597, searchLng=127.194719, anchorLabel="미사역"`
 
 **19번 쿼리결정**: `query="파스타"` — ⚠️ **"파스타"는 `CATEGORY_KEYWORDS`의 FD6 목록에 실제로
-포함된 단어라** 카테고리 검색 우선 분기가 걸려 `query`가 빈 문자열로 바뀜(→ `count`도 아직
-0) → **20번 키워드검색분기가 NO** → 23a번(카테고리검색분기_비었음, `count==0` 참) → 23b번
-(`categoryGroupCode`="FD6" 비어있지 않음 → YES) → 카카오카테고리검색으로 바로 감(이건
+포함된 단어라** 카테고리 검색 우선 분기가 걸려 `query`가 빈 문자열로 바뀜(→ `candidates`도
+아직 빈 배열) → **20번 키워드검색분기가 NO** → 23a번(카테고리검색분기_비었음,
+`length(candidates)==0` 참) → 23b번(`categoryGroupCode`="FD6" 비어있지 않음 → YES) →
+카카오카테고리검색으로 바로 감(이건
 버그가 아니라 원본 `pipeline.js`와 동일한 동작 — "파스타" 하나만 딱 말하면 상호명 매칭보다
 거리순 카테고리 검색이 더 정확한 결과를 준다고 판단한 설계).
 
@@ -1087,7 +1088,7 @@ GET /v2/local/search/category.json?category_group_code=FD6&x=127.194719&y=37.560
 ]
 ```
 
-**32번 큐레이션분기**: `count > 0`(2건) → YES → 34번 Agent "큐레이션" 응답(기대값):
+**32번 큐레이션분기**: `length(candidates) > 0`(2건) → YES → 34번 Agent "큐레이션" 응답(기대값):
 ```json
 {
   "rankedIndices": [0, 1],
@@ -1133,8 +1134,9 @@ GET /v2/local/search/category.json?category_group_code=FD6&x=127.194719&y=37.560
 anchorLabel="집", originResolved=true`. **카카오 API 호출 없이 즉시 확정됨.**
 
 **19번 쿼리결정**: `query="편의점"` — CS2 목록이 `['편의점']` 딱 하나뿐이라 카테고리 검색
-우선 분기가 걸려 `query=""` → 20번 NO → 23a번(`count==0` 참) → 23b번(`categoryGroupCode`=
-"CS2" 비어있지 않음 → YES) → 카카오카테고리검색으로. **여기서 `searchLat`/
+우선 분기가 걸려 `query=""` → 20번 NO → 23a번(`length(candidates)==0` 참) →
+23b번(`categoryGroupCode`="CS2" 비어있지 않음 → YES) → 카카오카테고리검색으로. **여기서
+`searchLat`/
 `searchLng`가 집 좌표(37.4979, 127.0276)를 쓰는지가 핵심** — 만약 12번 Code가 매칭에
 실패하거나 13번 Condition의 `matched` 비교가 잘못돼 있으면, `searchLat/Lng`가 검색변수의
 초기값(트리거 GPS 좌표 37.5665, 126.9780 — 서울시청 부근)으로 남아서 엉뚱하게 먼 편의점이
@@ -1280,10 +1282,14 @@ Sub-flow로 분리하고, `chip`/`locate`/`text` 세 플로우가 전부 그걸 
 - **Condition 노드는 "소스/연산자/값" 구조의 단일 비교만 가능** — `&&`/`||`로 여러 조건을
   한 노드에 합칠 수 없다(연산자 목록: `>`, `<`, `>=`, `<=`, `==`, `!=`, `equals`,
   `contains`). 13-2~13-7을 전부 이 구조에 맞게 다시 설계했다(compound 조건은 Condition
-  노드 체인으로 분리하거나 Code에서 미리 정리, 배열 개수 비교는 `.length`를 직접 쓰는
-  대신 Code 노드가 미리 계산한 `count` 숫자 필드를 참조하도록 변경).
+  노드 체인으로 분리하거나 Code에서 미리 정리).
 - **Switch 노드에 default(그 외 전부를 받는) 케이스가 있음** — 4번 "의도분기"를
   navigate_favorite/ambiguous/default 3-way로 설계.
+- **Smart Component 소스 칸에서 내장 Function(fx 패널)을 쓸 수 있음** — String 카테고리에
+  `length`/`substring`/`indexOf`/`contains`/`trim`/... 등, Math 카테고리에
+  `add`/`sum`/`round`/... 등 확인됨. 이 덕분에 배열 개수 비교를 위해 Code 노드가 `count`를
+  따로 계산해서 반환하던 워크어라운드를 걷어내고, `length(#{candidates})`처럼 Condition
+  소스에서 바로 처리하도록 13-6/13-7을 다시 단순화했다.
 
 **아직 남은 것**:
 1. Condition의 "값" 칸에 문자열 리터럴(예: `navigate_favorite`)을 따옴표 없이 그냥
@@ -1292,7 +1298,12 @@ Sub-flow로 분리하고, `chip`/`locate`/`text` 세 플로우가 전부 그걸 
 2. Code 노드가 return하는 일반 객체(Variable이 아닌)의 boolean 필드(예:
    `{matched: true}`)도 Condition에서 `true` 리터럴과 정상 비교되는지 — Variable의 네이티브
    불리언과 Code 노드의 JS boolean이 이 플랫폼에서 같은 취급을 받는지는 아직 실제로 확인 전.
-3. **Sub-flow 노드가 호출할 수 있는 트리거 타입이 정확히 무엇인가?** — API Trigger로 만든
+3. **`candidates`(배열/ListData 타입)를 Condition 소스로 골랐을 때 fx 패널에 정확히 어떤
+   함수가 뜨는가** — 스크린샷은 String 타입 필드(`originHint`) 기준이라 String/Math
+   카테고리만 봤음. 배열을 고르면 "List"/"Array" 같은 별도 카테고리가 뜨고 그 안에
+   `length`가 아닌 다른 이름(`size`, `count` 등)일 수 있음 — 23a/26a/29/32의 `length(...)`
+   자리를 실제 이름으로 바꿔 끼울 것.
+4. **Sub-flow 노드가 호출할 수 있는 트리거 타입이 정확히 무엇인가?** — API Trigger로 만든
    플로우도 되는지, 아니면 전용 트리거 타입으로 새로 만들어야 하는지. 입출력 계약이
    API Trigger 호출(Plugin-API처럼 동기적으로 끝나고 `#{서브플로우 이름.필드}`로 결과
    참조)과 동일한 모양인지도 같이 확인되면 좋음. 14번 항목의 Sub-flow 분리 제안이 이 답에
