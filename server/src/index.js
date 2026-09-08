@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { runMockPipeline } = require('./pipeline');
 const { runActionFlow, pickFlowKey, ActionFlowError } = require('./actionflowClient');
+const { runActionFlowSearch } = require('./actionflowSearch');
 const { buildAuthorizeUrl, exchangeCodeForTokens, refreshAccessToken, revokeToken } = require('./googleAuth');
 const { parseCookies, serializeCookie } = require('./cookies');
 
@@ -25,10 +26,15 @@ app.use(express.static(path.join(__dirname, '..', '..', 'web')));
 
 app.post('/api/search', async (req, res) => {
   try {
-    const result =
-      BACKEND_MODE === 'actionflow'
-        ? await runActionFlow(pickFlowKey(req.body), req.body)
-        : await runMockPipeline(req.body);
+    let result;
+    if (BACKEND_MODE === 'actionflow') {
+      const flowKey = pickFlowKey(req.body);
+      // 'search'(text/chip/locate)는 ActionFlow 플로우 하나를 통째로 부르지 않는다 —
+      // actionflowSearch.js 참고(분기/카카오 검색은 이 서버가 직접, LLM 2곳만 ActionFlow).
+      result = flowKey === 'search' ? await runActionFlowSearch(req.body) : await runActionFlow(flowKey, req.body);
+    } else {
+      result = await runMockPipeline(req.body);
+    }
     res.json(result);
   } catch (err) {
     // travel-time은 실패해도 절대 HTTP 에러로 응답하면 안 된다 — 프론트엔드가 real:false를

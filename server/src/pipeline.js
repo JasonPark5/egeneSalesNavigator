@@ -705,21 +705,13 @@ async function fetchNaverDrivingMinutes({ originLat, originLng, destLat, destLng
   throw lastErr;
 }
 
-async function runMockPipeline(body) {
-  if ((body.inputType || '') === 'briefing') {
-    return generateBriefing(body);
-  }
-  if ((body.inputType || '') === 'create-event') {
-    return parseEventFromText(body);
-  }
-  if ((body.inputType || '') === 'travel-time') {
-    try {
-      const { minutes, distanceM } = await fetchNaverDrivingMinutes(body);
-      return { travelMinutes: minutes, distanceM, real: true };
-    } catch (err) {
-      return { travelMinutes: null, distanceM: null, real: false, error: String(err.message || err) };
-    }
-  }
+// 검색(text/chip/locate) 오케스트레이션 본체. resolveIntentFn/curateResultsFn을 주입받는
+// 구조라 "무엇으로 LLM을 부르는가"만 갈아끼우면 된다 — mock 모드는 resolveIntent/
+// curateResults(직접 Gemini/Claude/OpenAI 호출)를 넣고, actionflow 모드는
+// actionflowSearch.js가 ActionFlow의 소형 Agent 플로우를 부르는 버전을 넣는다.
+// 즐겨찾기 매칭/원점 해석/카카오 폴백 체인 등 나머지 전부는 두 모드가 완전히 동일한
+// 코드를 그대로 공유한다 — ActionFlow 캔버스에 이 분기 로직을 따로 옮겨 그릴 필요가 없다.
+async function runSearchPipeline(body, { resolveIntentFn, curateResultsFn }) {
   const ctx = prepareContext(body);
 
   if (ctx.skipLLM) {
@@ -758,7 +750,7 @@ async function runMockPipeline(body) {
     };
   }
 
-  const intent = await resolveIntent(ctx);
+  const intent = await resolveIntentFn(ctx, body);
   if (!intent.categoryGroupCode) {
     const inferred = inferCategoryFromText(ctx.text);
     if (inferred) intent.categoryGroupCode = inferred;
@@ -946,7 +938,7 @@ async function runMockPipeline(body) {
     }
   }
 
-  const curated = await curateResults({
+  const curated = await curateResultsFn({
     candidates,
     originalText: ctx.text,
     filters: intent.filters || [],
@@ -971,4 +963,22 @@ async function runMockPipeline(body) {
   };
 }
 
-module.exports = { runMockPipeline };
+async function runMockPipeline(body) {
+  if ((body.inputType || '') === 'briefing') {
+    return generateBriefing(body);
+  }
+  if ((body.inputType || '') === 'create-event') {
+    return parseEventFromText(body);
+  }
+  if ((body.inputType || '') === 'travel-time') {
+    try {
+      const { minutes, distanceM } = await fetchNaverDrivingMinutes(body);
+      return { travelMinutes: minutes, distanceM, real: true };
+    } catch (err) {
+      return { travelMinutes: null, distanceM: null, real: false, error: String(err.message || err) };
+    }
+  }
+  return runSearchPipeline(body, { resolveIntentFn: resolveIntent, curateResultsFn: curateResults });
+}
+
+module.exports = { runMockPipeline, runSearchPipeline, defaultIntent };

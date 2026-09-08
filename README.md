@@ -52,22 +52,39 @@ ActionFlow의 API Trigger 노드는 POST + JSON body를 받고, 플로우 끝에
 
 ## ActionFlow 플로우 계약
 
-`BACKEND_MODE=actionflow`일 때 `server/`가 호출하는 4개 플로우입니다. 각 플로우는 ActionFlow의
+`BACKEND_MODE=actionflow`일 때 `server/`가 호출하는 소형 플로우들입니다. 각 플로우는 ActionFlow의
 API Trigger 노드(POST + JSON body)로 만들고, 마지막 노드(Json Result)에서 아래 "응답" 형태의
 JSON을 그대로 돌려주면 됩니다(n8n의 Webhook + Respond to Webhook과 동일한 동기 방식). 요청
-바디는 프론트엔드가 보낸 것 그대로 전달되므로, 필드 이름은 아래 표와 정확히 일치해야 합니다.
+바디는 서버가 보낸 것 그대로 전달되므로, 필드 이름은 아래 표와 정확히 일치해야 합니다.
 
-### 1. 장소 검색 — `ACTIONFLOW_SEARCH_URL` (inputType: `text` / `chip` / `locate`)
+**장소 검색(`text`/`chip`/`locate`)은 ActionFlow 플로우 하나가 통째로 처리하지 않습니다.**
+즐겨찾기 매칭·원점/지명 해석·카카오 검색(키워드→카테고리→전국→주소 폴백) 같은 분기 로직은
+`server/src/pipeline.js`의 `runSearchPipeline()`이 **mock 모드와 완전히 동일한 코드**로 직접
+처리하고(카카오는 사내 거버넌스 대상이 아닌 공개 REST API라 이 서버가 `KAKAO_REST_API_KEY`로
+직접 호출), ActionFlow는 그중 LLM이 꼭 필요한 두 지점만 작은 Agent 플로우로 담당합니다
+(`server/src/actionflowSearch.js`). 처음엔 카카오 폴백/조건 분기까지 전부 ActionFlow 노드로
+옮기려 했으나, Condition이 단일 비교만 가능하고 Agent가 tool use를 지원하지 않는 제약 때문에
+노드 30개가 넘는 유지보수 어려운 플로우가 됐던 시행착오 끝에 이 구조로 정리했습니다(자세한
+경위는 [`docs/actionflow-notes.md` 13번 항목](docs/actionflow-notes.md#13-text-자연어-검색--actionflow는-llm-두-곳만-담당) 참고).
+그래서 `chip`/`locate`는 LLM을 아예 안 쓰므로(`skipLLM` 플래그) ActionFlow를 전혀 호출하지 않고
+이 서버가 카카오 검색만으로 끝냅니다.
 
-기존 로직: `server/src/pipeline.js`의 `runMockPipeline()` 중 `text`/`chip`/`locate` 분기
-(`resolveIntent` LLM → Kakao 키워드/카테고리/전국/주소 검색 → `curateResults` LLM. `chip`/`locate`는
-LLM을 건너뛰고 Kakao 검색만 함 — `skipLLM` 플래그로 구분). `text`(전체 LLM 의도분석) 분기를
-ActionFlow로 옮기는 구체적인 노드 설계는
-[`docs/actionflow-notes.md` 13번 항목](docs/actionflow-notes.md#13-text-자연어-검색--전체-llm-의도분석resolveintent-플로우-설계)
-참고.
+### 1a. 의도분석 — `ACTIONFLOW_INTENT_URL` (inputType: `text` 전용, Agent 노드 1개)
 
-- **요청**: `{ text, lat, lng, landmark, transportMode, categoryGroupCode, inputType, chipRadius, lang, favorites[], recentSearches[], userId, llmProvider?, llmApiKey? }`
-- **응답**: `{ candidates: Candidate[], destination, locationLabel?, transportMode, spoken, topPick: {index, reason} | null, clarification }`
+기존 로직: `resolveIntent()`의 System/User 프롬프트와 동일한 내용을, Agent 노드(tool use 없음)가
+순수 JSON으로 출력하도록 프롬프트에서 강제. 발화 하나에서 검색 의도 전체를 뽑아낸다.
+
+- **요청**: `{ text, lat, lng, landmark, transportMode, categoryGroupCode, inputType, chipRadius, lang, favorites[], recentSearches[], userId, llmProvider?, llmApiKey? }` (프론트엔드가 `/api/search`로 보낸 바디 그대로)
+- **응답**: `{ intent, query, categoryGroupCode, transportMode, originHint, locationHint, destinationFavoriteName, filters[], spoken, clarification }`
+  (필드 의미는 `pipeline.js`의 `INTENT_TOOL_SCHEMA` 참고. `navigate_favorite`인데 `destinationFavoriteName`이 없거나 `ambiguous`인데 `clarification`이 없으면 `intent`를 `'search'`로 되돌려서 반환 — 플로우 안 Code 노드가 처리)
+
+### 1b. 큐레이션 — `ACTIONFLOW_CURATE_URL` (inputType: `text` 전용, 후보가 있을 때만 호출, Agent 노드 1개)
+
+기존 로직: `curateResults()`와 동일한 System/User 프롬프트. 후보 목록 중 사용자 의도에 가장 잘
+맞는 곳을 추천/정렬한다(후보 0건이면 이 서버가 호출 자체를 생략함).
+
+- **요청**: `{ candidates: Candidate[], text, filters[], lang }`
+- **응답**: `{ candidates: Candidate[] (추천순 재정렬, index 1부터 재부여), spoken, topPick: {index, reason} }`
   - `Candidate`: `{ index, name, address, category, lat, lng, distanceM, distanceLabel, phone, placeUrl }`
 
 ### 2. 오늘 일정 브리핑 — `ACTIONFLOW_BRIEFING_URL` (inputType: `briefing`)
@@ -77,7 +94,7 @@ ActionFlow로 옮기는 구체적인 노드 설계는
 - **요청**: `{ inputType: 'briefing', lang, scheduleFacts: { events: [...], tightGapWarnings: [...] }, llmProvider?, llmApiKey? }`
 - **응답**: `{ briefingText }`
 
-### 3. 음성 → 일정 생성 — `ACTIONFLOW_CREATE_EVENT_URL` (inputType: `create-event`)
+### 3. 음성 → 일정 생성 — `ACTIONFLOW_CREATE_EVENT_URL` (inputType: `create-event`, Agent 노드 1개)
 
 기존 로직: `parseEventFromText()` — LLM 하나만 호출, 외부 API 없음. 실제 캘린더 등록(POST)은
 ActionFlow가 아니라 프론트엔드가 이 응답을 받은 뒤 Google Calendar API로 직접 한다 — 이 플로우는
@@ -129,10 +146,12 @@ npm start                 # http://localhost:4000
 
 - `BACKEND_MODE=mock` (기본값): ActionFlow 없이 로컬에서 바로 동작. `LLM_PROVIDER`(gemini/claude),
   해당 API 키, `KAKAO_REST_API_KEY`(developers.kakao.com)가 필요합니다.
-- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. 위 "ActionFlow 플로우 계약"대로 만든 4개
-  플로우의 API Trigger URI를 각각 `ACTIONFLOW_SEARCH_URL` / `ACTIONFLOW_BRIEFING_URL` /
-  `ACTIONFLOW_CREATE_EVENT_URL` / `ACTIONFLOW_TRAVEL_TIME_URL`에 넣으면 됩니다
-  (인증이 있다면 `ACTIONFLOW_API_KEY`도, 4개 플로우 공통으로 적용됨).
+- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. `KAKAO_REST_API_KEY`는 이 모드에서도 여전히
+  필요합니다(카카오 검색은 항상 이 서버가 직접 호출 — 위 "ActionFlow 플로우 계약" 참고). 위
+  계약대로 만든 소형 플로우들의 API Trigger URI를 각각 `ACTIONFLOW_INTENT_URL` /
+  `ACTIONFLOW_CURATE_URL` / `ACTIONFLOW_BRIEFING_URL` / `ACTIONFLOW_CREATE_EVENT_URL` /
+  `ACTIONFLOW_TRAVEL_TIME_URL`에 넣으면 됩니다(인증이 있다면 `ACTIONFLOW_API_KEY`도, 전체
+  공통으로 적용됨).
 - **`GOOGLE_CLIENT_SECRET`**: `BACKEND_MODE`와 무관하게 Google Calendar 연동(오늘 일정 브리핑,
   음성 일정 등록)을 쓰려면 항상 필요합니다. Google Cloud Console의 OAuth 클라이언트에서
   "승인된 리디렉션 URI"로 `http://localhost:4000/api/auth/google/callback`을 등록해두세요
