@@ -554,6 +554,16 @@
     }
     .usage-tip strong { color: var(--primary); font-weight: 600; }
 
+    .example-label {
+      width: 100%;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: left;
+      margin: 10px 0 6px;
+    }
+    .example-suggestions { display: flex; gap: 8px; overflow-x: auto; width: 100%; padding: 2px 2px 4px; }
+    .example-suggestions::-webkit-scrollbar { height: 0; }
+
     /* ─── Settings new controls ──────────────── */
     .seg-group {
       display: flex;
@@ -1435,6 +1445,13 @@
   <div class="chat-area" id="chatArea">
     <div class="empty-state" id="emptyState">
       <div class="usage-tip" id="usageTip"></div>
+      <div class="example-label" data-i18n="example.label">💬 이렇게 말해보세요 (마이크도 동일하게 됩니다)</div>
+      <div class="example-suggestions">
+        <div class="suggestion-chip" data-i18n="example.q1" onclick="sendExampleQuery(t('example.q1'))">미사역 근처 파스타집 찾아줘</div>
+        <div class="suggestion-chip" data-i18n="example.q2" onclick="sendExampleQuery(t('example.q2'))">회사로 가자</div>
+        <div class="suggestion-chip" data-i18n="example.q3" onclick="sendExampleQuery(t('example.q3'))">집 근처 편의점</div>
+        <div class="suggestion-chip" data-i18n="example.q4" onclick="sendExampleQuery(t('example.q4'))">홍대에서 대중교통으로 갈 만한 술집</div>
+      </div>
       <div id="recentSearches" class="recent-box" style="display:none;"></div>
       <p class="action-subtitle" id="emptySubtitle" style="margin-top:8px;" data-i18n="empty.subtitle">검색 결과가 여기에 표시됩니다</p>
     </div>
@@ -1789,6 +1806,11 @@ const I18N = {
     'chip.AD5': '숙박',
     'tip.chips': '위 <strong>칩</strong>은 <strong>현재 위치 {0}km 이내</strong> 추천이에요',
     'tip.elsewhere': '멀리 있는 곳은 <em>마이크</em>나 <em>아래 입력창</em>으로 검색해주세요',
+    'example.label': '💬 이렇게 말해보세요 (마이크도 동일하게 됩니다)',
+    'example.q1': '미사역 근처 파스타집 찾아줘',
+    'example.q2': '회사로 가자',
+    'example.q3': '집 근처 편의점',
+    'example.q4': '홍대에서 대중교통으로 갈 만한 술집',
     'recent.title': '🕒 최근 검색',
     'empty.subtitle': '검색 결과가 여기에 표시됩니다',
     'input.placeholder': '목적지를 입력하세요',
@@ -1960,6 +1982,11 @@ const I18N = {
     'chip.AD5': 'Lodging',
     'tip.chips': 'The <strong>chips</strong> above show places within <strong>{0} km</strong> of you',
     'tip.elsewhere': 'For distant places, use the <em>mic</em> or <em>text input</em> below',
+    'example.label': '💬 Try saying (works the same with the mic)',
+    'example.q1': 'Find a pasta place near Misa station',
+    'example.q2': 'Take me to the office',
+    'example.q3': 'Convenience store near home',
+    'example.q4': 'A bar near Hongdae reachable by transit',
     'recent.title': '🕒 Recent',
     'empty.subtitle': 'Search results will appear here',
     'input.placeholder': 'Enter a destination',
@@ -3371,6 +3398,10 @@ function renderRecentSearches() {
 
 function sendChip(code) {
   sendText(t('chip.' + code), code, 'chip');
+}
+// 자연어 예시 칩(빈 화면에 노출) — 타이핑/마이크 둘 다와 동일한 inputType:'text' 경로를 탄다.
+function sendExampleQuery(text) {
+  sendText(text, '', 'text');
 }
 function sendCategory(code, label) { // legacy alias
   sendText(label || t('chip.' + code), code, 'chip');
