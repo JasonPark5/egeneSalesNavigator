@@ -298,6 +298,12 @@ Switch/Condition/Variable을 검색 플로우에 추가한 뒤로 눈에 띄게 
 
 ### 13-1. 새 아키텍처 요약
 
+> **결정 변경(해커톤 데모용)**: `chip`/`locate`가 쓰던 `ACTIONFLOW_SEARCH_URL`은 이미
+> Switch(inputType)/Plugin-API/Condition/Variable을 실제로 조합한, ActionFlow를 "제대로
+> 쓰는" 모습을 보여주기 좋은 플로우라서(11번 항목 참고) 없애지 않고 그대로 살려둔다. 아래
+> 재설계는 **`text` 한정**으로만 적용된다 — `text`가 즐겨찾기 매칭·원점/지명 해석·카카오
+> 폴백까지 겹쳐서 압도적으로 복잡했던 것이지, `chip`/`locate`가 문제였던 적은 없었다.
+
 ```
 web/index.html --POST /api/search--> server/src/index.js
                                          │
@@ -306,30 +312,35 @@ web/index.html --POST /api/search--> server/src/index.js
                                          │         └─ runSearchPipeline(body, {resolveIntent, curateResults})
                                          │              (LLM 직접 호출: Gemini/Claude/OpenAI)
                                          │
-                                         └─ BACKEND_MODE=actionflow, inputType이 text/chip/locate면
-                                              └─ actionflowSearch.js: runActionFlowSearch()
-                                                   └─ pipeline.js: runSearchPipeline(body, {
-                                                        resolveIntentViaActionFlow, curateResultsViaActionFlow })
-                                                        ├─ 즐겨찾기 매칭 / 원점·지명 해석 /
-                                                        │   카카오 검색 폴백 4단계 — 전부 로컬 JS
-                                                        │   (mock 모드와 완전히 동일한 코드)
-                                                        ├─ 의도 파악이 필요하면
-                                                        │   → ACTIONFLOW_INTENT_URL 호출 (Agent 1개짜리 플로우)
-                                                        └─ 큐레이션이 필요하면(후보가 있을 때만)
-                                                            → ACTIONFLOW_CURATE_URL 호출 (Agent 1개짜리 플로우)
+                                         └─ BACKEND_MODE=actionflow
+                                              ├─ inputType이 chip/locate면
+                                              │    └─ runActionFlow('search', body) → ACTIONFLOW_SEARCH_URL
+                                              │         (원래 있던 그 플로우 그대로 — Switch/Plugin-API/Condition/Variable)
+                                              └─ inputType이 text면
+                                                   └─ actionflowSearch.js: runActionFlowSearch()
+                                                        └─ pipeline.js: runSearchPipeline(body, {
+                                                             resolveIntentViaActionFlow, curateResultsViaActionFlow })
+                                                             ├─ 즐겨찾기 매칭 / 원점·지명 해석 /
+                                                             │   카카오 검색 폴백 4단계 — 전부 로컬 JS
+                                                             │   (mock 모드와 완전히 동일한 코드)
+                                                             ├─ 의도 파악이 필요하면
+                                                             │   → ACTIONFLOW_INTENT_URL 호출 (Agent 1개짜리 플로우)
+                                                             └─ 큐레이션이 필요하면(후보가 있을 때만)
+                                                                 → ACTIONFLOW_CURATE_URL 호출 (Agent 1개짜리 플로우)
 ```
 
-`runSearchPipeline()`은 **두 모드에서 완전히 같은 함수**다 — 즐겨찾기 매칭/원점 해석/카카오
-검색 분기가 모드에 따라 다르게 동작할 여지 자체가 없다. 갈아끼우는 건 딱 두 가지, "의도를
-어떻게 알아내는가"와 "큐레이션을 어떻게 하는가"뿐이고, 그마저도 함수 하나씩 주입하는 것으로
-끝난다. `chip`/`locate`는 애초에 이 둘을 안 쓰므로(`skipLLM`) ActionFlow를 전혀 호출하지
-않고 카카오 검색만으로 끝난다.
+`runSearchPipeline()`은 **mock/actionflow 두 모드에서 완전히 같은 함수**다 — `text`의
+즐겨찾기 매칭/원점 해석/카카오 검색 분기가 모드에 따라 다르게 동작할 여지 자체가 없다.
+갈아끼우는 건 딱 두 가지, "의도를 어떻게 알아내는가"와 "큐레이션을 어떻게 하는가"뿐이고,
+그마저도 함수 하나씩 주입하는 것으로 끝난다.
 
-**그래서 ActionFlow에 실제로 만들어야 하는 플로우는 딱 2개, 각각 `API Trigger → Agent →
-Code → Result` 4노드뿐이다.** Condition/Switch/Variable/Plugin-API/Sub-flow는 전혀 필요
-없다 — 전부 `server/src/pipeline.js` / `server/src/actionflowSearch.js`의 평범한 JS
-`if`/`while`/함수 호출로 대체됐다(코드는 `&&`/`||`/배열 메서드를 자유롭게 쓸 수 있어서
-ActionFlow Condition의 단일 비교 제약 자체가 문제가 되지 않는다).
+**`text`를 위해 새로 만들어야 하는 플로우는 딱 2개, 각각 `API Trigger → Agent → Code →
+Result` 4노드뿐이다** — 즐겨찾기 매칭/원점 해석/카카오 폴백 같은 분기 로직은 여기(13번
+항목)에 없다. Condition/Switch/Variable/Plugin-API/Sub-flow가 전혀 필요 없는 이유는 전부
+`server/src/pipeline.js` / `server/src/actionflowSearch.js`의 평범한 JS `if`/`while`/함수
+호출로 대체됐기 때문이다(코드는 `&&`/`||`/배열 메서드를 자유롭게 쓸 수 있어서 ActionFlow
+Condition의 단일 비교 제약 자체가 문제가 되지 않는다). `chip`/`locate`의 `ACTIONFLOW_SEARCH_URL`
+플로우는 이 둘과 별개로 이미 존재하는 그대로 유지된다(11번 항목 참고, 여기서 새로 손댈 것 없음).
 
 ### 13-2. 의도분석 플로우 — `ACTIONFLOW_INTENT_URL`
 
@@ -619,15 +630,19 @@ return {
 (`candidates`/`topPick`은 배열·객체라 따옴표 없이. 이 JSON이 그대로
 `curateResultsViaActionFlow()`의 반환값이 된다.)
 
-### 13-4. 서버 코드가 담당하는 것 (더 이상 ActionFlow에 옮기지 않는 부분)
+### 13-4. 서버 코드가 담당하는 것 (`text`에 한해 더 이상 ActionFlow에 옮기지 않는 부분)
 
 아래는 전부 `server/src/pipeline.js`의 `runSearchPipeline()` 안에 있는 그대로의 JS이고,
-mock/actionflow 두 모드가 **완전히 같은 코드를 공유**한다 — actionflow 모드 전용 코드는
-`server/src/actionflowSearch.js`의 `resolveIntentViaActionFlow`/
-`curateResultsViaActionFlow` 두 함수뿐이다:
+mock 모드와 actionflow 모드의 `text` 처리가 **완전히 같은 코드를 공유**한다 — actionflow
+모드 전용 코드는 `server/src/actionflowSearch.js`의 `resolveIntentViaActionFlow`/
+`curateResultsViaActionFlow` 두 함수뿐이다. `chip`/`locate`는 이 함수 자체를 안 거친다 —
+`server/src/index.js`가 actionflow 모드에서 `inputType`을 보고 `chip`/`locate`는 아예
+`ACTIONFLOW_SEARCH_URL` 플로우로 바로 보내기 때문(13-1 다이어그램 참고). `skipLLM` 분기(아래
+카카오 키워드+주소검색 로직)는 이제 mock 모드에서만 실행된다:
 
-- `chip`/`locate`(`skipLLM`) — 카카오 키워드 검색만(반경/정렬 방식만 다름), `locate`는
-  0건이면 카카오 주소검색으로 폴백. LLM/ActionFlow 전혀 안 씀.
+- `chip`/`locate`(`skipLLM`, **mock 모드 전용** — actionflow 모드에선 `ACTIONFLOW_SEARCH_URL`이
+  대신 처리) — 카카오 키워드 검색만(반경/정렬 방식만 다름), `locate`는 0건이면 카카오
+  주소검색으로 폴백.
 - `navigate_favorite`/`ambiguous` 조기 응답 — `intent`가 이 둘이면 카카오 검색 자체를
   건너뛰고 바로 응답 조립.
 - 원점(origin) 해석 — `originHint`가 즐겨찾기 별칭이면 그 좌표로, 아니면 현재 GPS로.

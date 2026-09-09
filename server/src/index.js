@@ -29,9 +29,15 @@ app.post('/api/search', async (req, res) => {
     let result;
     if (BACKEND_MODE === 'actionflow') {
       const flowKey = pickFlowKey(req.body);
-      // 'search'(text/chip/locate)는 ActionFlow 플로우 하나를 통째로 부르지 않는다 —
-      // actionflowSearch.js 참고(분기/카카오 검색은 이 서버가 직접, LLM 2곳만 ActionFlow).
-      result = flowKey === 'search' ? await runActionFlowSearch(req.body) : await runActionFlow(flowKey, req.body);
+      if (flowKey === 'search' && (req.body.inputType || 'text') === 'text') {
+        // 'text'만 이 서버가 직접 오케스트레이션한다 — 즐겨찾기 매칭/원점 해석/카카오
+        // 폴백은 로컬 JS, LLM 2곳(의도분석/큐레이션)만 ActionFlow. actionflowSearch.js 참고.
+        result = await runActionFlowSearch(req.body);
+      } else {
+        // chip/locate('search')와 briefing/create-event/travel-time은 예전처럼 ActionFlow
+        // 플로우 하나를 그대로 호출한다.
+        result = await runActionFlow(flowKey, req.body);
+      }
     } else {
       result = await runMockPipeline(req.body);
     }

@@ -57,17 +57,28 @@ API Trigger 노드(POST + JSON body)로 만들고, 마지막 노드(Json Result)
 JSON을 그대로 돌려주면 됩니다(n8n의 Webhook + Respond to Webhook과 동일한 동기 방식). 요청
 바디는 서버가 보낸 것 그대로 전달되므로, 필드 이름은 아래 표와 정확히 일치해야 합니다.
 
-**장소 검색(`text`/`chip`/`locate`)은 ActionFlow 플로우 하나가 통째로 처리하지 않습니다.**
-즐겨찾기 매칭·원점/지명 해석·카카오 검색(키워드→카테고리→전국→주소 폴백) 같은 분기 로직은
-`server/src/pipeline.js`의 `runSearchPipeline()`이 **mock 모드와 완전히 동일한 코드**로 직접
-처리하고(카카오는 사내 거버넌스 대상이 아닌 공개 REST API라 이 서버가 `KAKAO_REST_API_KEY`로
-직접 호출), ActionFlow는 그중 LLM이 꼭 필요한 두 지점만 작은 Agent 플로우로 담당합니다
-(`server/src/actionflowSearch.js`). 처음엔 카카오 폴백/조건 분기까지 전부 ActionFlow 노드로
-옮기려 했으나, Condition이 단일 비교만 가능하고 Agent가 tool use를 지원하지 않는 제약 때문에
-노드 30개가 넘는 유지보수 어려운 플로우가 됐던 시행착오 끝에 이 구조로 정리했습니다(자세한
-경위는 [`docs/actionflow-notes.md` 13번 항목](docs/actionflow-notes.md#13-text-자연어-검색--actionflow는-llm-두-곳만-담당) 참고).
-그래서 `chip`/`locate`는 LLM을 아예 안 쓰므로(`skipLLM` 플래그) ActionFlow를 전혀 호출하지 않고
-이 서버가 카카오 검색만으로 끝냅니다.
+**장소 검색은 `inputType`에 따라 두 갈래로 나뉩니다.** `chip`/`locate`는 즐겨찾기 매칭이나
+LLM 없이 카카오 검색만 하면 되므로 원래대로 `ACTIONFLOW_SEARCH_URL` 플로우 하나가 통째로
+처리합니다(Switch(inputType)/Plugin-API/Condition/Variable을 실제로 쓰는, 지금까지 만든 것 중
+가장 "ActionFlow다운" 플로우 — [`docs/actionflow-notes.md` 11번 항목](docs/actionflow-notes.md#11-variable--switch--condition으로-분기-결과-합류시키기) 참고).
+반면 `text`는 즐겨찾기 매칭·원점/지명 해석·카카오 폴백(키워드→카테고리→전국→주소) 같은 분기
+로직이 훨씬 복잡해서 `server/src/pipeline.js`의 `runSearchPipeline()`이 **mock 모드와 완전히
+동일한 코드**로 직접 처리하고(카카오는 사내 거버넌스 대상이 아닌 공개 REST API라 이 서버가
+`KAKAO_REST_API_KEY`로 직접 호출), ActionFlow는 그중 LLM이 꼭 필요한 두 지점만 작은 Agent
+플로우로 담당합니다(`server/src/actionflowSearch.js`). 처음엔 `text`도 카카오 폴백/조건 분기까지
+전부 ActionFlow 노드로 옮기려 했으나, Condition이 단일 비교만 가능하고 Agent가 tool use를
+지원하지 않는 제약 때문에 노드 30개가 넘는 유지보수 어려운 플로우가 됐던 시행착오 끝에 이
+구조로 정리했습니다(자세한 경위는 [`docs/actionflow-notes.md` 13번 항목](docs/actionflow-notes.md#13-text-자연어-검색--actionflow는-llm-두-곳만-담당) 참고).
+
+### 1. 장소 검색 — `ACTIONFLOW_SEARCH_URL` (inputType: `chip` / `locate` 전용)
+
+기존 로직: `server/src/pipeline.js`의 `runSearchPipeline()` 중 `skipLLM`(`chip`/`locate`) 분기 —
+카카오 키워드 검색만(`locate`는 반경 무제한+정확도순, 0건이면 주소검색 폴백; `chip`은 반경
+제한+거리순).
+
+- **요청**: `{ text, lat, lng, landmark, transportMode, categoryGroupCode, inputType, chipRadius, lang, favorites[], recentSearches[], userId }` (프론트엔드가 `/api/search`로 보낸 바디 그대로)
+- **응답**: `{ candidates: Candidate[], destination, transportMode, spoken: '', topPick: null, clarification: '' }`
+  - `Candidate`: `{ index, name, address, category, lat, lng, distanceM, distanceLabel, phone, placeUrl }`
 
 ### 1a. 의도분석 — `ACTIONFLOW_INTENT_URL` (inputType: `text` 전용, Agent 노드 1개)
 
@@ -146,12 +157,13 @@ npm start                 # http://localhost:4000
 
 - `BACKEND_MODE=mock` (기본값): ActionFlow 없이 로컬에서 바로 동작. `LLM_PROVIDER`(gemini/claude),
   해당 API 키, `KAKAO_REST_API_KEY`(developers.kakao.com)가 필요합니다.
-- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. `KAKAO_REST_API_KEY`는 이 모드에서도 여전히
-  필요합니다(카카오 검색은 항상 이 서버가 직접 호출 — 위 "ActionFlow 플로우 계약" 참고). 위
-  계약대로 만든 소형 플로우들의 API Trigger URI를 각각 `ACTIONFLOW_INTENT_URL` /
-  `ACTIONFLOW_CURATE_URL` / `ACTIONFLOW_BRIEFING_URL` / `ACTIONFLOW_CREATE_EVENT_URL` /
-  `ACTIONFLOW_TRAVEL_TIME_URL`에 넣으면 됩니다(인증이 있다면 `ACTIONFLOW_API_KEY`도, 전체
-  공통으로 적용됨).
+- `BACKEND_MODE=actionflow`: 사내 ActionFlow 연동. `KAKAO_REST_API_KEY`는 `text` 검색(카카오
+  폴백을 이 서버가 직접 호출)에 여전히 필요합니다 — `chip`/`locate`는 `ACTIONFLOW_SEARCH_URL`
+  플로우가 자체 카카오 연동으로 처리하므로 이 키를 안 씁니다(위 "ActionFlow 플로우 계약" 참고).
+  위 계약대로 만든 플로우들의 API Trigger URI를 각각 `ACTIONFLOW_SEARCH_URL` /
+  `ACTIONFLOW_INTENT_URL` / `ACTIONFLOW_CURATE_URL` / `ACTIONFLOW_BRIEFING_URL` /
+  `ACTIONFLOW_CREATE_EVENT_URL` / `ACTIONFLOW_TRAVEL_TIME_URL`에 넣으면 됩니다(인증이 있다면
+  `ACTIONFLOW_API_KEY`도, 전체 공통으로 적용됨).
 - **`GOOGLE_CLIENT_SECRET`**: `BACKEND_MODE`와 무관하게 Google Calendar 연동(오늘 일정 브리핑,
   음성 일정 등록)을 쓰려면 항상 필요합니다. Google Cloud Console의 OAuth 클라이언트에서
   "승인된 리디렉션 URI"로 `http://localhost:4000/api/auth/google/callback`을 등록해두세요
