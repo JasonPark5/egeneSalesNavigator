@@ -494,7 +494,8 @@ const BRIEFING_TOOL_SCHEMA = {
       briefingText: {
         type: 'string',
         description:
-          '짧은 인사로 시작하는 간결한 음성 브리핑. scheduleFacts.events의 각 항목은 title/time/location은 ' +
+          '"# 인사말" 값을 그대로 문장 맨 앞에 쓰고 시작하는 간결한 음성 브리핑(인사말을 직접 판단해서 ' +
+          '지어내지 말 것). scheduleFacts.events의 각 항목은 title/time/location은 ' +
           '항상 있고, travelMinutes/transportMode/departBy는 이동시간이 실제로 계산된 경우에만 있습니다 ' +
           '(없으면 travelTimeKnown:false — 아직 위치를 확인 전인 캘린더 일정). events에 있는 일정은 하나도 ' +
           '빠짐없이 전부 언급하되, **각 일정은 딱 한 문장으로만** 다루세요 — 제목·시각·이동시간(몇 분 ' +
@@ -520,6 +521,12 @@ async function generateBriefing(body) {
   const lang = (body.lang || 'ko').trim();
   const scheduleFacts = body.scheduleFacts || { events: [], tightGapWarnings: [] };
   const llmOverride = body.llmProvider ? { provider: body.llmProvider, apiKey: body.llmApiKey } : null;
+  // 브리핑 요청엔 scheduleFacts(일정 사실)만 있고 현재 시각이 없어서, LLM이 시스템 프롬프트
+  // 예시 문구를 시간과 무관하게 그대로 반복하는 문제가 있었다(항상 "좋은 아침이에요"). 그래서
+  // 프론트(web/index.html의 computeGreeting())가 로컬 시각으로 인사말을 미리 확정해서
+  // 보내고, LLM은 그 문구를 그대로 맨 앞에 쓰기만 한다 — scheduleFacts를 지어내지 않는 것과
+  // 같은 원칙. 값이 안 오면(예: 오래된 프론트) 기존 예시 문구로 안전하게 대체.
+  const greeting = (body.greeting || '').trim() || (lang === 'en' ? 'Good morning' : '좋은 아침이에요');
 
   if (!scheduleFacts.events || !scheduleFacts.events.length) return { briefingText: '' };
 
@@ -529,9 +536,11 @@ async function generateBriefing(body) {
       : '중요: 사용자 UI 언어는 한국어입니다. briefingText를 한국어로 작성하세요. ';
   const systemPrompt =
     langDirective +
-    '당신은 외근이 많은 영업직 사용자를 위한 아침 일정 브리핑 어시스턴트입니다. ' +
+    '당신은 외근이 많은 영업직 사용자를 위한 일정 브리핑 어시스턴트입니다. ' +
     '제공된 오늘 일정 사실(scheduleFacts)만 바탕으로, 소리 내어 듣기 좋은 **간결한** 브리핑을 작성하세요. ' +
-    '짧은 인사로 시작하고(예: "좋은 아침이에요, 오늘 일정 안내해 드릴게요"), scheduleFacts.events에 있는 ' +
+    '반드시 "# 인사말" 값을 그대로(토씨 하나 바꾸지 말고) 문장 맨 앞에 쓰고 이어서 오늘 일정 안내를 ' +
+    '덧붙이세요(예: 인사말이 "좋은 오후예요"면 "좋은 오후예요, 오늘 남은 일정 안내해 드릴게요") — 시간을 ' +
+    '직접 판단해서 다른 인사말을 지어내지 마세요. scheduleFacts.events에 있는 ' +
     '일정은 하나도 빠짐없이 전부 언급하되 **각 일정은 딱 한 문장으로만** 다루세요 — 제목·시각·이동시간(몇 ' +
     '분 걸리는지)·출발 권장 시각을 자연스러운 한 문장에 녹여서 말하고(예: "여의도 미팅은 11시, 약 38분 ' +
     '걸려서 10시 8분쯤 출발하시면 돼요"), 같은 시각/숫자를 다시 반복하지 마세요. location은 전체 ' +
@@ -544,7 +553,7 @@ async function generateBriefing(body) {
     '체크리스트 제안 같은 부가 멘트도 덧붙이지 마세요. 전체 분량은 인사 한 문장 + 일정당 한 문장 정도로 ' +
     '짧게 유지하세요. ' +
     langDirective;
-  const userMessage = `# 오늘 일정 사실\n${JSON.stringify(scheduleFacts)}`;
+  const userMessage = `# 인사말\n${greeting}\n\n# 오늘 일정 사실\n${JSON.stringify(scheduleFacts)}`;
 
   try {
     const args = await callLLMTool({

@@ -1718,6 +1718,10 @@ const I18N = {
     'tab.fav': '즐겨찾기',
     'tab.search': '검색',
     'today.briefingLabel': '오늘의 브리핑',
+    'briefing.greeting.morning': '좋은 아침이에요',
+    'briefing.greeting.afternoon': '좋은 오후예요',
+    'briefing.greeting.evening': '좋은 저녁이에요',
+    'briefing.greeting.night': '늦은 시간이네요',
     'today.calStatus': 'Google Calendar 연동됨',
     'today.calStatusMock': '예시 일정',
     'today.refreshTraffic': '실시간 교통 반영',
@@ -1894,6 +1898,10 @@ const I18N = {
     'tab.fav': 'Favorites',
     'tab.search': 'Search',
     'today.briefingLabel': "Today's briefing",
+    'briefing.greeting.morning': 'Good morning',
+    'briefing.greeting.afternoon': 'Good afternoon',
+    'briefing.greeting.evening': 'Good evening',
+    'briefing.greeting.night': 'Hey there',
     'today.calStatus': 'Google Calendar connected',
     'today.calStatusMock': 'Sample events',
     'today.refreshTraffic': 'Refresh traffic',
@@ -2598,6 +2606,19 @@ async function refreshTravelTimesNow() {
 // 브리핑 LLM에 넘길 "사실"들을 여기서 미리 계산해둔다 (시간 계산은 LLM이 아니라 JS가 함 —
 // LLM은 이 사실을 자연스러운 문장으로 바꾸기만 하고 새로운 사실을 지어내지 않도록).
 // 타이트한 구간 경고는 타임라인에 이미 표시되는 것과 같은 로직(renderToday 안의 freeMin 계산)을 재사용.
+// 브리핑 인사말은 LLM이 스스로 "몇 시니까 무슨 인사"를 판단하게 두지 않는다 — 브리핑 요청에
+// 현재 시각 자체가 안 실려 있어서(scheduleFacts엔 일정 사실만 있음) 시스템 프롬프트에 적어둔
+// 예시 문구("좋은 아침이에요")를 시간과 무관하게 그대로 반복하는 문제가 있었다. 그래서
+// 프론트가 로컬 시각으로 인사말을 미리 확정해서 보내고, LLM은 그 문구를 그대로 맨 앞에
+// 쓰기만 한다(scheduleFacts의 사실을 지어내지 않는 것과 같은 원칙).
+function computeGreeting() {
+  var h = new Date().getHours();
+  if (h >= 5 && h < 12) return t('briefing.greeting.morning');
+  if (h >= 12 && h < 18) return t('briefing.greeting.afternoon');
+  if (h >= 18 && h < 22) return t('briefing.greeting.evening');
+  return t('briefing.greeting.night');
+}
+
 function computeScheduleFacts(events) {
   // 실제 Google Calendar 일정은 위치를 사용자가 확인하기 전까진 이동시간을 모른다
   // (travelKnown:false). 그렇다고 그 일정들을 브리핑에서 통째로 빼면(예전 방식) 정작
@@ -2763,6 +2784,7 @@ function refreshBriefingWithLLM(events) {
   var payload = {
     inputType: 'briefing',
     lang: currentLang,
+    greeting: computeGreeting(),
     scheduleFacts: computeScheduleFacts(events),
     llmProvider: CONFIG.llmProvider || undefined,
     llmApiKey: CONFIG.llmApiKey || undefined,

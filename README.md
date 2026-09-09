@@ -100,9 +100,13 @@ LLM 없이 카카오 검색만 하면 되므로 원래대로 `ACTIONFLOW_SEARCH_
 
 ### 2. 오늘 일정 브리핑 — `ACTIONFLOW_BRIEFING_URL` (inputType: `briefing`)
 
-기존 로직: `generateBriefing()` — LLM 하나만 호출, 외부 API 없음.
+기존 로직: `generateBriefing()` — LLM 하나만 호출, 외부 API 없음. `greeting`은 프론트(`web/index.html`의
+`computeGreeting()`)가 로컬 시각으로 미리 확정한 인사말이다 — 이 요청엔 현재 시각 자체가
+없어서(`scheduleFacts`는 일정 사실만 있음) LLM에 시간 판단을 맡기면 항상 같은 인사말(예:
+"좋은 아침이에요")을 반복하는 문제가 있었다. Agent는 이 값을 **그대로** `briefingText` 맨
+앞에 써야 하고, 시간을 스스로 판단해 다른 인사말을 지어내면 안 된다.
 
-- **요청**: `{ inputType: 'briefing', lang, scheduleFacts: { events: [...], tightGapWarnings: [...] }, llmProvider?, llmApiKey? }`
+- **요청**: `{ inputType: 'briefing', lang, greeting, scheduleFacts: { events: [...], tightGapWarnings: [...] }, llmProvider?, llmApiKey? }`
 - **응답**: `{ briefingText }`
 
 ### 3. 음성 → 일정 생성 — `ACTIONFLOW_CREATE_EVENT_URL` (inputType: `create-event`, Agent 노드 1개)
