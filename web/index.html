@@ -1746,6 +1746,7 @@ const I18N = {
     'today.confirmed': '일정 장소로 저장했어요',
     'today.needsEdit': '캘린더에서 장소를 직접 입력해주세요',
     'today.briefingSimple': '오늘 일정 {0}건이 있어요.',
+    'today.briefing.allDone': '오늘 남은 일정이 없어요. 편안한 하루 보내세요.',
     'today.viaSearchHint': '정확한 이동시간은 검색에서 확인하세요',
     'today.noLocationHint': '이 일정엔 위치가 없어요. 검색으로 찾아볼까요?',
     'today.findLocation': '검색으로 찾기',
@@ -1926,6 +1927,7 @@ const I18N = {
     'today.confirmed': 'Saved as the event location',
     'today.needsEdit': 'Please add the location in your calendar',
     'today.briefingSimple': 'You have {0} event(s) today.',
+    'today.briefing.allDone': "No more events today. Enjoy the rest of your day.",
     'today.viaSearchHint': 'Check Search for the exact travel time',
     'today.noLocationHint': "This event has no location. Want to search for it?",
     'today.findLocation': 'Search for it',
@@ -2454,6 +2456,15 @@ function timeToMinutes(hhmm) {
   var p = hhmm.split(':');
   return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
 }
+// 브리핑은 "이동 안내"가 목적이라, 시작 시각이 이미 지난 일정을 넣으면 이미 끝난 미팅에
+// 출발 시각을 안내하는 것처럼 되어버린다(인사말과 같은 문제 — LLM은 지금이 몇 시인지 모름).
+// 종료 시각 데이터는 없어서 "시작 시각이 지났으면 제외"를 기준으로 삼는다. 타임라인 카드
+// 목록(renderToday)은 하루 전체를 그대로 보여줘야 하니 건드리지 않고, 브리핑 텍스트에
+// 들어가는 입력에만 적용한다.
+function upcomingEvents(events) {
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  return events.filter(function(e) { return timeToMinutes(e.time) >= nowMin; });
+}
 function minutesToTime(mins) {
   mins = ((mins % 1440) + 1440) % 1440;
   var h = Math.floor(mins / 60), m = mins % 60;
@@ -2619,7 +2630,11 @@ function computeGreeting() {
   return t('briefing.greeting.night');
 }
 
-function computeScheduleFacts(events) {
+function computeScheduleFacts(allEvents) {
+  // 시작 시각이 이미 지난 일정은 브리핑에서 뺀다(upcomingEvents 주석 참고) — tightGapWarnings도
+  // 자연히 "남은 일정끼리"만 계산된다(이미 지나간 두 미팅 사이가 빠듯했는지는 지금 안내할
+  // 이유가 없다).
+  var events = upcomingEvents(allEvents);
   // 실제 Google Calendar 일정은 위치를 사용자가 확인하기 전까진 이동시간을 모른다
   // (travelKnown:false). 그렇다고 그 일정들을 브리핑에서 통째로 빼면(예전 방식) 정작
   // 방금 연동한 실사용자한텐 브리핑이 "오늘 일정 4건이 있어요"로만 끝나버림 — 그래서
@@ -2670,15 +2685,20 @@ function renderToday(skipBriefing) {
   var today = new Date();
   var dateLabel = (today.getMonth() + 1) + (currentLang === 'en' ? '/' + today.getDate() : '월 ' + today.getDate() + '일 일정');
 
-  var knownEvents = events.filter(function(e) { return e.travelKnown !== false; });
+  // 이 요약 문구도 브리핑과 같은 이유로 "남은 일정" 기준 — 타임라인 카드 목록(아래 events.forEach)은
+  // 하루 전체를 그대로 보여주니 여기만 upcomingEvents로 좁힌다.
+  var remaining = upcomingEvents(events);
+  var knownEvents = remaining.filter(function(e) { return e.travelKnown !== false; });
   var briefingText;
-  if (knownEvents.length) {
+  if (!remaining.length) {
+    briefingText = t('today.briefing.allDone');
+  } else if (knownEvents.length) {
     var totalTravel = knownEvents.reduce(function(sum, e) { return sum + e.travelMinutes; }, 0);
     var first = knownEvents[0];
     var firstDeparture = recommendedDepartureTime(first.time, first.travelMinutes);
-    briefingText = t('today.briefing', events.length, totalTravel, eventLocationName(first), firstDeparture);
+    briefingText = t('today.briefing', remaining.length, totalTravel, eventLocationName(first), firstDeparture);
   } else {
-    briefingText = t('today.briefingSimple', events.length);
+    briefingText = t('today.briefingSimple', remaining.length);
   }
 
   var html = '';
@@ -2781,11 +2801,19 @@ function refreshBriefingWithLLM(events) {
   // 캘린더로 막 교체된 화면)을 엉뚱한(이전 mock 데이터 기반) 텍스트로 덮어쓰지 않게 한다.
   var myRequestId = ++briefingRequestId;
   if (!events.length) return;
+  var scheduleFacts = computeScheduleFacts(events);
+  // 오늘 일정은 있었지만 전부 시작 시각이 지났으면(upcomingEvents 필터 후 0건) LLM을 부를
+  // 이유가 없다 — curateResults가 후보 0건이면 큐레이션 LLM을 건너뛰는 것과 같은 원칙.
+  if (!scheduleFacts.events.length) {
+    var doneEl = document.getElementById('briefingText');
+    if (doneEl) doneEl.textContent = t('today.briefing.allDone');
+    return;
+  }
   var payload = {
     inputType: 'briefing',
     lang: currentLang,
     greeting: computeGreeting(),
-    scheduleFacts: computeScheduleFacts(events),
+    scheduleFacts: scheduleFacts,
     llmProvider: CONFIG.llmProvider || undefined,
     llmApiKey: CONFIG.llmApiKey || undefined,
   };
