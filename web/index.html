@@ -3752,10 +3752,13 @@ function navigateTo(dlat, dlng, dname, mode) {
   mode = mode || transportMode;
   logVisit(dlat, dlng, dname);
 
-  if (navApp === 'tmap') {
-    // 티맵 딥링크는(공식 문서가 따로 없어 커뮤니티 자료 기준) 자동차 경로만 확인돼서,
-    // 대중교통을 선택한 상태여도 자동차 경로로 열고 안내 문구도 그에 맞춘다.
-    mode = 'car';
+  if (navApp === 'tmap' && mode === 'transit') {
+    // 티맵 딥링크는(공식 문서가 따로 없어 커뮤니티 자료 기준) 자동차 경로만 지원한다.
+    // 예전엔 이 경우 그냥 mode를 'car'로 바꿔 티맵을 열었는데, 사용자가 명시적으로
+    // 대중교통 버튼을 눌렀는데 자동차 경로가 뜨는 건 실제로 요청한 걸 못 받는 것 —
+    // 기본 내비게이션 앱 설정과 무관하게, 대중교통을 지원하는 네이버 지도로 연다.
+    openNaverMap(dlat, dlng, dname, 'transit');
+  } else if (navApp === 'tmap') {
     openTmap(dlat, dlng, dname);
   } else {
     openNaverMap(dlat, dlng, dname, mode);
