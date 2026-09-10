@@ -1307,7 +1307,7 @@
     .pattern-scroll::-webkit-scrollbar { height: 0; }
     .pattern-card {
       flex-shrink: 0; min-width: 132px; background: var(--card-bg);
-      border: 1.5px solid #f6cfcb; border-radius: 14px; padding: 12px;
+      border: 1.5px solid #f6cfcb; border-radius: 14px; padding: 12px; cursor: pointer;
     }
     .pattern-card .pattern-icon {
       width: 28px; height: 28px; border-radius: 8px; background: var(--primary-light);
@@ -1445,6 +1445,7 @@
   <div class="chat-area" id="chatArea">
     <div class="empty-state" id="emptyState">
       <div class="usage-tip" id="usageTip"></div>
+      <div id="recentVisits" class="recent-box" style="display:none;"></div>
       <div class="example-label" data-i18n="example.label">💬 이렇게 말해보세요 (마이크도 동일하게 됩니다)</div>
       <div class="example-suggestions">
         <div class="suggestion-chip" data-i18n="example.q1" onclick="sendExampleQuery(t('example.q1'))">미사역 근처 파스타집 찾아줘</div>
@@ -1757,9 +1758,12 @@ const I18N = {
     'today.untitled': '(제목 없음)',
     'today.locating': '위치를 찾는 중이에요…',
     'today.locateNotFound': '위치를 찾지 못했어요. 검색에서 직접 찾아주세요.',
-    'fav.patternLabel': '지금 이 시간대에 자주 가는 곳',
+    'departure.alertTitle': '지금 출발하세요!',
+    'departure.alertBody': '"{0}" — 약 {1}분 걸려요',
+    'departure.toastFallback': '🚗 지금 출발하세요! "{0}" — 약 {1}분',
     'fav.frequentLabel': '자주 가는 곳',
     'fav.visitCount': '회 방문',
+    'search.recentVisits': '최근·자주 방문한 곳',
     'assistant.title': '무엇을 도와드릴까요?',
     'assistant.idle': '탭해서 말씀해주세요',
     'assistant.listening': '듣고 있어요…',
@@ -1938,9 +1942,12 @@ const I18N = {
     'today.untitled': '(No title)',
     'today.locating': 'Finding the location…',
     'today.locateNotFound': "Couldn't find it. Please search manually.",
-    'fav.patternLabel': 'Frequent at this time of day',
+    'departure.alertTitle': 'Time to leave!',
+    'departure.alertBody': '"{0}" — about {1} min away',
+    'departure.toastFallback': '🚗 Time to leave! "{0}" — about {1} min',
     'fav.frequentLabel': 'Frequent places',
     'fav.visitCount': ' visits',
+    'search.recentVisits': 'Recent & frequent places',
     'assistant.title': 'How can I help?',
     'assistant.idle': 'Tap and speak',
     'assistant.listening': 'Listening…',
@@ -2667,6 +2674,45 @@ function computeScheduleFacts(allEvents) {
     }
   }
   return { eventCount: events.length, events: factEvents, tightGapWarnings: warnings };
+}
+
+// ─── 출발 알림 ─────────────────────────────────────────────
+// recommendedDepartureTime()으로 이미 계산하고 있던 "출발 권장 시각"을 그 순간에
+// 알림으로 띄워준다. 키에 departMin(계산된 출발 권장 시각)까지 포함해서, "실시간 교통
+// 반영"으로 이동시간이 재계산돼 권장 시각이 바뀌면 같은 일정이라도 새 알림으로 취급한다.
+var departureNotified = {};
+
+function fireDepartureAlert(ev) {
+  var body = t('departure.alertBody', ev.title, ev.travelMinutes);
+  if (window.Notification && Notification.permission === 'granted') {
+    try { new Notification(t('departure.alertTitle'), { body: body, icon: 'icons/icon-192.png' }); }
+    catch (e) { showToast(t('departure.toastFallback', ev.title, ev.travelMinutes)); }
+  } else {
+    showToast(t('departure.toastFallback', ev.title, ev.travelMinutes));
+  }
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  speak(body);
+}
+
+function checkDepartureAlerts() {
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  upcomingEvents(TODAY_EVENTS).forEach(function(ev) {
+    if (ev.travelKnown === false || ev.travelMinutes == null) return;
+    var departMin = timeToMinutes(ev.time) - ev.travelMinutes - DEPARTURE_BUFFER_MIN;
+    if (nowMin < departMin) return;
+    var key = ev.time + '|' + ev.title + '|' + departMin;
+    if (departureNotified[key]) return;
+    departureNotified[key] = true;
+    fireDepartureAlert(ev);
+  });
+}
+
+function startDepartureWatcher() {
+  if (window.Notification && Notification.permission === 'default') {
+    Notification.requestPermission().catch(function() {});
+  }
+  checkDepartureAlerts();
+  setInterval(checkDepartureAlerts, 30000);
 }
 
 function renderToday(skipBriefing) {
@@ -3419,6 +3465,28 @@ function clearResults() {
   if (emptyState) chatArea.appendChild(emptyState);
 }
 
+// 최근·자주 방문한 곳 — visitLog(logVisit) 데이터를 검색 탭 빈 화면에 노출한다.
+// 즐겨찾기 탭은 사용자가 직접 저장한 것만 보여주도록 두고(진짜 즐겨찾기와 섞이면
+// 찾기 어려워짐), 방문 이력 기반 추천은 "검색을 막 시작하려는 시점"인 여기로 옮겼다.
+function renderRecentVisits() {
+  var box = document.getElementById('recentVisits');
+  if (!box) return;
+  var visits = getVisitLog()
+    .filter(function(v) { return v.count >= 2; })
+    .sort(function(a, b) { return (b.count * 1e13 + b.lastVisited) - (a.count * 1e13 + a.lastVisited); })
+    .slice(0, 5);
+  if (!visits.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="fav-section-label">' + t('search.recentVisits') + '</div><div class="pattern-scroll">' +
+    visits.map(function(v) {
+      return '<div class="pattern-card" onclick="navigateTo(' + v.lat + ',' + v.lng + ',\'' + escAttr(v.name) + '\')">' +
+        '<div class="pattern-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg></div>' +
+        '<div class="pattern-name">' + escHtml(v.name) + '</div>' +
+        '<div class="pattern-meta">' + v.count + t('fav.visitCount') + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+}
+
 // 최근 검색 (최대 5개)
 function getRecentSearches() {
   try { return JSON.parse(localStorage.getItem('recentSearches') || '[]'); } catch(e) { return []; }
@@ -3900,16 +3968,7 @@ function logVisit(lat, lng, name) {
   }
   if (log.length > 100) log = log.slice(-100);
   localStorage.setItem('visitLog', JSON.stringify(log));
-}
-
-function addFavoriteFromVisit(lat, lng, name) {
-  var favs = getFavorites();
-  if (!favs.some(function(f) { return sameCoord(f.lat, f.lng, lat, lng); })) {
-    favs.unshift({ lat: lat, lng: lng, name: name, address: '', category: '', savedAt: Date.now() });
-    saveFavorites(favs);
-    showToast(t('fav.added', name));
-  }
-  renderFavorites();
+  renderRecentVisits();
 }
 
 function renderFavorites() {
@@ -3923,34 +3982,11 @@ function renderFavorites() {
 
   var merged = favs.map(function(f) {
     var v = visitFor(f.lat, f.lng);
-    return { fav: f, count: v ? v.count : 0, lastVisited: v ? v.lastVisited : f.savedAt, isFav: true };
-  }).concat(
-    visits.filter(function(v) {
-      return v.count >= 3 && !favs.some(function(f) { return sameCoord(f.lat, f.lng, v.lat, v.lng); });
-    }).map(function(v) {
-      return { fav: { lat: v.lat, lng: v.lng, name: v.name, address: '', category: '' }, count: v.count, lastVisited: v.lastVisited, isFav: false };
-    })
-  );
+    return { fav: f, count: v ? v.count : 0, lastVisited: v ? v.lastVisited : f.savedAt };
+  });
   merged.sort(function(a, b) { return (b.count * 1e13 + b.lastVisited) - (a.count * 1e13 + a.lastVisited); });
 
-  var hourNow = new Date().getHours();
-  var patterns = visits.filter(function(v) {
-    return v.count >= 2 && v.hours.some(function(h) { return Math.abs(h - hourNow) <= 1; });
-  }).sort(function(a, b) { return b.count - a.count; }).slice(0, 3);
-
   var html = '';
-
-  if (patterns.length) {
-    html += '<div><div class="fav-section-label">' + t('fav.patternLabel') + '</div><div class="pattern-scroll">';
-    patterns.forEach(function(v) {
-      html += '<div class="pattern-card">' +
-        '<div class="pattern-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg></div>' +
-        '<div class="pattern-name">' + escHtml(v.name) + '</div>' +
-        '<div class="pattern-meta">' + v.count + t('fav.visitCount') + '</div>' +
-      '</div>';
-    });
-    html += '</div></div>';
-  }
 
   if (merged.length === 0) {
     html += '<div class="fav-empty">' +
@@ -3974,11 +4010,9 @@ function renderFavorites() {
           '</div>' +
           '<div class="fav-info">' +
             '<div class="fav-name">' + escHtml(f.name) +
-              (m.isFav
-                ? (f.alias
-                    ? '<span class="fav-alias-badge" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.edit')) + '">' + escHtml(f.alias) + '</span>'
-                    : '<button class="fav-alias-btn" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.set')) + '">' + t('fav.alias.add') + '</button>')
-                : '') +
+              (f.alias
+                ? '<span class="fav-alias-badge" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.edit')) + '">' + escHtml(f.alias) + '</span>'
+                : '<button class="fav-alias-btn" onclick="setFavoriteAlias(' + f.lat + ',' + f.lng + ')" title="' + escAttr(t('fav.alias.set')) + '">' + t('fav.alias.add') + '</button>') +
             '</div>' +
             '<div class="fav-address">' + escHtml(f.address || '') + '</div>' +
             (m.count ? '<div class="fav-visit-meta">' + m.count + t('fav.visitCount') + '</div>' : '') +
@@ -3987,9 +4021,7 @@ function renderFavorites() {
         '<div class="fav-row2">' +
           '<button class="fav-transit-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'transit\')">' + t('transport.transit') + '</button>' +
           '<button class="fav-car-btn" onclick="navigateTo(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\',\'car\')">' + t('transport.car') + '</button>' +
-          (m.isFav
-            ? '<button class="fav-delete-btn" onclick="removeFavorite(' + f.lat + ',' + f.lng + ')">🗑</button>'
-            : '<button class="fav-delete-btn" onclick="addFavoriteFromVisit(' + f.lat + ',' + f.lng + ',\'' + escAttr(f.name) + '\')">☆</button>') +
+          '<button class="fav-delete-btn" onclick="removeFavorite(' + f.lat + ',' + f.lng + ')">🗑</button>' +
         '</div>' +
       '</div>';
   });
@@ -4192,7 +4224,9 @@ detectInAppBrowser();
 initLocation();
 updateFavCount();
 renderRecentSearches();
+renderRecentVisits();
 renderToday();
+startDepartureWatcher();
 handleCalendarRedirectResult();
 checkGoogleAuthAvailable();
 restoreGoogleSession();
