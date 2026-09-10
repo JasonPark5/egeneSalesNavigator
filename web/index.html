@@ -1306,14 +1306,17 @@
     .pattern-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
     .pattern-scroll::-webkit-scrollbar { height: 0; }
     .pattern-card {
-      flex-shrink: 0; min-width: 132px; background: var(--card-bg);
+      flex-shrink: 0; width: 132px; background: var(--card-bg);
       border: 1.5px solid #f6cfcb; border-radius: 14px; padding: 12px; cursor: pointer;
     }
     .pattern-card .pattern-icon {
       width: 28px; height: 28px; border-radius: 8px; background: var(--primary-light);
       display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
     }
-    .pattern-card .pattern-name { font-size: 13px; font-weight: 700; }
+    .pattern-card .pattern-name {
+      font-size: 13px; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .pattern-card .pattern-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
     .fav-visit-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
@@ -3481,7 +3484,7 @@ function renderRecentVisits() {
     visits.map(function(v) {
       return '<div class="pattern-card" onclick="navigateTo(' + v.lat + ',' + v.lng + ',\'' + escAttr(v.name) + '\')">' +
         '<div class="pattern-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12A7 7 0 0 0 5 9c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg></div>' +
-        '<div class="pattern-name">' + escHtml(v.name) + '</div>' +
+        '<div class="pattern-name" title="' + escAttr(v.name) + '">' + escHtml(v.name) + '</div>' +
         '<div class="pattern-meta">' + v.count + t('fav.visitCount') + '</div>' +
       '</div>';
     }).join('') + '</div>';
