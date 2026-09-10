@@ -554,6 +554,16 @@
     }
     .usage-tip strong { color: var(--primary); font-weight: 600; }
 
+    .example-label {
+      width: 100%;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: left;
+      margin: 10px 0 6px;
+    }
+    .example-suggestions { display: flex; gap: 8px; overflow-x: auto; width: 100%; padding: 2px 2px 4px; }
+    .example-suggestions::-webkit-scrollbar { height: 0; }
+
     /* ─── Settings new controls ──────────────── */
     .seg-group {
       display: flex;
@@ -1435,6 +1445,13 @@
   <div class="chat-area" id="chatArea">
     <div class="empty-state" id="emptyState">
       <div class="usage-tip" id="usageTip"></div>
+      <div class="example-label" data-i18n="example.label">💬 이렇게 말해보세요 (마이크도 동일하게 됩니다)</div>
+      <div class="example-suggestions">
+        <div class="suggestion-chip" data-i18n="example.q1" onclick="sendExampleQuery(t('example.q1'))">미사역 근처 파스타집 찾아줘</div>
+        <div class="suggestion-chip" data-i18n="example.q2" onclick="sendExampleQuery(t('example.q2'))">회사로 가자</div>
+        <div class="suggestion-chip" data-i18n="example.q3" onclick="sendExampleQuery(t('example.q3'))">집 근처 편의점</div>
+        <div class="suggestion-chip" data-i18n="example.q4" onclick="sendExampleQuery(t('example.q4'))">홍대에서 대중교통으로 갈 만한 술집</div>
+      </div>
       <div id="recentSearches" class="recent-box" style="display:none;"></div>
       <p class="action-subtitle" id="emptySubtitle" style="margin-top:8px;" data-i18n="empty.subtitle">검색 결과가 여기에 표시됩니다</p>
     </div>
@@ -1564,6 +1581,14 @@
       <button type="button" class="seg-btn" data-val="transit" onclick="setTransportPick('transit')" data-i18n="transport.transit">🚇 대중교통</button>
     </div>
 
+    <!-- Navigation app for 길찾기 deep links -->
+    <label data-i18n="settings.navApp" style="margin-top:14px;">내비게이션 앱</label>
+    <div class="seg-group" id="navAppSeg">
+      <button type="button" class="seg-btn" data-val="naver" onclick="setNavAppPick('naver')" data-i18n="navApp.naver">네이버 지도</button>
+      <button type="button" class="seg-btn" data-val="tmap" onclick="setNavAppPick('tmap')" data-i18n="navApp.tmap">티맵</button>
+    </div>
+    <div class="modal-note" data-i18n="settings.navApp.hint">티맵은 자동차 경로만 지원돼요(대중교통 선택 시에도 자동차 경로로 열려요). 앱이 없으면 스토어로 안내해요.</div>
+
     <!-- Chip radius -->
     <label style="margin-top:14px;">
       <span data-i18n="settings.chipRadius">칩 검색 반경</span>
@@ -1660,6 +1685,10 @@ const I18N = {
     'settings.voice.none': '시스템 기본',
     'settings.voice.preview': '미리듣기',
     'settings.transport': '기본 이동수단',
+    'settings.navApp': '내비게이션 앱',
+    'settings.navApp.hint': '티맵은 자동차 경로만 지원돼요(대중교통 선택 시에도 자동차 경로로 열려요). 앱이 없으면 스토어로 안내해요.',
+    'navApp.naver': '네이버 지도',
+    'navApp.tmap': '티맵',
     'settings.chipRadius': '칩 검색 반경',
     'settings.chipRadius.hint': '"칩"으로 검색할 때 현재 위치 기준 반경',
     'settings.advanced': '고급 설정',
@@ -1689,6 +1718,10 @@ const I18N = {
     'tab.fav': '즐겨찾기',
     'tab.search': '검색',
     'today.briefingLabel': '오늘의 브리핑',
+    'briefing.greeting.morning': '좋은 아침이에요',
+    'briefing.greeting.afternoon': '좋은 오후예요',
+    'briefing.greeting.evening': '좋은 저녁이에요',
+    'briefing.greeting.night': '늦은 시간이네요',
     'today.calStatus': 'Google Calendar 연동됨',
     'today.calStatusMock': '예시 일정',
     'today.refreshTraffic': '실시간 교통 반영',
@@ -1713,6 +1746,7 @@ const I18N = {
     'today.confirmed': '일정 장소로 저장했어요',
     'today.needsEdit': '캘린더에서 장소를 직접 입력해주세요',
     'today.briefingSimple': '오늘 일정 {0}건이 있어요.',
+    'today.briefing.allDone': '오늘 남은 일정이 없어요. 편안한 하루 보내세요.',
     'today.viaSearchHint': '정확한 이동시간은 검색에서 확인하세요',
     'today.noLocationHint': '이 일정엔 위치가 없어요. 검색으로 찾아볼까요?',
     'today.findLocation': '검색으로 찾기',
@@ -1777,6 +1811,11 @@ const I18N = {
     'chip.AD5': '숙박',
     'tip.chips': '위 <strong>칩</strong>은 <strong>현재 위치 {0}km 이내</strong> 추천이에요',
     'tip.elsewhere': '멀리 있는 곳은 <em>마이크</em>나 <em>아래 입력창</em>으로 검색해주세요',
+    'example.label': '💬 이렇게 말해보세요 (마이크도 동일하게 됩니다)',
+    'example.q1': '미사역 근처 파스타집 찾아줘',
+    'example.q2': '회사로 가자',
+    'example.q3': '집 근처 편의점',
+    'example.q4': '홍대에서 대중교통으로 갈 만한 술집',
     'recent.title': '🕒 최근 검색',
     'empty.subtitle': '검색 결과가 여기에 표시됩니다',
     'input.placeholder': '목적지를 입력하세요',
@@ -1797,6 +1836,7 @@ const I18N = {
     'nav.transit': '대중교통 🚇',
     'nav.car': '자동차 🚗',
     'nav.currentLoc': '현재위치',
+    'nav.tmapDesktopFallback': '티맵은 모바일 앱에서만 열려요. 대신 네이버 지도 웹으로 안내할게요.',
     'fav.empty': '즐겨찾기가 비어있어요.<br>검색 결과에서 ☆ 버튼을 눌러<br>자주 가는 곳을 저장하세요.',
     'fav.deleted': '즐겨찾기에서 삭제했습니다.',
     'fav.deletedName': '"{0}" 즐겨찾기에서 삭제했습니다.',
@@ -1826,6 +1866,10 @@ const I18N = {
     'settings.voice.none': 'System default',
     'settings.voice.preview': 'Preview',
     'settings.transport': 'Default transport',
+    'settings.navApp': 'Navigation app',
+    'settings.navApp.hint': 'Tmap only supports driving routes (opens a driving route even if transit is selected). If the app isn\'t installed, you\'ll be sent to the store.',
+    'navApp.naver': 'Naver Map',
+    'navApp.tmap': 'Tmap',
     'settings.chipRadius': 'Chip search radius',
     'settings.chipRadius.hint': 'Radius from your location for "chip" searches',
     'settings.advanced': 'Advanced',
@@ -1855,6 +1899,10 @@ const I18N = {
     'tab.fav': 'Favorites',
     'tab.search': 'Search',
     'today.briefingLabel': "Today's briefing",
+    'briefing.greeting.morning': 'Good morning',
+    'briefing.greeting.afternoon': 'Good afternoon',
+    'briefing.greeting.evening': 'Good evening',
+    'briefing.greeting.night': 'Hey there',
     'today.calStatus': 'Google Calendar connected',
     'today.calStatusMock': 'Sample events',
     'today.refreshTraffic': 'Refresh traffic',
@@ -1879,6 +1927,7 @@ const I18N = {
     'today.confirmed': 'Saved as the event location',
     'today.needsEdit': 'Please add the location in your calendar',
     'today.briefingSimple': 'You have {0} event(s) today.',
+    'today.briefing.allDone': "No more events today. Enjoy the rest of your day.",
     'today.viaSearchHint': 'Check Search for the exact travel time',
     'today.noLocationHint': "This event has no location. Want to search for it?",
     'today.findLocation': 'Search for it',
@@ -1943,6 +1992,11 @@ const I18N = {
     'chip.AD5': 'Lodging',
     'tip.chips': 'The <strong>chips</strong> above show places within <strong>{0} km</strong> of you',
     'tip.elsewhere': 'For distant places, use the <em>mic</em> or <em>text input</em> below',
+    'example.label': '💬 Try saying (works the same with the mic)',
+    'example.q1': 'Find a pasta place near Misa station',
+    'example.q2': 'Take me to the office',
+    'example.q3': 'Convenience store near home',
+    'example.q4': 'A bar near Hongdae reachable by transit',
     'recent.title': '🕒 Recent',
     'empty.subtitle': 'Search results will appear here',
     'input.placeholder': 'Enter a destination',
@@ -1963,6 +2017,7 @@ const I18N = {
     'nav.transit': 'Transit 🚇',
     'nav.car': 'Car 🚗',
     'nav.currentLoc': 'My Location',
+    'nav.tmapDesktopFallback': 'Tmap only opens on mobile. Opening Naver Map on the web instead.',
     'fav.empty': 'No favorites yet.<br>Tap ☆ on a result<br>to save places you visit often.',
     'fav.deleted': 'Removed from favorites.',
     'fav.deletedName': 'Removed "{0}" from favorites.',
@@ -2023,6 +2078,9 @@ let locationReady = null;       // Promise: GPS + Nominatim 모두 완료
 // 기본 이동수단(설정에서 저장한 값) — 검색탭 토글/음성 명령으로 바뀌는 현재 세션의 transportMode와는 별개.
 let defaultTransportMode = localStorage.getItem('transportModeDefault') || 'car';
 let transportMode = defaultTransportMode;
+// 길찾기 딥링크로 열 내비게이션 앱. 'naver'는 대중교통/자동차 둘 다 지원, 'tmap'은 자동차
+// 경로만 지원(navigateTo() 참고).
+let navApp = localStorage.getItem('navApp') || 'naver';
 let isRecording = false;
 let recognition = null;
 let lastCandidates = [];
@@ -2398,6 +2456,15 @@ function timeToMinutes(hhmm) {
   var p = hhmm.split(':');
   return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
 }
+// 브리핑은 "이동 안내"가 목적이라, 시작 시각이 이미 지난 일정을 넣으면 이미 끝난 미팅에
+// 출발 시각을 안내하는 것처럼 되어버린다(인사말과 같은 문제 — LLM은 지금이 몇 시인지 모름).
+// 종료 시각 데이터는 없어서 "시작 시각이 지났으면 제외"를 기준으로 삼는다. 타임라인 카드
+// 목록(renderToday)은 하루 전체를 그대로 보여줘야 하니 건드리지 않고, 브리핑 텍스트에
+// 들어가는 입력에만 적용한다.
+function upcomingEvents(events) {
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  return events.filter(function(e) { return timeToMinutes(e.time) >= nowMin; });
+}
 function minutesToTime(mins) {
   mins = ((mins % 1440) + 1440) % 1440;
   var h = Math.floor(mins / 60), m = mins % 60;
@@ -2550,7 +2617,24 @@ async function refreshTravelTimesNow() {
 // 브리핑 LLM에 넘길 "사실"들을 여기서 미리 계산해둔다 (시간 계산은 LLM이 아니라 JS가 함 —
 // LLM은 이 사실을 자연스러운 문장으로 바꾸기만 하고 새로운 사실을 지어내지 않도록).
 // 타이트한 구간 경고는 타임라인에 이미 표시되는 것과 같은 로직(renderToday 안의 freeMin 계산)을 재사용.
-function computeScheduleFacts(events) {
+// 브리핑 인사말은 LLM이 스스로 "몇 시니까 무슨 인사"를 판단하게 두지 않는다 — 브리핑 요청에
+// 현재 시각 자체가 안 실려 있어서(scheduleFacts엔 일정 사실만 있음) 시스템 프롬프트에 적어둔
+// 예시 문구("좋은 아침이에요")를 시간과 무관하게 그대로 반복하는 문제가 있었다. 그래서
+// 프론트가 로컬 시각으로 인사말을 미리 확정해서 보내고, LLM은 그 문구를 그대로 맨 앞에
+// 쓰기만 한다(scheduleFacts의 사실을 지어내지 않는 것과 같은 원칙).
+function computeGreeting() {
+  var h = new Date().getHours();
+  if (h >= 5 && h < 12) return t('briefing.greeting.morning');
+  if (h >= 12 && h < 18) return t('briefing.greeting.afternoon');
+  if (h >= 18 && h < 22) return t('briefing.greeting.evening');
+  return t('briefing.greeting.night');
+}
+
+function computeScheduleFacts(allEvents) {
+  // 시작 시각이 이미 지난 일정은 브리핑에서 뺀다(upcomingEvents 주석 참고) — tightGapWarnings도
+  // 자연히 "남은 일정끼리"만 계산된다(이미 지나간 두 미팅 사이가 빠듯했는지는 지금 안내할
+  // 이유가 없다).
+  var events = upcomingEvents(allEvents);
   // 실제 Google Calendar 일정은 위치를 사용자가 확인하기 전까진 이동시간을 모른다
   // (travelKnown:false). 그렇다고 그 일정들을 브리핑에서 통째로 빼면(예전 방식) 정작
   // 방금 연동한 실사용자한텐 브리핑이 "오늘 일정 4건이 있어요"로만 끝나버림 — 그래서
@@ -2601,15 +2685,20 @@ function renderToday(skipBriefing) {
   var today = new Date();
   var dateLabel = (today.getMonth() + 1) + (currentLang === 'en' ? '/' + today.getDate() : '월 ' + today.getDate() + '일 일정');
 
-  var knownEvents = events.filter(function(e) { return e.travelKnown !== false; });
+  // 이 요약 문구도 브리핑과 같은 이유로 "남은 일정" 기준 — 타임라인 카드 목록(아래 events.forEach)은
+  // 하루 전체를 그대로 보여주니 여기만 upcomingEvents로 좁힌다.
+  var remaining = upcomingEvents(events);
+  var knownEvents = remaining.filter(function(e) { return e.travelKnown !== false; });
   var briefingText;
-  if (knownEvents.length) {
+  if (!remaining.length) {
+    briefingText = t('today.briefing.allDone');
+  } else if (knownEvents.length) {
     var totalTravel = knownEvents.reduce(function(sum, e) { return sum + e.travelMinutes; }, 0);
     var first = knownEvents[0];
     var firstDeparture = recommendedDepartureTime(first.time, first.travelMinutes);
-    briefingText = t('today.briefing', events.length, totalTravel, eventLocationName(first), firstDeparture);
+    briefingText = t('today.briefing', remaining.length, totalTravel, eventLocationName(first), firstDeparture);
   } else {
-    briefingText = t('today.briefingSimple', events.length);
+    briefingText = t('today.briefingSimple', remaining.length);
   }
 
   var html = '';
@@ -2712,10 +2801,19 @@ function refreshBriefingWithLLM(events) {
   // 캘린더로 막 교체된 화면)을 엉뚱한(이전 mock 데이터 기반) 텍스트로 덮어쓰지 않게 한다.
   var myRequestId = ++briefingRequestId;
   if (!events.length) return;
+  var scheduleFacts = computeScheduleFacts(events);
+  // 오늘 일정은 있었지만 전부 시작 시각이 지났으면(upcomingEvents 필터 후 0건) LLM을 부를
+  // 이유가 없다 — curateResults가 후보 0건이면 큐레이션 LLM을 건너뛰는 것과 같은 원칙.
+  if (!scheduleFacts.events.length) {
+    var doneEl = document.getElementById('briefingText');
+    if (doneEl) doneEl.textContent = t('today.briefing.allDone');
+    return;
+  }
   var payload = {
     inputType: 'briefing',
     lang: currentLang,
-    scheduleFacts: computeScheduleFacts(events),
+    greeting: computeGreeting(),
+    scheduleFacts: scheduleFacts,
     llmProvider: CONFIG.llmProvider || undefined,
     llmApiKey: CONFIG.llmApiKey || undefined,
   };
@@ -3026,6 +3124,13 @@ function setTransportPick(mode) {
     b.classList.toggle('active', b.dataset.val === mode);
   });
   document.getElementById('transportSeg').dataset.pending = mode;
+}
+// 설정 화면의 "내비게이션 앱" 선택 — 위 기본 이동수단과 동일하게 저장(Save) 시에만 반영됨.
+function setNavAppPick(app) {
+  document.querySelectorAll('#navAppSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === app);
+  });
+  document.getElementById('navAppSeg').dataset.pending = app;
 }
 
 // ========================
@@ -3344,6 +3449,10 @@ function renderRecentSearches() {
 function sendChip(code) {
   sendText(t('chip.' + code), code, 'chip');
 }
+// 자연어 예시 칩(빈 화면에 노출) — 타이핑/마이크 둘 다와 동일한 inputType:'text' 경로를 탄다.
+function sendExampleQuery(text) {
+  sendText(text, '', 'text');
+}
 function sendCategory(code, label) { // legacy alias
   sendText(label || t('chip.' + code), code, 'chip');
 }
@@ -3635,9 +3744,31 @@ function showCandidates(candidates, topPick, locationLabel) {
 // ========================
 // NAVIGATION DEEPLINK
 // ========================
+// 설정 > 내비게이션 앱(navApp)에 따라 실제로 열 앱을 고른다. 카카오내비는 일단 스킵함 —
+// 딥링크 자체는 있지만(kakaonavi-sdk://navigate?appkey=...) 우리가 아직 등록 안 한
+// 별도의 카카오내비 전용 appkey가 필요해서(검색에 쓰는 Kakao REST/JS 키와는 다른 키),
+// 나중에 그 키를 발급받으면 openTmap()과 같은 패턴으로 openKakaoNavi()를 추가하면 됨.
 function navigateTo(dlat, dlng, dname, mode) {
   mode = mode || transportMode;
   logVisit(dlat, dlng, dname);
+
+  if (navApp === 'tmap' && mode === 'transit') {
+    // 티맵 딥링크는(공식 문서가 따로 없어 커뮤니티 자료 기준) 자동차 경로만 지원한다.
+    // 예전엔 이 경우 그냥 mode를 'car'로 바꿔 티맵을 열었는데, 사용자가 명시적으로
+    // 대중교통 버튼을 눌렀는데 자동차 경로가 뜨는 건 실제로 요청한 걸 못 받는 것 —
+    // 기본 내비게이션 앱 설정과 무관하게, 대중교통을 지원하는 네이버 지도로 연다.
+    openNaverMap(dlat, dlng, dname, 'transit');
+  } else if (navApp === 'tmap') {
+    openTmap(dlat, dlng, dname);
+  } else {
+    openNaverMap(dlat, dlng, dname, mode);
+  }
+
+  addBotMessage(t('nav.start', dname, mode === 'transit' ? t('nav.transit') : t('nav.car')));
+  speak(t('nav.startTts', dname));
+}
+
+function openNaverMap(dlat, dlng, dname, mode) {
   var slat = currentLocation ? currentLocation.lat : '';
   var slng = currentLocation ? currentLocation.lng : '';
   var appname = 'com.example.mapservice';
@@ -3651,20 +3782,49 @@ function navigateTo(dlat, dlng, dname, mode) {
     ? 'https://map.naver.com/v5/directions/' + slng + ',' + slat + ',' + enc(t('nav.currentLoc')) + ',15,map/' + dlng + ',' + dlat + ',' + enc(dname) + ',15,map/-/transit?c=15,0,0,0,dh'
     : 'https://map.naver.com/v5/directions/' + slng + ',' + slat + ',' + enc(t('nav.currentLoc')) + ',15,map/' + dlng + ',' + dlat + ',' + enc(dname) + ',15,map/-/car?c=15,0,0,0,dh';
 
-  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    var timer = setTimeout(function() { window.open(webUrl, '_blank'); }, 1500);
-    var iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = appUrl;
-    document.body.appendChild(iframe);
-    window.addEventListener('blur', function() { clearTimeout(timer); }, { once: true });
-  } else {
-    window.open(webUrl, '_blank');
-  }
+  openDeepLinkWithFallback(appUrl, webUrl);
+}
 
-  addBotMessage(t('nav.start', dname, mode === 'transit' ? t('nav.transit') : t('nav.car')));
-  speak(t('nav.startTts', dname));
+// 티맵 딥링크: tmap://route?goalname=목적지명&goalx=경도&goaly=위도 (WGS84라 우리 좌표
+// 그대로 씀, x=경도/y=위도 순서 주의). 티맵은 공식 개발자 문서가 따로 공개돼있지 않아
+// 커뮤니티에 정리된 형식 기준(iOS 구버전은 rGoName/rGoX/rGoY를 썼다는 자료도 있어 혹시
+// 몰라 같이 붙임 — 인식 안 되는 파라미터는 보통 무시되니 두 형식을 같이 보내도 안전함).
+// 앱이 없으면(딥링크 무반응) 스토어로 보낸다 — 네이버처럼 쓸만한 길찾기 웹 서비스가
+// 따로 없어서 웹 폴백 대신 설치 유도가 더 나음.
+function openTmap(dlat, dlng, dname) {
+  var enc = encodeURIComponent;
+  var appUrl = 'tmap://route?goalname=' + enc(dname) + '&goalx=' + dlng + '&goaly=' + dlat
+    + '&rGoName=' + enc(dname) + '&rGoX=' + dlng + '&rGoY=' + dlat;
+  var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid = /Android/i.test(navigator.userAgent);
+
+  if (!isIOS && !isAndroid) {
+    // 데스크톱엔 티맵 앱/웹 버전이 없어서 네이버 지도 웹으로 대체.
+    showToast(t('nav.tmapDesktopFallback'));
+    openNaverMap(dlat, dlng, dname, 'car');
+    return;
+  }
+  var storeUrl = isIOS
+    ? 'https://apps.apple.com/kr/app/id431589174'
+    : 'https://play.google.com/store/apps/details?id=com.skt.tmap.ku';
+  openDeepLinkWithFallback(appUrl, storeUrl);
+}
+
+// 모바일에서 앱 딥링크(iframe)를 시도하고, 일정 시간 안에 앱으로 전환되지(blur) 않으면
+// fallbackUrl(웹 페이지 또는 스토어)을 새 탭으로 연다. 데스크톱이면 딥링크 시도 없이
+// fallbackUrl을 바로 연다.
+function openDeepLinkWithFallback(appUrl, fallbackUrl) {
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isMobile) {
+    window.open(fallbackUrl, '_blank');
+    return;
+  }
+  var timer = setTimeout(function() { window.open(fallbackUrl, '_blank'); }, 1500);
+  var iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = appUrl;
+  document.body.appendChild(iframe);
+  window.addEventListener('blur', function() { clearTimeout(timer); }, { once: true });
 }
 
 // ========================
@@ -3861,6 +4021,11 @@ function openConfig() {
     b.classList.toggle('active', b.dataset.val === defaultTransportMode);
   });
   document.getElementById('transportSeg').dataset.pending = '';
+  // Navigation app segmented control
+  document.querySelectorAll('#navAppSeg .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.val === navApp);
+  });
+  document.getElementById('navAppSeg').dataset.pending = '';
   // Chip radius slider
   var km = chipRadius / 1000;
   document.getElementById('radiusSlider').value = km;
@@ -3908,6 +4073,12 @@ function saveConfig() {
     localStorage.setItem('transportModeDefault', defaultTransportMode);
   }
   setTransport(defaultTransportMode);
+  // Navigation app
+  var pendingNavApp = document.getElementById('navAppSeg').dataset.pending || navApp;
+  if (pendingNavApp !== navApp) {
+    navApp = pendingNavApp;
+    localStorage.setItem('navApp', navApp);
+  }
   // Radius
   var km = parseInt(document.getElementById('radiusSlider').value, 10) || 5;
   chipRadius = km * 1000;

@@ -34,7 +34,10 @@
 | Plugin-API Manager의 params/header/body (템플릿 정의) | `#{key}` — 이 Plugin-API 자신의 input values 이름 | `#{query}` |
 | Flow 액션 아이템의 파라미터 입력 폼 (**POST+JSON body 트리거일 때**) | `#{parameter.body.필드명}` — 아래 2-1 참고 | `#{parameter.body.text}` |
 | Code 노드(JavaScript) 안에서 상위 노드 결과 참조 | `model["아이템 이름"]` | `model["KAKAO MAP"]` |
-| Result/End 노드의 JSON 템플릿에서 상위 노드 결과 참조 | `#{아이템 이름.경로.경로}` (dot notation) | `#{KAKAO MAP.meta.same_name.keyword}` |
+| Code 노드 안에서 Variable 필드 참조 | `model["Variable 아이템 이름"].필드명` | `model["검색변수"].originResolved` |
+| Condition/Result/Plugin-API 파라미터 등에서 Code/Agent/Plugin-API 결과 참조 | `#{아이템 이름.경로.경로}` (dot notation) | `#{KAKAO MAP.meta.same_name.keyword}` |
+| Condition/Result/Plugin-API 파라미터 등에서 **Variable** 필드 참조 | `#{필드명}` (아이템 이름 없이 필드명만 — Variable만 예외) | `#{originResolved}` |
+| Smart Component 필드(소스 칸 등)에서 내장 Function 적용 | `함수명(#{...})` — fx 패널이 고른 값의 타입별로 다른 카테고리를 보여줌: String(`length`/`substring`/`indexOf`/`contains`/`trim`/...), Math(`add`/`sum`/`round`/...), List(`size`/`indexOf`/...), Date, Validation, network 등 | 배열은 `size(#{candidates})`, 문자열은 `length(#{...})` |
 
 ### 2-1. ⚠️ API Trigger의 "parameter" 목록 vs "요청 본문(Request Body)" — 제일 크게 삽질한 부분
 
@@ -225,8 +228,10 @@ Result 노드의 Response(JSON) 템플릿은 **엄격한 JSON 문법**을 지켜
   필드(예: `radius`, `sort`, `candidates`)를 선언해두면, **이후 플로우 어디서든 같은
   이름의 필드를 가진 Variable 노드를 또 두면 그게 곧 그 변수에 값을 대입하는 것**이다.
   별도의 "업데이트 모드" 같은 게 있는 게 아니라 이름이 같으면 같은 변수를 가리킨다.
-- 선언 이후엔 `#{필드명}`으로 플로우 어디서든 바로 참조 가능(예: `#{candidates}`,
-  `#{radius}`) — Code 노드 이름이나 다른 접두사 없이 그냥 변수 이름만 쓴다.
+- 선언 이후엔 (Condition/Result/Plugin-API 파라미터 같은 Smart Component 자리에서)
+  `#{필드명}`으로 플로우 어디서든 바로 참조 가능(예: `#{candidates}`, `#{radius}`) —
+  Variable 아이템 이름이나 다른 접두사 없이 그냥 필드 이름만 쓴다. (Code 노드 **안**에서는
+  2번 표대로 `model["Variable 아이템 이름"].필드명`으로 접근.)
 - **Switch/Condition의 각 분기는 서로 다른 액션 아이템을 거친 뒤 다시 하나의 다음
   노드로 합류할 수 있다.** 즉 분기 A는 Code1을 거치고, 분기 B는 Code2를 거쳐도, 각
   분기 끝에서 **같은 이름의 Variable에 결과를 대입**해두면, 합류 지점 이후로는
@@ -271,3 +276,397 @@ Switch/Condition/Variable을 검색 플로우에 추가한 뒤로 눈에 띄게 
 처리, 커밋 `c56ba55`). 일정 개수가 보통 적어서 체감 속도 차이는 크지 않음. Variable을
 쓰는 플로우를 만들 땐 애초에 동시 호출 가능성을 염두에 두고, 프론트엔드에서 순차
 호출하거나 플로우 자체에 실행 격리 옵션이 있는지 먼저 확인할 것.
+
+## 13. `text` 자연어 검색 — ActionFlow는 LLM 두 곳만 담당
+
+### 13-0. 왜 다시 설계했는가 (전환 배경)
+
+이전 판(이 절의 옛 버전)은 `resolveIntent` LLM → 즐겨찾기/지명 원점 해석 → 카카오 검색
+폴백 4단계(키워드→카테고리→전국→주소) → `curateResults` LLM 전체를 ActionFlow 캔버스
+하나에 노드 30개 이상으로 재현하려고 했다. 실제로 만들어보니 Condition이 "소스/연산자/값"
+단일 비교만 가능하고, Agent에 tool use가 없고, AND 조건마다 Condition을 체인으로 쪼개야
+하는 제약이 겹쳐서 유지보수가 어려운 초대형 플로우가 됐다 — 실제 내보낸 XML을 분석한
+결과 23개 노드 중 9개만 정상 동작, 14개는 분기 모양만 있고 조건/코드가 비어있었고, 후보
+검색·큐레이션 구간(약 25~30개 노드)은 아예 손도 못 댄 상태였다.
+
+**결론**: ActionFlow 캔버스에 분기 로직 자체를 그리는 대신, 이미 `BACKEND_MODE=mock`에서
+실제로 검증되어 동작 중인 `server/src/pipeline.js`의 JS 로직을 **actionflow 모드에서도
+그대로 재사용**하고, ActionFlow는 정말 LLM이 필요한 두 지점만 담당하도록 재설계했다. 카카오
+검색은 사내 거버넌스 대상이 아닌 공개 REST API(개발자 등록만 하면 누구나 키 발급)라서 이
+서버가 직접 호출해도 무방한 반면, LLM은 이 프로젝트에서 ActionFlow가 관리하는 것이 전제다 —
+이 경계선을 따라 나누면 "ActionFlow에 정말 넣어야 하는 것"이 자연히 최소로 줄어든다.
+
+### 13-1. 새 아키텍처 요약
+
+> **결정 변경(해커톤 데모용)**: `chip`/`locate`가 쓰던 `ACTIONFLOW_SEARCH_URL`은 이미
+> Switch(inputType)/Plugin-API/Condition/Variable을 실제로 조합한, ActionFlow를 "제대로
+> 쓰는" 모습을 보여주기 좋은 플로우라서(11번 항목 참고) 없애지 않고 그대로 살려둔다. 아래
+> 재설계는 **`text` 한정**으로만 적용된다 — `text`가 즐겨찾기 매칭·원점/지명 해석·카카오
+> 폴백까지 겹쳐서 압도적으로 복잡했던 것이지, `chip`/`locate`가 문제였던 적은 없었다.
+
+```
+web/index.html --POST /api/search--> server/src/index.js
+                                         │
+                                         ├─ BACKEND_MODE=mock
+                                         │    └─ pipeline.js: runMockPipeline()
+                                         │         └─ runSearchPipeline(body, {resolveIntent, curateResults})
+                                         │              (LLM 직접 호출: Gemini/Claude/OpenAI)
+                                         │
+                                         └─ BACKEND_MODE=actionflow
+                                              ├─ inputType이 chip/locate면
+                                              │    └─ runActionFlow('search', body) → ACTIONFLOW_SEARCH_URL
+                                              │         (원래 있던 그 플로우 그대로 — Switch/Plugin-API/Condition/Variable)
+                                              └─ inputType이 text면
+                                                   └─ actionflowSearch.js: runActionFlowSearch()
+                                                        └─ pipeline.js: runSearchPipeline(body, {
+                                                             resolveIntentViaActionFlow, curateResultsViaActionFlow })
+                                                             ├─ 즐겨찾기 매칭 / 원점·지명 해석 /
+                                                             │   카카오 검색 폴백 4단계 — 전부 로컬 JS
+                                                             │   (mock 모드와 완전히 동일한 코드)
+                                                             ├─ 의도 파악이 필요하면
+                                                             │   → ACTIONFLOW_INTENT_URL 호출 (Agent 1개짜리 플로우)
+                                                             └─ 큐레이션이 필요하면(후보가 있을 때만)
+                                                                 → ACTIONFLOW_CURATE_URL 호출 (Agent 1개짜리 플로우)
+```
+
+`runSearchPipeline()`은 **mock/actionflow 두 모드에서 완전히 같은 함수**다 — `text`의
+즐겨찾기 매칭/원점 해석/카카오 검색 분기가 모드에 따라 다르게 동작할 여지 자체가 없다.
+갈아끼우는 건 딱 두 가지, "의도를 어떻게 알아내는가"와 "큐레이션을 어떻게 하는가"뿐이고,
+그마저도 함수 하나씩 주입하는 것으로 끝난다.
+
+**`text`를 위해 새로 만들어야 하는 플로우는 딱 2개, 각각 `API Trigger → Agent → Code →
+Result` 4노드뿐이다** — 즐겨찾기 매칭/원점 해석/카카오 폴백 같은 분기 로직은 여기(13번
+항목)에 없다. Condition/Switch/Variable/Plugin-API/Sub-flow가 전혀 필요 없는 이유는 전부
+`server/src/pipeline.js` / `server/src/actionflowSearch.js`의 평범한 JS `if`/`while`/함수
+호출로 대체됐기 때문이다(코드는 `&&`/`||`/배열 메서드를 자유롭게 쓸 수 있어서 ActionFlow
+Condition의 단일 비교 제약 자체가 문제가 되지 않는다). `chip`/`locate`의 `ACTIONFLOW_SEARCH_URL`
+플로우는 이 둘과 별개로 이미 존재하는 그대로 유지된다(11번 항목 참고, 여기서 새로 손댈 것 없음).
+
+### 13-2. 의도분석 플로우 — `ACTIONFLOW_INTENT_URL`
+
+**API Trigger 요청 본문** — `web/index.html`의 `buildSearchPayload()`가 `/api/search`로
+보내는 바디를 `actionflowSearch.js`가 그대로 이 플로우에 전달한다(README "ActionFlow 플로우
+계약" 1a번 참고). API Trigger의 "요청 본문" 스키마에 그대로 붙여넣을 것:
+
+```json
+{
+  "text": "미사역 주변에 아이랑 갈만한 파스타집 찾아줘",
+  "lat": 37.5665,
+  "lng": 126.9780,
+  "landmark": "",
+  "transportMode": "transit",
+  "categoryGroupCode": "",
+  "inputType": "text",
+  "userId": "b3f1c2e4-3a1d-4b7a-9c2e-1f0a2b3c4d5e",
+  "tz": "Asia/Seoul",
+  "chipRadius": 5000,
+  "lang": "ko",
+  "favorites": [
+    { "name": "래미안강남포레스트", "alias": "집", "lat": 37.4979, "lng": 127.0276 },
+    { "name": "우리금융 상암센터", "alias": "회사", "lat": 37.5793, "lng": 126.8912 }
+  ],
+  "recentSearches": [
+    { "text": "강남역 스타벅스", "code": "CE7" }
+  ],
+  "localTime": "2026-09-07T08:04:12.345Z"
+}
+```
+
+⚠️ `llmProvider`/`llmApiKey`(개인 구독 LLM 키)는 대부분의 요청에서 아예 body에서 빠진다
+(`undefined`면 `JSON.stringify`가 키 자체를 생략함) — 요청 본문 스키마에서 required로 두지
+말 것. 이 두 필드는 actionflow 모드에선 애초에 쓰이지 않는다(LLM 접근은 ActionFlow가
+관리하므로 사용자 개인 키를 여기 flow에 넘길 이유가 없다) — `resolveIntentViaActionFlow`가
+body를 그대로 전달하긴 하지만 Agent 프롬프트에서 이 두 필드는 참조하지 않는다.
+
+**Agent "의도분석" System Prompt** — Agent 노드에 tool use는 없고 System/User Prompt 두
+칸뿐이라, 결과는 텍스트(`.answer`)로 오고 마크다운 코드블록으로 감싸질 수 있다. 그래서
+System Prompt에서 순수 JSON 출력을 강하게 지시한다(`server/src/pipeline.js`의
+`resolveIntent()` 시스템 프롬프트와 내용 동일 — 새 업종/필드 추가 시 양쪽 다 갱신):
+
+```
+중요: 사용자 UI 언어는 한국어입니다. spoken, clarification 등 모든 자유 텍스트 출력 필드를 한국어로 작성하세요. (UI 언어가 english면 이 문단 대신 "IMPORTANT: ... English only"로 교체)
+
+당신은 한국 길찾기 앱의 의도 분석 어시스턴트입니다. 사용자의 자연어 발화에서 카카오 로컬 검색에 쓸 쿼리/카테고리/필터를 추출하세요.
+즐겨찾기 별칭(집, 회사 등)이 발화에서 목적지 자체로 쓰이면(예: '집으로 가자', '회사 가는 길') intent='navigate_favorite'이고 destinationFavoriteName에 그 별칭을 넣으세요.
+즐겨찾기 별칭이 검색 기준 위치로만 쓰이면(예: '집 근처 편의점', '회사 주변 카페') intent='search'이고 originHint에만 넣으세요 (destinationFavoriteName은 비움).
+originHint/destinationFavoriteName에 즐겨찾기를 넣을 때는 '# 즐겨찾기' 목록에 있는 alias 값을 토씨 하나 안 틀리고 그대로 복사해서 넣으세요.
+즐겨찾기가 아닌 임의의 지역/역/동네/랜드마크명이 검색 기준 위치로 쓰이면(예: '미사역 주변 맛집', '홍대에서 혼술', '판교역 근처 카페') locationHint에 그 지명만 넣으세요(originHint는 '현재위치'로 둠). 이때 query에는 그 지명을 절대 포함하지 마세요.
+지명 없이 그냥 '카페 찾아줘'처럼 현재 위치 기준이면 locationHint는 비워두세요.
+발화가 지역/역/동네/랜드마크명 단독으로만 이루어져 있으면(예: '미사역', '강남역', '홍대') query에 그 이름을 그대로 넣고 categoryGroupCode와 locationHint는 반드시 빈 문자열로 두세요.
+'# 최근 검색'은 '거기', '그 근처', '아까 거기서' 처럼 지금 발화만으로는 뜻이 불완전할 때만 참고하세요.
+이동수단(transportMode)은 발화에 명시적으로 언급된 경우에만 그 값으로 바꾸고, 언급이 없으면 컨텍스트의 '이동수단 기본' 값을 그대로 유지하세요.
+query는 실제 상호명/업종에 매칭될 짧은 검색어만 넣고, '아이랑 갈만한' 같은 동반자/분위기/목적 수식어는 query에서 빼서 filters에 넣으세요.
+모호하면 clarification에 짧은 질문을 넣고 intent='ambiguous'.
+
+categoryGroupCode는 다음 중 하나이거나 빈 문자열: FD6=음식점/맛집, CE7=카페, CS2=편의점, PM9=약국, SW8=지하철역, PK6=주차장, BK9=은행, OL7=주유소/충전소, HP8=병원, MT1=대형마트, AD5=숙박, AT4=관광명소, CT1=문화시설, PO3=공공기관, AC5=학원, SC4=학교, PS3=어린이집/유치원, AG2=부동산.
+
+아래 JSON 형식으로만 답하세요. 설명 문장이나 마크다운 코드블록 없이, 이 스키마의 순수 JSON 객체 하나만 출력하세요. 모든 필드를 항상 포함하세요(해당 없으면 빈 문자열 "" 또는 빈 배열 []):
+{
+  "intent": "search" | "navigate_favorite" | "ambiguous",
+  "query": "string",
+  "categoryGroupCode": "string",
+  "transportMode": "transit" | "car",
+  "originHint": "string",
+  "locationHint": "string",
+  "destinationFavoriteName": "string",
+  "filters": ["string"],
+  "spoken": "string",
+  "clarification": "string"
+}
+```
+
+**Agent "의도분석" User Prompt** (Smart Component로 트리거 값 바인딩):
+
+```
+# 사용자 발화
+"#{parameter.body.text}"
+
+# 컨텍스트
+- 위치: (#{parameter.body.lat}, #{parameter.body.lng})
+- 이동수단 기본: #{parameter.body.transportMode}
+- 입력 방식: #{parameter.body.inputType}
+- 언어: #{parameter.body.lang}
+
+# 즐겨찾기
+#{parameter.body.favorites}
+
+# 최근 검색
+#{parameter.body.recentSearches}
+```
+
+**Code "의도파싱"**:
+
+```javascript
+var agent = model["의도분석"];
+var text = (agent.answer || '').replace(/```json/g, '').replace(/```/g, '').trim();
+var parsed = {};
+try { parsed = JSON.parse(text); } catch (e) { parsed = {}; }
+
+// 즐겨찾기 목록에 없는 흔한 업종 단어가 원문에 있으면 categoryGroupCode 보조 추론
+// (pipeline.js의 CATEGORY_KEYWORDS와 완전히 동일해야 함 — 새 업종 추가 시 양쪽 다 갱신).
+var CATEGORY_KEYWORDS = [
+  ['FD6', ['맛집','밥집','식당','고깃집','고기집','국밥','냉면','분식','돈까스','파스타','이자카야','포차','중국집','일식집','백반','뷔페']],
+  ['CE7', ['카페','커피','디저트','베이커리','빵집']],
+  ['CS2', ['편의점']],
+  ['PM9', ['약국']],
+  ['SW8', ['지하철역','전철역']],
+  ['PK6', ['주차장']],
+  ['BK9', ['은행','atm','현금인출기']],
+  ['OL7', ['주유소','충전소']],
+  ['HP8', ['병원','의원','치과','한의원']],
+  ['MT1', ['대형마트','이마트','홈플러스','롯데마트']],
+  ['AD5', ['호텔','모텔','펜션','게스트하우스','리조트','숙소']],
+  ['AT4', ['관광지','관광명소','전망대','유적지']],
+  ['CT1', ['영화관','극장','미술관','박물관','공연장','전시관']],
+  ['PO3', ['주민센터','구청','시청','동사무소','우체국','경찰서','소방서']],
+  ['AC5', ['학원']],
+  ['SC4', ['학교','초등학교','중학교','고등학교','대학교']],
+  ['PS3', ['어린이집','유치원']],
+  ['AG2', ['부동산','공인중개사']]
+];
+
+var originalText = model.parameter.body.text || '';
+var defaultCategory = model.parameter.body.categoryGroupCode || '';
+var userTransportMode = model.parameter.body.transportMode || 'transit';
+
+var intent = {
+  intent: parsed.intent || 'search',
+  query: parsed.query != null ? parsed.query : originalText,
+  categoryGroupCode: parsed.categoryGroupCode || defaultCategory || '',
+  transportMode: parsed.transportMode || userTransportMode,
+  originHint: parsed.originHint || '현재위치',
+  locationHint: parsed.locationHint || '',
+  destinationFavoriteName: parsed.destinationFavoriteName || '',
+  filters: Array.isArray(parsed.filters) ? parsed.filters : [],
+  spoken: parsed.spoken || '',
+  clarification: parsed.clarification || ''
+};
+
+if (!intent.categoryGroupCode) {
+  var found = CATEGORY_KEYWORDS.find(function (e) {
+    return e[1].some(function (kw) { return originalText.indexOf(kw) !== -1; });
+  });
+  if (found) intent.categoryGroupCode = found[0];
+}
+
+// pipeline.js(resolveIntent 호출부)는 navigate_favorite인데 destinationFavoriteName이
+// 없거나 ambiguous인데 clarification이 없으면 그 분기를 안 타고 그냥 검색으로 흘려보낸다
+// — 여기서 미리 intent를 'search'로 되돌려두면 이 플로우를 부르는 서버 쪽(pipeline.js의
+// runSearchPipeline)이 그 두 가지 경우를 신경 쓸 필요가 없어진다.
+if (intent.intent === 'navigate_favorite' && !intent.destinationFavoriteName) {
+  intent.intent = 'search';
+}
+if (intent.intent === 'ambiguous' && !intent.clarification) {
+  intent.intent = 'search';
+}
+
+return intent; // 순수 객체 — 6번 항목의 "Can not parse json result" 함정 주의
+```
+
+**Result "의도분석결과"** (이 플로우의 마지막 노드 — Code 뒤에 별도 Result 노드를 두고
+`#{의도파싱.필드}`를 그대로 반영):
+
+```json
+{
+  "intent": "#{의도파싱.intent}",
+  "query": "#{의도파싱.query}",
+  "categoryGroupCode": "#{의도파싱.categoryGroupCode}",
+  "transportMode": "#{의도파싱.transportMode}",
+  "originHint": "#{의도파싱.originHint}",
+  "locationHint": "#{의도파싱.locationHint}",
+  "destinationFavoriteName": "#{의도파싱.destinationFavoriteName}",
+  "filters": #{의도파싱.filters},
+  "spoken": "#{의도파싱.spoken}",
+  "clarification": "#{의도파싱.clarification}"
+}
+```
+
+(`filters`는 배열이라 따옴표 없이 — 7번 항목 규칙. 이 JSON이 그대로
+`actionflowSearch.js`의 `resolveIntentViaActionFlow()` 반환값이 되고, 서버 쪽
+`runSearchPipeline()`이 이걸 받아서 즐겨찾기 매칭/카카오 검색을 이어간다.)
+
+### 13-3. 큐레이션 플로우 — `ACTIONFLOW_CURATE_URL`
+
+이 플로우는 후보가 있을 때만 호출된다 — `actionflowSearch.js`의
+`curateResultsViaActionFlow()`가 `candidates.length === 0`이면 이 URL을 아예 호출하지
+않고 바로 폴백을 반환한다(불필요한 LLM 호출 비용 절감, `pipeline.js`의 `curateResults()`와
+동일한 원칙). 그래서 플로우 안에는 "후보가 있는지" 확인하는 Condition조차 필요 없다.
+
+**API Trigger 요청 본문**:
+
+```json
+{
+  "candidates": [
+    { "index": 1, "name": "미사 파스타하우스", "address": "경기 하남시 미사대로 520", "category": "이탈리안",
+      "lat": 37.55980, "lng": 127.19510, "distanceM": 420, "distanceLabel": "420m",
+      "phone": "031-000-0000", "placeUrl": "http://place.map.kakao.com/111" },
+    { "index": 2, "name": "강가에파스타", "address": "경기 하남시 미사강변대로 200", "category": "양식",
+      "lat": 37.56200, "lng": 127.19700, "distanceM": 780, "distanceLabel": "780m",
+      "phone": "", "placeUrl": "" }
+  ],
+  "text": "미사역 주변에 아이랑 갈만한 파스타집 찾아줘",
+  "filters": ["아이랑 갈만한"],
+  "lang": "ko"
+}
+```
+
+**Code "후보목록축약"** (Agent 프롬프트에 넣을 요약 — 트리거의 `candidates`를 그대로 쓰지
+않고 이름/카테고리/주소/거리만 남긴다):
+
+```javascript
+var candidates = model.parameter.body.candidates || [];
+return candidates.map(function (c, i) {
+  return { i: i, name: c.name, category: c.category, address: c.address, distance: c.distanceLabel };
+});
+```
+
+**Agent "큐레이션" System Prompt** (`pipeline.js`의 `curateResults()` 시스템 프롬프트와
+내용 동일):
+
+```
+중요: 사용자 UI 언어는 한국어입니다. spoken, topPickReason 등 모든 자유 텍스트 출력 필드를 한국어로 작성하세요. (UI 언어가 english면 이 문단 대신 "IMPORTANT: ... English only"로 교체)
+
+당신은 검색 결과 큐레이터입니다. 사용자의 필터/분위기/의도와 후보들의 카테고리/거리를 종합해 가장 맞는 곳을 추천하세요.
+후보 데이터에는 이름/카테고리/주소/거리만 있고 평점·가격대·시설·서비스 품질 정보는 없습니다.
+topPickReason/spoken에서 '고급스러운', '평점 높은', '분위기 좋은'처럼 확인 불가능한 사실을 지어내지 말고, 실제로 아는 정보(카테고리 일치, 거리, 이름)에만 근거해 이유를 말하세요.
+
+아래 JSON 형식으로만 답하세요. 설명 문장이나 마크다운 코드블록 없이, 이 스키마의 순수 JSON 객체 하나만 출력하세요:
+{
+  "rankedIndices": [0, 1, 2],
+  "topPickIndex": 0,
+  "topPickReason": "string",
+  "spoken": "string"
+}
+```
+
+**Agent "큐레이션" User Prompt**:
+
+```
+# 원본 발화
+"#{parameter.body.text}"
+
+# 의도 필터
+#{parameter.body.filters}
+
+# 언어: #{parameter.body.lang}
+
+# 후보 (0-based)
+#{후보목록축약}
+```
+
+**Code "큐레이션파싱"** (재정렬은 트리거로 받은 원본 `candidates`, 즉 전체 필드를 가진
+객체를 기준으로 한다 — 위 "후보목록축약"은 프롬프트용 요약일 뿐):
+
+```javascript
+var agent = model["큐레이션"];
+var text = (agent.answer || '').replace(/```json/g, '').replace(/```/g, '').trim();
+var args = {};
+try { args = JSON.parse(text); } catch (e) { args = {}; }
+
+var candidates = model.parameter.body.candidates || [];
+var ranked = (args.rankedIndices || [])
+  .map(function (i) { return candidates[i]; })
+  .filter(Boolean)
+  .map(function (c, newI) { return Object.assign({}, c, { index: newI + 1 }); });
+var newTopIdx = (args.rankedIndices || []).indexOf(args.topPickIndex);
+
+return {
+  candidates: ranked.length ? ranked : candidates,
+  spoken: args.spoken || '',
+  topPick: { index: newTopIdx >= 0 ? newTopIdx : 0, reason: args.topPickReason || '' }
+};
+```
+
+**Result "큐레이션결과"**:
+
+```json
+{
+  "candidates": #{큐레이션파싱.candidates},
+  "spoken": "#{큐레이션파싱.spoken}",
+  "topPick": #{큐레이션파싱.topPick}
+}
+```
+
+(`candidates`/`topPick`은 배열·객체라 따옴표 없이. 이 JSON이 그대로
+`curateResultsViaActionFlow()`의 반환값이 된다.)
+
+### 13-4. 서버 코드가 담당하는 것 (`text`에 한해 더 이상 ActionFlow에 옮기지 않는 부분)
+
+아래는 전부 `server/src/pipeline.js`의 `runSearchPipeline()` 안에 있는 그대로의 JS이고,
+mock 모드와 actionflow 모드의 `text` 처리가 **완전히 같은 코드를 공유**한다 — actionflow
+모드 전용 코드는 `server/src/actionflowSearch.js`의 `resolveIntentViaActionFlow`/
+`curateResultsViaActionFlow` 두 함수뿐이다. `chip`/`locate`는 이 함수 자체를 안 거친다 —
+`server/src/index.js`가 actionflow 모드에서 `inputType`을 보고 `chip`/`locate`는 아예
+`ACTIONFLOW_SEARCH_URL` 플로우로 바로 보내기 때문(13-1 다이어그램 참고). `skipLLM` 분기(아래
+카카오 키워드+주소검색 로직)는 이제 mock 모드에서만 실행된다:
+
+- `chip`/`locate`(`skipLLM`, **mock 모드 전용** — actionflow 모드에선 `ACTIONFLOW_SEARCH_URL`이
+  대신 처리) — 카카오 키워드 검색만(반경/정렬 방식만 다름), `locate`는 0건이면 카카오
+  주소검색으로 폴백.
+- `navigate_favorite`/`ambiguous` 조기 응답 — `intent`가 이 둘이면 카카오 검색 자체를
+  건너뛰고 바로 응답 조립.
+- 원점(origin) 해석 — `originHint`가 즐겨찾기 별칭이면 그 좌표로, 아니면 현재 GPS로.
+- 지명(location) 해석 — `locationHint`가 즐겨찾기와 일치하면 그 좌표로, 아니면 카카오
+  키워드검색(정확도순)으로 좌표만 확인.
+- 카카오 검색 폴백 체인 — 키워드검색 → (0건이면) 카테고리검색 → (0건이면) 전국
+  무제한검색 → (0건이면) 주소검색.
+- 후보가 있을 때만 큐레이션 플로우 호출, 없으면 바로 검색 결과 그대로 응답.
+
+이전 판의 13-2~13-9(Switch "의도분기", 즐겨찾기매칭 Code 6개, location힌트분기 Condition
+체인, 카카오 폴백 4단계 Plugin-API×4 + 정규화 Code×4 + 후보변수 Variable 재대입×4 등,
+합쳐서 노드 30개 가까이)는 전부 위 두 함수(`runSearchPipeline`, `actionflowSearch.js`)로
+대체됐다 — ActionFlow 캔버스에는 더 이상 필요 없다.
+
+### 13-5. 확인이 필요한 질문 — 전부 해결됨
+
+이전 판에서 남아있던 질문(Condition 값 칸 리터럴 문법, Code가 반환하는 boolean 필드의
+Condition 비교, Sub-flow가 호출 가능한 트리거 타입)은 이번 재설계로 전부 **질문 자체가
+무의미해졌다** — 위 2개 플로우 어디에도 Condition/Switch/Sub-flow가 없기 때문이다. 아래는
+그래도 여전히 유효한, 실제로 확인된 사실들:
+
+- Agent 노드 System/User Prompt에 `#{parameter.body.x}` Smart Component가 정상적으로
+  먹힌다(프롬프트 칸에 파란 태그로 삽입되는 걸 확인).
+- `favorites`/`recentSearches` 같은 배열도 Agent 프롬프트에 잘 들어간다.
+- Agent 노드에 tool use는 없다 — System/User Prompt 두 칸뿐이라, 순수 JSON 출력을
+  프롬프트로 강제하고 Code 노드에서 마크다운 코드블록을 벗겨내는 방식이 필요하다.
+- Code 노드에서는 `model.parameter.body.필드명`으로 트리거 body를 바로 읽을 수 있다.

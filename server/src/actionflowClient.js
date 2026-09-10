@@ -9,8 +9,19 @@
 // 끝 - 별도 폴링이 필요 없습니다.
 
 // index.js의 pickFlowKey()가 body.inputType을 보고 이 중 하나로 매핑한다.
+//
+// 'search'는 chip/locate 전용이다 — 즐겨찾기 매칭/원점 해석 같은 분기 로직 없이
+// "좌표+반경+쿼리로 카카오 검색해서 후보를 돌려준다"만 하면 되는, 원래 있던 그대로의
+// 플로우(Switch(inputType)/Plugin-API/Condition/Variable 패턴, docs/actionflow-notes.md
+// 11번 항목 참고)다. `text`는 이것과 별개로 즐겨찾기 매칭/원점·지명 해석/카카오 폴백
+// 체인이 훨씬 복잡해서, 그 분기 로직은 server/src/pipeline.js의 runSearchPipeline()이
+// 담당하고(mock 모드와 100% 동일 코드 재사용) ActionFlow는 그중 LLM이 꼭 필요한 두 지점
+// (의도분석/큐레이션)만 소형 Agent 플로우로 호출한다(server/src/actionflowSearch.js 참고,
+// docs/actionflow-notes.md 13번 항목).
 const FLOW_ENV_KEYS = {
-  search: 'ACTIONFLOW_SEARCH_URL', // text/chip/locate 공통 — 장소 검색(Kakao) + (필요시) LLM
+  search: 'ACTIONFLOW_SEARCH_URL', // chip/locate 전용 — 카카오 검색만(LLM 없음)
+  intent: 'ACTIONFLOW_INTENT_URL', // 자연어 발화 -> 검색 의도 JSON (text 전용, LLM 1회, Agent만)
+  curate: 'ACTIONFLOW_CURATE_URL', // 후보 목록 -> 추천/정렬/한줄평 (text 전용, LLM 1회, Agent만)
   briefing: 'ACTIONFLOW_BRIEFING_URL', // 오늘 일정 사실 -> 음성 브리핑 문장 (LLM만)
   'create-event': 'ACTIONFLOW_CREATE_EVENT_URL', // 발화 -> 일정 제목/날짜/시간/장소 (LLM만)
   'travel-time': 'ACTIONFLOW_TRAVEL_TIME_URL', // 실시간 자동차 이동시간 (Naver Directions만, LLM 없음)
@@ -75,8 +86,12 @@ async function runActionFlow(flowKey, payload) {
   return res.json();
 }
 
-// body.inputType -> 호출할 플로우 키. text/chip/locate는 전부 하나의 "검색" 플로우로 묶는다
-// (pipeline.js의 runMockPipeline()도 내부적으로 이 셋을 같은 함수 안에서 분기하는 것과 동일한 경계).
+// body.inputType -> 요청 분류 키. text/chip/locate는 여전히 'search'로 묶여서 반환되지만
+// (pipeline.js의 runSearchPipeline()이 셋 다 같은 함수 안에서 분기하는 것과 동일한 경계),
+// index.js는 이 중 'text'만 actionflowSearch.runActionFlowSearch()로 보내고 chip/locate는
+// 그대로 runActionFlow('search', ...)로 보낸다(위 FLOW_ENV_KEYS 주석 참고) — 그래서 여기
+// 반환값만으론 chip/locate와 text가 구분이 안 되고, 그 구분은 index.js가 body.inputType을
+// 직접 다시 봐서 한다.
 function pickFlowKey(body) {
   const inputType = (body && body.inputType) || 'text';
   if (inputType === 'briefing') return 'briefing';

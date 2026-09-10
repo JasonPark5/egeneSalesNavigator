@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { runMockPipeline } = require('./pipeline');
 const { runActionFlow, pickFlowKey, ActionFlowError } = require('./actionflowClient');
+const { runActionFlowSearch } = require('./actionflowSearch');
 const { buildAuthorizeUrl, exchangeCodeForTokens, refreshAccessToken, revokeToken } = require('./googleAuth');
 const { parseCookies, serializeCookie } = require('./cookies');
 
@@ -25,10 +26,21 @@ app.use(express.static(path.join(__dirname, '..', '..', 'web')));
 
 app.post('/api/search', async (req, res) => {
   try {
-    const result =
-      BACKEND_MODE === 'actionflow'
-        ? await runActionFlow(pickFlowKey(req.body), req.body)
-        : await runMockPipeline(req.body);
+    let result;
+    if (BACKEND_MODE === 'actionflow') {
+      const flowKey = pickFlowKey(req.body);
+      if (flowKey === 'search' && (req.body.inputType || 'text') === 'text') {
+        // 'text'만 이 서버가 직접 오케스트레이션한다 — 즐겨찾기 매칭/원점 해석/카카오
+        // 폴백은 로컬 JS, LLM 2곳(의도분석/큐레이션)만 ActionFlow. actionflowSearch.js 참고.
+        result = await runActionFlowSearch(req.body);
+      } else {
+        // chip/locate('search')와 briefing/create-event/travel-time은 예전처럼 ActionFlow
+        // 플로우 하나를 그대로 호출한다.
+        result = await runActionFlow(flowKey, req.body);
+      }
+    } else {
+      result = await runMockPipeline(req.body);
+    }
     res.json(result);
   } catch (err) {
     // travel-time은 실패해도 절대 HTTP 에러로 응답하면 안 된다 — 프론트엔드가 real:false를
