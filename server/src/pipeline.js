@@ -156,7 +156,7 @@ async function callLLMTool({ systemPrompt, userMessage, toolSchema, toolChoiceNa
   }
 
   if (provider === 'openai') {
-    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const model = process.env.OPENAI_MODEL || 'gpt-5.4-nano';
     const apiKey = overrideKey || process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다.');
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
