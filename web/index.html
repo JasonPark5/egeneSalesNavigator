@@ -2945,17 +2945,34 @@ var ADDRESS_ADMIN_MARKERS = [
   '경상북도', '경상남도', '제주특별자치도', '제주도',
 ];
 
+// "서울특별시" 같은 정식 명칭이 아니라 "서울 강남구"처럼 광역시/도를 줄여 쓰는
+// 도로명주소 표기(2014년 이후 공식 형식이라 실제로 이게 더 흔하다)를 잡기 위한
+// 패턴. 흔한 지명 일부가 우연히 들어간 상호와 헷갈리지 않도록, 반드시 뒤에
+// "공백 + 시/군/구로 끝나는 단어"가 붙는 경우만 주소 시작점으로 본다.
+var REGION_DISTRICT_RE = /(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\s+\S+(?:시|군|구)(?=\s|$)/;
+
 function extractPlaceName(raw) {
   var s = (raw || '').trim();
   if (!s) return s;
+
+  // 콤마나 괄호로 "장소명"과 "상세주소"가 나뉘는 경우 그 앞부분만 우선 취한다
+  // (예: "강남파이낸스센터 (서울 강남구 테헤란로 152)", "스타벅스, 서울 강남구...").
   var commaIdx = s.indexOf(',');
-  var candidate = (commaIdx >= 0 ? s.slice(0, commaIdx) : s).trim();
+  var parenIdx = s.indexOf('(');
+  var cutAt = commaIdx >= 0 ? commaIdx : -1;
+  if (parenIdx >= 0 && (cutAt === -1 || parenIdx < cutAt)) cutAt = parenIdx;
+  var candidate = (cutAt >= 0 ? s.slice(0, cutAt) : s).trim();
 
   var cutIdx = -1;
   ADDRESS_ADMIN_MARKERS.forEach(function(marker) {
     var idx = candidate.indexOf(marker);
     if (idx > 0 && (cutIdx === -1 || idx < cutIdx)) cutIdx = idx;
   });
+  var regionMatch = candidate.match(REGION_DISTRICT_RE);
+  if (regionMatch) {
+    var ridx = candidate.indexOf(regionMatch[0]);
+    if (ridx > 0 && (cutIdx === -1 || ridx < cutIdx)) cutIdx = ridx;
+  }
   if (cutIdx > 0) candidate = candidate.slice(0, cutIdx).trim();
 
   // 잘라내고 남은 게 국가/시도명 자체뿐이면(장소명 없이 주소만 있던 경우) 원문을 그대로 씀
