@@ -2457,6 +2457,8 @@ let TODAY_EVENTS = [
 ];
 const MOCK_TODAY_EVENTS = TODAY_EVENTS;
 let calendarConnected = false;
+// 캘린더 종료시각을 못 읽은 일정(목데이터, 종일 이벤트 등)에 한해 쓰는 폴백값 —
+// 실제 종료시각이 있으면 ev.durationMin을 우선한다(refreshTodayFromCalendar 참고).
 const MEETING_DURATION_MIN = 60;
 // 출발 권장 시각 = 미팅 시각 - (이동시간 + 이 버퍼). 나가는 준비 시간 10분 +
 // 미팅 시작 전 여유 도착 10분 = 20분.
@@ -2670,7 +2672,7 @@ function computeScheduleFacts(allEvents) {
   for (var i = 0; i < events.length - 1; i++) {
     var ev = events[i], next = events[i + 1];
     if (ev.travelKnown === false || next.travelKnown === false) continue;
-    var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
+    var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - (ev.durationMin || MEETING_DURATION_MIN);
     var neededMin = next.travelMinutes + DEPARTURE_BUFFER_MIN;
     if (freeMin < neededMin) {
       warnings.push({ afterTitle: ev.title, beforeTitle: next.title, freeMinutes: Math.max(freeMin, 0), neededMinutes: neededMin });
@@ -2821,7 +2823,7 @@ function renderToday(skipBriefing) {
 
     var next = events[i + 1];
     if (next && ev.travelKnown !== false && next.travelKnown !== false) {
-      var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - MEETING_DURATION_MIN;
+      var freeMin = timeToMinutes(next.time) - timeToMinutes(ev.time) - (ev.durationMin || MEETING_DURATION_MIN);
       var neededMin = next.travelMinutes + DEPARTURE_BUFFER_MIN;
       if (freeMin < neededMin) {
         html += '<div class="warning-strip-row"><div style="width:30px;flex-shrink:0;"></div>' +
@@ -3131,9 +3133,18 @@ async function refreshTodayFromCalendar(allowRetry) {
       var hh = ('0' + start.getHours()).slice(-2);
       var mm = ('0' + start.getMinutes()).slice(-2);
       var title = item.summary || t('today.untitled');
+      // 실제 종료시각이 있으면 소요시간을 계산해둔다(빠듯한 구간 경고에서 고정 60분
+      // 대신 써먹음) — 없으면(종일 이벤트 등) MEETING_DURATION_MIN 폴백으로 처리된다.
+      var durationMin;
+      if (item.end && item.end.dateTime) {
+        var end = new Date(item.end.dateTime);
+        var mins = Math.round((end - start) / 60000);
+        if (mins > 0) durationMin = mins;
+      }
       return {
         time: hh + ':' + mm,
         title: title,
+        durationMin: durationMin,
         resolved: !!item.location,
         locationName: item.location || '',
         inferredName: '',
