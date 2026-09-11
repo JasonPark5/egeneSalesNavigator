@@ -1766,6 +1766,7 @@ const I18N = {
     'today.untitled': '(제목 없음)',
     'today.locating': '위치를 찾는 중이에요…',
     'today.locateNotFound': '위치를 찾지 못했어요. 검색에서 직접 찾아주세요.',
+    'today.checkingCalendar': '일정을 확인하는 중이에요…',
     'departure.alertTitle': '지금 출발하세요!',
     'departure.alertBody': '"{0}" — 약 {1}분 걸려요',
     'departure.toastFallback': '🚗 지금 출발하세요! "{0}" — 약 {1}분',
@@ -1950,6 +1951,7 @@ const I18N = {
     'today.untitled': '(No title)',
     'today.locating': 'Finding the location…',
     'today.locateNotFound': "Couldn't find it. Please search manually.",
+    'today.checkingCalendar': 'Checking your calendar…',
     'departure.alertTitle': 'Time to leave!',
     'departure.alertBody': '"{0}" — about {1} min away',
     'departure.toastFallback': '🚗 Time to leave! "{0}" — about {1} min',
@@ -2725,6 +2727,21 @@ function startDepartureWatcher() {
   setInterval(checkDepartureAlerts, 30000);
 }
 
+// 캘린더 연동 여부를 아직 확인 못한 최초 진입 순간에 쓴다. 연동 여부를 모른 채
+// renderToday()를 바로 부르면 TODAY_EVENTS가 초기값(MOCK_TODAY_EVENTS)이라 실제로는
+// 연동돼 있는 사용자에게도 "샘플 일정입니다, 지금 연동하세요" 배너가 잠깐 잘못
+// 떴다가 실제 데이터로 바뀌는 깜빡임이 생긴다. 그 대신 연동 여부가 확정될 때까지는
+// 브리핑/일정 자리 모두에 조회중 표시만 하고, restoreGoogleSession()이 결과를 알면
+// 그때 (실제 데이터든 mock 안내든) 확정해서 렌더링한다.
+function renderTodayLoading() {
+  var panel = document.getElementById('todayPanel');
+  panel.innerHTML =
+    '<div class="today-empty">' +
+      '<div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>' +
+      '<p>' + t('today.checkingCalendar') + '</p>' +
+    '</div>';
+}
+
 function renderToday(skipBriefing) {
   var panel = document.getElementById('todayPanel');
   var events = TODAY_EVENTS;
@@ -3080,15 +3097,16 @@ function updateCalendarConnectUI() {
 async function restoreGoogleSession() {
   try {
     var res = await fetch('/api/auth/google/access-token');
-    if (!res.ok) return;
+    if (!res.ok) { renderToday(); return; }
     var data = await res.json();
-    if (!data.connected || !data.accessToken) return;
+    if (!data.connected || !data.accessToken) { renderToday(); return; }
     googleAccessToken = data.accessToken;
     calendarConnected = true;
     updateCalendarConnectUI();
     refreshTodayFromCalendar();
   } catch (e) {
-    // server/(로컬) 등 이 라우트 자체가 없는 환경 — 조용히 mock 상태로 둠
+    // server/(로컬) 등 이 라우트 자체가 없는 환경 — mock 상태로 렌더링
+    renderToday();
   }
 }
 
@@ -4261,7 +4279,7 @@ initLocation();
 updateFavCount();
 renderRecentSearches();
 renderRecentVisits();
-renderToday();
+renderTodayLoading();
 startDepartureWatcher();
 handleCalendarRedirectResult();
 checkGoogleAuthAvailable();
