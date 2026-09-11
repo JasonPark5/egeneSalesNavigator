@@ -159,24 +159,36 @@ async function callLLMTool({ systemPrompt, userMessage, toolSchema, toolChoiceNa
     const model = process.env.OPENAI_MODEL || 'gpt-5.4-nano';
     const apiKey = overrideKey || process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY가 설정되지 않았습니다.');
+    // gpt-5 계열은 추론 모델이라 예전 gpt-4 계열과 요청 파라미터 스키마가 다르다 —
+    // temperature 자체를 안 받고(값이 1 고정), max_tokens 대신 max_completion_tokens를
+    // 써야 한다. 안 맞추면 "Unsupported parameter" 400 에러로 호출 자체가 실패한다.
+    const isReasoningModel = /^gpt-5/.test(model);
+    const requestBody = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      tools: [
+        { type: 'function', function: { name: toolSchema.name, description: toolSchema.description, parameters: toolSchema.parameters } },
+      ],
+      tool_choice: { type: 'function', function: { name: toolChoiceName } },
+    };
+    if (isReasoningModel) {
+      requestBody.max_completion_tokens = 800;
+    } else {
+      requestBody.temperature = 0.3;
+      requestBody.max_tokens = 800;
+    }
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        temperature: 0.3,
-        max_tokens: 800,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        tools: [
-          { type: 'function', function: { name: toolSchema.name, description: toolSchema.description, parameters: toolSchema.parameters } },
-        ],
-        tool_choice: { type: 'function', function: { name: toolChoiceName } },
-      }),
+      body: JSON.stringify(requestBody),
     });
-    if (!res.ok) throw new Error(`OpenAI API 오류: HTTP ${res.status}`);
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`OpenAI API 오류: HTTP ${res.status}${errBody ? ' — ' + errBody.slice(0, 300) : ''}`);
+    }
     const data = await res.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     return toolCall ? JSON.parse(toolCall.function.arguments) : null;
